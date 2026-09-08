@@ -1,0 +1,24 @@
+# Reference: the filesystem MCP server from modelcontextprotocol/servers (open source).
+# Demonstrates the idempotency carve-out: a mostly-mutating server defaults to
+# NOT retry-safe, with read-only tools individually marked retry-safe.
+kind: tool
+version: "1"
+name: mcp-filesystem
+transport: stdio
+command: npx -y @modelcontextprotocol/server-filesystem ./examples/docs
+auth:
+  mode: none
+allowedTools:
+  - read_file
+  - read_multiple_files
+  - list_directory
+  - search_files
+  - write_file
+idempotent:
+  default: false
+  overrides:
+    read_file: true
+    read_multiple_files: true
+    list_directory: true
+    search_files: true
+schemaExchange: json-schema

@@ -1,0 +1,13 @@
+# AWS Bedrock (public product). Credentials enter via the documented bearer
+# token env var name; no value is ever stored in this file.
+kind: model
+version: "1"
+name: bedrock-claude
+provider: aws-bedrock
+credentialsEnv: AWS_BEARER_TOKEN_BEDROCK
+models:
+  sonnet: anthropic.claude-3-5-sonnet-20241022-v2:0
+fallbackChain:
+  - sonnet
+usageAttr:
+  costCenter: platform-eng

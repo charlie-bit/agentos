@@ -1,0 +1,11 @@
+# Generic remote MCP server over HTTP with a bearer token read from the
+# environment. The endpoint URL is a public documentation placeholder.
+kind: tool
+version: "1"
+name: mcp-remote-example
+transport: http
+endpoint: https://mcp.example.com/rpc
+auth:
+  mode: bearer-token-env
+  env: AGENTOS_EXAMPLE_MCP_TOKEN
+schemaExchange: json-schema

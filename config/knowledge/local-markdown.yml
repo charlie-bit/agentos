@@ -1,0 +1,10 @@
+# Knowledge mounted straight from a repository directory (the contract's
+# "path" mount). The knowledge base itself is a SEPARATE repository in real
+# deployments; this minimal dir exists so the example preset resolves fully.
+kind: knowledge
+version: "1"
+name: local-markdown
+provider: markdown
+mount:
+  type: path
+  path: ./examples/docs

@@ -1,0 +1,14 @@
+# DeepSeek (public product), Anthropic-compatible endpoint — see its public
+# API docs (api.deepseek.com/anthropic). The URL itself is configured through
+# the env var named below; only the NAME appears in this file.
+kind: model
+version: "1"
+name: deepseek
+provider: deepseek
+baseUrlEnv: AGENTOS_DEEPSEEK_ANTHROPIC_BASE_URL
+credentialsEnv: AGENTOS_DEEPSEEK_API_KEY
+models:
+  general: deepseek-chat
+  reasoner: deepseek-reasoner
+fallbackChain:
+  - general
