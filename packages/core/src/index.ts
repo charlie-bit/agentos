@@ -1,3 +1,4 @@
 // @agentos/core — kernel-facing orchestration, zero kernel imports.
-// P1b-1 ships the manifest module only; further modules land per blueprint.
+// Modules: manifest (load + judge), session (ledger). Further modules per blueprint.
 export * from "./manifest/index.js";
+export * from "./session/index.js";
