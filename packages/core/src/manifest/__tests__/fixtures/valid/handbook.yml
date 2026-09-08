@@ -1,0 +1,5 @@
+kind: knowledge
+version: "1"
+name: handbook
+provider: markdown
+mount: { type: path, path: ./knowledge-base }

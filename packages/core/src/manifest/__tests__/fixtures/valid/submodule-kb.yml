@@ -1,0 +1,5 @@
+kind: knowledge
+version: "1"
+name: submodule-kb
+provider: markdown
+mount: { type: submodule, path: vendor-books, ref: v3 }

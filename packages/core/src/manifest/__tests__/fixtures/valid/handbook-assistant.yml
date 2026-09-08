@@ -1,0 +1,7 @@
+kind: preset
+version: "1"
+name: handbook-assistant
+knowledge: handbook
+model: vendor-a
+tools: [filesystem, gateway, builtin]
+entry: mock-chat

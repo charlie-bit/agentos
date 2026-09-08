@@ -1,0 +1,7 @@
+kind: preset
+version: "1"
+name: confused-preset
+knowledge: handbook
+model: filesystem
+tools: []
+entry: mock-chat

@@ -1,0 +1,7 @@
+kind: tool
+version: "2"
+name: future-tool
+transport: stdio
+command: x
+auth: { mode: none }
+schemaExchange: json-schema

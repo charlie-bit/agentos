@@ -1,0 +1,9 @@
+kind: tool
+version: "1"
+name: filesystem
+transport: stdio
+command: npx -y @modelcontextprotocol/server-filesystem /workspace
+auth: { mode: none }
+allowedTools: [read_file, write_file]
+idempotent: { default: true, overrides: { write_file: false } }
+schemaExchange: json-schema

@@ -1,0 +1,12 @@
+kind: knowledge
+version: "1"
+name: synced-kb
+provider: markdown
+workspaceId: w-1
+tokenEnv: KB_TOKEN
+mount:
+  type: git-sync
+  repoUrl: https://git.example.com/org/open-books
+  ref: main
+  targetPath: /srv/kb/open-books
+  intervalMs: 300000

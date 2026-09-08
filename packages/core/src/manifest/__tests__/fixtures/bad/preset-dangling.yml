@@ -1,0 +1,7 @@
+kind: preset
+version: "1"
+name: broken-preset
+knowledge: ghost-handbook
+model: vendor-a
+tools: [filesystem]
+entry: mock-chat

@@ -1,0 +1,7 @@
+kind: preset
+version: "1"
+name: echo-preset
+knowledge: handbook
+model: vendor-a
+tools: [filesystem, filesystem]
+entry: mock-chat

@@ -1,0 +1,6 @@
+kind: model
+version: "1"
+name: flaky-vendor
+provider: flaky
+models: { general: flaky/small }
+fallbackChain: [general, turbo]

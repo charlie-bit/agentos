@@ -1,0 +1,6 @@
+kind: tool
+version: "1"
+transport: stdio
+command: run --stdio
+auth: { mode: none }
+schemaExchange: json-schema

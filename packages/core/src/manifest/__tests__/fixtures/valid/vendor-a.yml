@@ -1,0 +1,10 @@
+kind: model
+version: "1"
+name: vendor-a
+provider: vendor-a
+credentialsEnv: VENDOR_A_API_KEY
+models:
+  general: vendor-a/small
+  big: vendor-a/big
+fallbackChain: [big, general]
+usageAttr: { costCenter: platform }
