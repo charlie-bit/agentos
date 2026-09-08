@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.env*
+*.log
+.DS_Store
+
+# local working dirs (design scratch / vendored public references)
+pm-skills-temp/
+.reference/
+*.local
