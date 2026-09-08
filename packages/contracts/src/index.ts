@@ -1,10 +1,10 @@
-// @agentos/contracts — the owned contract surface of AgentOS.
-//
-// Four contracts will be defined here (types land in P1a-3):
-//   ModelProvider · ToolProvider (MCP) · KnowledgeProvider · EntryAdapter
-//
-// This shell exists so the workspace wiring and the eslint import discipline
-// (kernel SDKs banned outside packages/adapters/**) have a first target.
-// zod is the only runtime dependency, by design.
-
-export {};
+// @agentos/contracts — the owned contract surface of AgentOS: the four sockets.
+// Manifests (zod) declare WHAT is mounted; runtime interfaces (TS) define HOW
+// core talks to an implementation. Import discipline: this package depends on
+// zod only and never imports kernel SDKs or sibling @agentos packages.
+export * from "./manifest.js";
+export * from "./tool.js";
+export * from "./model.js";
+export * from "./knowledge.js";
+export * from "./entry.js";
+export * from "./preset.js";
