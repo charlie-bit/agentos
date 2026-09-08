@@ -114,7 +114,11 @@ const knowledgeMountSchema = z.discriminatedUnion("type", [
     /** Pinned submodule revision; absent = whatever the parent repo points at. */
     ref: z.string().min(1).optional(),
   }),
-  /** Plain filesystem directory; simplest dev/embed fallback. */
+  /**
+   * Plain filesystem source: either a single .md file (single-page corpus) or a
+   * directory (provider scans *.md recursively). Provider decides via stat —
+   * the contract only ever asks for "a readable file source".
+   */
   z.strictObject({
     type: z.literal("path"),
     path: z.string().min(1),
