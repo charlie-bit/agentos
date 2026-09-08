@@ -8,4 +8,7 @@ dist/
 pm-skills-temp/
 .reference/
 *.local
+
+# session ledger database (default location; path overridable via AGENTOS_SESSION_DB)
+.agentos/
 .claude/settings.local.json
