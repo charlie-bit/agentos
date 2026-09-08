@@ -8,3 +8,4 @@ dist/
 pm-skills-temp/
 .reference/
 *.local
+.claude/settings.local.json
