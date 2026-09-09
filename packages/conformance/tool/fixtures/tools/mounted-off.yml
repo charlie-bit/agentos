@@ -1,0 +1,9 @@
+kind: tool
+version: "1"
+name: mounted-off
+transport: stdio
+command: another-server
+auth:
+  mode: none
+enabled: false
+schemaExchange: json-schema

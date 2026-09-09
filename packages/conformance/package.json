@@ -1,0 +1,16 @@
+{
+  "name": "@agentos/conformance",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Contract-level conformance suites: black-box tests over the public API of core modules, asserting WHAT the contract promises, not how it is implemented. Fully offline (no spawns, no network). Swapping the runtime or kernel must NOT void these tests. First suite: tool (loader plans + drift).",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint tool",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@agentos/contracts": "workspace:*",
+    "@agentos/core": "workspace:*"
+  }
+}

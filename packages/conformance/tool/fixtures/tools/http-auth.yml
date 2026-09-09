@@ -1,0 +1,9 @@
+kind: tool
+version: "1"
+name: http-auth
+transport: http
+endpoint: https://gateway.example.com/mcp
+auth:
+  mode: bearer-token-env
+  env: CONF_TEST_TOKEN
+schemaExchange: json-schema

@@ -1,0 +1,10 @@
+kind: tool
+version: "1"
+name: plain-stdio
+transport: stdio
+command: fake-server --root ${CONF_TEST_ROOT}
+auth:
+  mode: none
+allowedTools:
+  - read_*
+schemaExchange: json-schema

@@ -38,9 +38,21 @@ importers:
       '@agentos/contracts':
         specifier: workspace:*
         version: link:../../contracts
+      '@agentos/core':
+        specifier: workspace:*
+        version: link:../../core
       '@anthropic-ai/claude-agent-sdk':
         specifier: ^0.3.0
         version: 0.3.263(@anthropic-ai/sdk@0.124.0(zod@4.5.4))(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.5.4))(zod@4.5.4)
+
+  packages/conformance:
+    dependencies:
+      '@agentos/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@agentos/core':
+        specifier: workspace:*
+        version: link:../core
 
   packages/contracts:
     dependencies:

@@ -1,0 +1,7 @@
+kind: tool
+version: "1"
+name: sdk-unregistered
+transport: sdk
+auth:
+  mode: none
+schemaExchange: json-schema
