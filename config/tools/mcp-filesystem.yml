@@ -1,24 +1,44 @@
 # Reference: the filesystem MCP server from modelcontextprotocol/servers (open source).
-# Demonstrates the idempotency carve-out: a mostly-mutating server defaults to
-# NOT retry-safe, with read-only tools individually marked retry-safe.
+# allowedTools mirrors the server's ACTUAL published tool set (probed offline
+# via tools/list) so the loader's drift check stays silent — drift is a
+# lie-detector between config and reality, so config must tell the truth.
+# Idempotency carve-out: mutating tools default to NOT retry-safe; the read
+# side and pure directory helpers are marked retry-safe individually.
+# ${AGENTOS_FS_ROOT}: loader-side env expansion (P3) — the mount root is
+# deployment config, never a code constant.
 kind: tool
 version: "1"
 name: mcp-filesystem
 transport: stdio
-command: npx -y @modelcontextprotocol/server-filesystem ./examples/docs
+command: npx -y @modelcontextprotocol/server-filesystem ${AGENTOS_FS_ROOT}
 auth:
   mode: none
 allowedTools:
   - read_file
+  - read_text_file
+  - read_media_file
   - read_multiple_files
-  - list_directory
-  - search_files
   - write_file
+  - edit_file
+  - create_directory
+  - move_file
+  - search_files
+  - get_file_info
+  - list_directory
+  - list_directory_with_sizes
+  - directory_tree
+  - list_allowed_directories
 idempotent:
   default: false
   overrides:
     read_file: true
+    read_text_file: true
+    read_media_file: true
     read_multiple_files: true
-    list_directory: true
     search_files: true
+    get_file_info: true
+    list_directory: true
+    list_directory_with_sizes: true
+    directory_tree: true
+    list_allowed_directories: true
 schemaExchange: json-schema
