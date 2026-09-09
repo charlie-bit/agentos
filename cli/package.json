@@ -13,6 +13,8 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@agentos/core": "workspace:*"
+    "@agentos/adapter-claude-sdk": "workspace:*",
+    "@agentos/core": "workspace:*",
+    "@agentos/entry-cli": "workspace:*"
   }
 }

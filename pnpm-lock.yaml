@@ -29,9 +29,15 @@ importers:
 
   cli:
     dependencies:
+      '@agentos/adapter-claude-sdk':
+        specifier: workspace:*
+        version: link:../packages/adapters/claude-sdk
       '@agentos/core':
         specifier: workspace:*
         version: link:../packages/core
+      '@agentos/entry-cli':
+        specifier: workspace:*
+        version: link:../packages/entry/entry-cli
 
   packages/adapters/claude-sdk:
     dependencies:
@@ -53,6 +59,9 @@ importers:
       '@agentos/core':
         specifier: workspace:*
         version: link:../core
+      '@agentos/entry-cli':
+        specifier: workspace:*
+        version: link:../entry/entry-cli
 
   packages/contracts:
     dependencies:
@@ -71,6 +80,15 @@ importers:
       zod:
         specifier: ^4.0.0
         version: 4.5.4
+
+  packages/entry/entry-cli:
+    dependencies:
+      '@agentos/contracts':
+        specifier: workspace:*
+        version: link:../../contracts
+      '@agentos/core':
+        specifier: workspace:*
+        version: link:../../core
 
 packages:
 

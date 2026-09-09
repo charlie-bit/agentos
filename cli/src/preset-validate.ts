@@ -14,6 +14,7 @@ import {
   type AnyManifest,
   type LoadedManifest,
 } from "@agentos/core";
+import { ENTRY_NAME } from "@agentos/entry-cli";
 
 export interface CliResult {
   exitCode: number;
@@ -22,10 +23,10 @@ export interface CliResult {
 
 /**
  * Entry adapters are code-registered — no entry manifest kind exists in the
- * contract envelope. P2 replaces this placeholder list with the real runtime
- * registry; until then "console" is the only resolvable entry name.
+ * contract envelope (P1b gap, closed in P4): the name comes from the entry
+ * package itself, single source of truth.
  */
-export const REGISTERED_ENTRY_NAMES: readonly string[] = ["console"];
+export const REGISTERED_ENTRY_NAMES: readonly string[] = [ENTRY_NAME];
 
 /**
  * Config root convention (documented in README of cli, kept here as truth):

@@ -26,12 +26,12 @@ afterEach(() => {
 });
 
 describe("agentos preset validate — happy", () => {
-  it("accepts the repo example preset and prints the four-slot summary", () => {
+  it("accepts the repo example preset and prints the four-slot summary", async () => {
     // cwd during vitest is cli/; locateTarget walks up to the repo root.
-    const r = run(["preset", "validate", "config/presets/example.yml"]);
+    const r = await run(["preset", "validate", "config/presets/example.yml"]);
     expect(r.exitCode).toBe(0);
     const text = r.lines.join("\n");
-    for (const slot of ["local-markdown", "deepseek", "mcp-filesystem", "console"]) {
+    for (const slot of ["local-markdown", "deepseek", "mcp-filesystem", "cli"]) {
       expect(text, `summary must name the ${slot} reference`).toContain(slot);
     }
     expect(text).toContain("6 manifests validated");
@@ -39,7 +39,7 @@ describe("agentos preset validate — happy", () => {
 });
 
 describe("agentos preset validate — sad", () => {
-  it("fails a preset referencing a tool that was never declared", () => {
+  it("fails a preset referencing a tool that was never declared", async () => {
     const dir = makeTempConfig({
       "presets/broken.yml": [
         "kind: preset",
@@ -48,11 +48,11 @@ describe("agentos preset validate — sad", () => {
         "knowledge: nowhere-kb",
         "model: nowhere-model",
         "tools: [ghost-tool]",
-        "entry: console",
+        "entry: cli",
         "",
       ].join("\n"),
     });
-    const r = run(["preset", "validate", join(dir, "presets/broken.yml")]);
+    const r = await run(["preset", "validate", join(dir, "presets/broken.yml")]);
     expect(r.exitCode).toBe(1);
     const text = r.lines.join("\n");
     expect(text).toContain("ghost-tool");
@@ -61,7 +61,7 @@ describe("agentos preset validate — sad", () => {
     expect(text).toContain("knowledge");
   });
 
-  it("reports humanized field errors from an invalid manifest (not a stack trace)", () => {
+  it("reports humanized field errors from an invalid manifest (not a stack trace)", async () => {
     const dir = makeTempConfig({
       "presets/badtool.yml": [
         "kind: tool",
@@ -73,29 +73,29 @@ describe("agentos preset validate — sad", () => {
         "",
       ].join("\n"),
     });
-    const r = run(["preset", "validate", join(dir, "presets/badtool.yml")]);
+    const r = await run(["preset", "validate", join(dir, "presets/badtool.yml")]);
     expect(r.exitCode).toBe(1);
     const text = r.lines.join("\n");
     expect(text).toContain("transport"); // field path present in human error
     expect(text).not.toContain("at run"); // never a stack trace
   });
 
-  it("target that exists nowhere returns exit 1, still without a stack trace", () => {
-    const r = run(["preset", "validate", "no/such/thing.yml"]);
+  it("target that exists nowhere returns exit 1, still without a stack trace", async () => {
+    const r = await run(["preset", "validate", "no/such/thing.yml"]);
     expect(r.exitCode).toBe(1);
     expect(r.lines.join("\n")).toContain("target not found");
   });
 });
 
-describe("agentos serve — placeholder", () => {
-  it("refuses with exit 1 and points at P2", () => {
-    const r = run(["serve"]);
-    expect(r.exitCode).toBe(1);
-    expect(r.lines.join("\n")).toContain("P2 delivers this");
+describe("agentos serve — P4 gate", () => {
+  it("bare serve (no --chat) is refused with usage, never starts a REPL", async () => {
+    const r = await run(["serve"]);
+    expect(r.exitCode).toBe(2);
+    expect(r.lines.join("\n")).toContain("--chat");
   });
 
-  it("unknown subcommands exit 2 with usage", () => {
-    const r = run(["frobnicate"]);
+  it("unknown subcommands exit 2 with usage", async () => {
+    const r = await run(["frobnicate"]);
     expect(r.exitCode).toBe(2);
     expect(r.lines.join("\n")).toContain("usage:");
   });
