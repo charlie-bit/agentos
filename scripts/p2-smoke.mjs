@@ -124,3 +124,19 @@ ledger.close();
 process.stdout.write(
   `✓ P2 smoke PASSED — channel: ${process.env.AGENTOS_SMOKE_BASE_URL ? "smoke-overridden Anthropic-compatible endpoint" : model.provider} lease, db: ${join(".agentos", "sessions.db")}\n`,
 );
+
+// ---- token accounting: what did this ignition cost? --------------------------
+const fmtUsage = (r) => {
+  const u = r?.usage;
+  if (!u) return "tokens: n/a (endpoint reported none)";
+  const parts = [`in=${u.inputTokens ?? 0}`, `out=${u.outputTokens ?? 0}`];
+  if (u.cacheReadTokens) parts.push(`cache_read=${u.cacheReadTokens}`);
+  if (u.cacheCreationTokens) parts.push(`cache_write=${u.cacheCreationTokens}`);
+  const cost =
+    typeof r?.totalCostUsd === "number"
+      ? ` | cost≈$${r.totalCostUsd.toFixed(4)} (Anthropic list-price; compat endpoints → channel billing is authoritative)`
+      : "";
+  return `tokens: ${parts.join(" ")} | turns=${r?.numTurns ?? "?"}${cost}`;
+};
+process.stdout.write(`  beat1 ${fmtUsage(beat1.result)}\n`);
+process.stdout.write(`  beat2 ${fmtUsage(beat2.result)}\n`);
