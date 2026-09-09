@@ -75,3 +75,63 @@ export const toolProviderManifestSchema = z.discriminatedUnion("transport", [
 export type ToolAuth = z.infer<typeof toolAuthSchema>;
 export type ToolIdempotency = z.infer<typeof toolIdempotencySchema>;
 export type ToolProviderManifest = z.infer<typeof toolProviderManifestSchema>;
+
+/* ---------------------------------------------------------------------------
+ * P3 pure addition (append-only; nothing above was touched).
+ *
+ * ToolMountPlan — the NEUTRAL assembly product: core/loader produces it from
+ * validated manifests; adapters translate it into kernel-native shapes. It is
+ * the reason "assemble" can exist in core without importing a kernel: the
+ * plan speaks transport mechanics, never SDK types.
+ * HYGIENE INVARIANT: resolved credential VALUES (expanded ${VARS}, auth
+ * headers) may live in a plan object in runtime memory ONLY — never
+ * persisted, never logged, never placed on an event stream. Adapters and
+ * consumers must treat plan contents as sensitive for exactly this reason.
+ * ------------------------------------------------------------------------- */
+
+/** stdio member: resolved spawn spec. command = executable; args pre-tokenized, no shell. */
+export const toolMountPlanStdioSchema = z.strictObject({
+  command: z.string().min(1),
+  args: z.array(z.string()).optional(),
+});
+
+/** http member: resolved URL + headers carrying auth VALUES (memory-only, see header). */
+export const toolMountPlanHttpSchema = z.strictObject({
+  /** Absolute URL after ${VAR} expansion. */
+  url: z.string().min(1),
+  /** Header name → resolved value. Values here are secrets-adjacent by convention. */
+  headers: z.record(z.string(), z.string()).optional(),
+});
+
+/** sdk member: a lookup name only — factory objects never cross this boundary. */
+export const toolMountPlanSdkSchema = z.strictObject({
+  /** Key into the CALLER's factory registry (entryNames precedent). */
+  factoryName: z.string().min(1),
+});
+
+/** One mount entry: exactly the member matching `transport` is present (schema-enforced). */
+export const toolMountPlanSchema = z
+  .strictObject({
+    /** Mount key, unique within a plan set; adapters namespace tools by it. */
+    key: z.string().min(1),
+    transport: z.enum(["stdio", "http", "sdk"]),
+    stdio: toolMountPlanStdioSchema.optional(),
+    http: toolMountPlanHttpSchema.optional(),
+    sdk: toolMountPlanSdkSchema.optional(),
+    /** Pass-through allowlist (bare tool names, no mcp__ prefix); absent = all discovered. */
+    allowedTools: z.array(z.string().min(1)).optional(),
+    /** Pass-through retry metadata; the loader never acts on it (future executor does). */
+    idempotent: toolIdempotencySchema.optional(),
+  })
+  .refine(
+    (p) =>
+      (p.transport === "stdio" && !!p.stdio && !p.http && !p.sdk) ||
+      (p.transport === "http" && !!p.http && !p.stdio && !p.sdk) ||
+      (p.transport === "sdk" && !!p.sdk && !p.stdio && !p.http),
+    { message: "exactly the member matching transport must be set" },
+  );
+
+export type ToolMountPlanStdio = z.infer<typeof toolMountPlanStdioSchema>;
+export type ToolMountPlanHttp = z.infer<typeof toolMountPlanHttpSchema>;
+export type ToolMountPlanSdk = z.infer<typeof toolMountPlanSdkSchema>;
+export type ToolMountPlan = z.infer<typeof toolMountPlanSchema>;
