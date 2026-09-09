@@ -41,7 +41,7 @@ for (const sub of ["tools", "models", "knowledge", "presets"]) {
   for (const f of r.failed) for (const e of f.errors) problems.push(`${f.source}: ${e.path}: ${e.message}`);
 }
 if (problems.length) fail(`config does not validate:\n  ${problems.join("\n  ")}`);
-const refErrors = validatePresetRefs(loaded, { entryNames: ["console"] });
+const refErrors = validatePresetRefs(loaded, { entryNames: ["cli"] });
 if (refErrors.length) fail(`reference integrity: ${refErrors.map((e) => `${e.path}: ${e.message}`).join("; ")}`);
 process.stdout.write(`✓ dogfood: ${loaded.length} config manifests valid, refs resolve\n`);
 

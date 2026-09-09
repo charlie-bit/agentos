@@ -1,6 +1,6 @@
 # The single convergence point: four name references, zero inline config.
-# Switching business = switching this file. "entry: console" resolves against
-# the cli's registered adapters (P2 will replace this placeholder registry).
+# Switching business = switching this file. "entry: cli" resolves against the
+# names exported by @agentos/entry-cli (code registry, per contract).
 kind: preset
 version: "1"
 name: example
@@ -9,4 +9,4 @@ model: deepseek
 tools:
   - mcp-filesystem
   - mcp-remote-example
-entry: console
+entry: cli
