@@ -5,6 +5,7 @@ export {
   plansToMcpServers,
   allowedToolsFromPlans,
   collectDrift,
+  consumeStream,
   runTurn,
   normalize,
   type ModelLease,

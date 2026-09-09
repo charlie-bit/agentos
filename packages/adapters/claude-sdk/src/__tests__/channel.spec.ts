@@ -12,7 +12,9 @@ import {
   plansToMcpServers,
   allowedToolsFromPlans,
   collectDrift,
+  consumeStream,
 } from "../index.js";
+import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk";
 
 const FAKE_ENV = {
   AGENTOS_SMOKE_BASE_URL: "https://channel.example/anthropic",
@@ -157,5 +159,40 @@ describe("drift wiring (P3)", () => {
     const discovered = ["mcp__fs__read_file", "mcp__fs__gone_tool"];
     const drift = collectDrift([plan], discovered);
     expect(drift).toEqual({ missing: [], undeclared: [] });
+  });
+});
+
+describe("consumeStream + onEvent (P5 incremental delivery, synthetic kernel)", () => {
+  const frames = [
+    { type: "system", subtype: "init", session_id: "s-9", tools: ["mcp__fs__read_file", "mcp__fs__gone_tool"] },
+    { type: "assistant", session_id: "s-9", message: { content: [{ type: "text", text: "hello" }] } },
+    { type: "result", session_id: "s-9", subtype: "success", is_error: false, num_turns: 1, total_cost_usd: 0.02 },
+  ] as unknown as SDKMessage[];
+  const fakeStream = () => (async function* () { for (const f of frames) yield f; })();
+  const mount = {
+    key: "fs",
+    transport: "stdio" as const,
+    stdio: { command: "x" },
+    allowedTools: ["read_file", "gone_tool", "never_mounted"],
+  };
+
+  it("onEvent fires per normalized RenderEvent in stream order", async () => {
+    const seen: string[] = [];
+    const out = await consumeStream(fakeStream(), { toolMounts: [mount], onEvent: (e) => seen.push(e.type) });
+    // drift lands right after the init frame it was computed from
+    expect(seen).toEqual(["session.init", "kernel.system.drift", "assistant.text", "result"]);
+    expect(out.sdkSessionId).toBe("s-9");
+    expect(out.result?.subtype).toBe("success");
+  });
+
+  it("a throwing onEvent consumer does not kill the turn", async () => {
+    const out = await consumeStream(fakeStream(), {
+      toolMounts: [mount],
+      onEvent: () => {
+        throw new Error("dead sink");
+      },
+    });
+    expect(out.events.length).toBe(4); // events still accumulate server-side
+    expect(out.result?.isError).toBe(false);
   });
 });

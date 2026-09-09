@@ -131,6 +131,13 @@ export interface TurnInput {
   allowedTools?: string[];
   /** Kernel turn cap. Default 6 — hello-world needs tool round-trip + answer. */
   maxTurns?: number;
+  /**
+   * Incremental delivery (P5 additive, backward compatible): called per
+   * normalized RenderEvent AS IT ARRIVES, before the turn resolves. Absent =
+   * P4 behavior untouched. Throw from this callback is caught and ignored —
+   * a dead consumer must not kill the kernel turn.
+   */
+  onEvent?: (event: RenderEvent) => void;
 }
 
 export interface TurnOutput {
@@ -160,37 +167,38 @@ export interface TurnOutput {
 }
 
 /**
- * One kernel turn. Throws only on kernel/transport failure (environment
- * problems); a model "error" result arrives as data (result.isError).
+ * Consume a kernel message stream into RenderEvents. Exported so conformance
+ * and unit tests can drive the FULL stream behavior (normalization, drift,
+ * incremental onEvent) with synthetic async iterables — no kernel, no network.
  */
-export async function runTurn(input: TurnInput): Promise<TurnOutput> {
-  const channel = resolveChannel(input.model);
+export async function consumeStream(
+  stream: AsyncIterable<SDKMessage>,
+  opts: { toolMounts: readonly ToolMountPlan[]; onEvent?: (event: RenderEvent) => void },
+): Promise<TurnOutput> {
   const events: RenderEvent[] = [];
   let sdkSessionId: string | undefined;
   let result: TurnOutput["result"];
 
-  const stream = query({
-    prompt: input.prompt,
-    options: {
-      systemPrompt: "You are an AgentOS assistant. Use the filesystem tools to inspect files when asked about the project.",
-      mcpServers: plansToMcpServers(input.toolMounts, input.sdkServers) as never,
-      allowedTools: input.allowedTools ?? allowedToolsFromPlans(input.toolMounts),
-      permissionMode: "default",
-      maxTurns: input.maxTurns ?? 6,
-      ...(input.resumeSdkSessionId ? { resume: input.resumeSdkSessionId } : {}),
-      env: { ...process.env, ...sdkEnvDelta(channel) },
-    },
-  });
+  const emit = (list: RenderEvent[]): void => {
+    for (const e of list) {
+      events.push(e);
+      try {
+        opts.onEvent?.(e);
+      } catch {
+        /* dead consumer: the turn survives (onEvent hygiene clause) */
+      }
+    }
+  };
 
   for await (const message of stream) {
     sdkSessionId = message.session_id ?? sdkSessionId;
-    events.push(...normalize(message));
+    emit(normalize(message));
     if (message.type === "system" && message.subtype === "init") {
       // Drift is a WARNING event, not a hard stop: fewer tools must still run
-      // the chain (absent-degrade philosophy); governance consumes this in P5.
-      const drift = collectDrift(input.toolMounts, message.tools ?? []);
+      // the chain (absent-degrade philosophy); the web console surfaces it.
+      const drift = collectDrift(opts.toolMounts, message.tools ?? []);
       if (drift.missing.length + drift.undeclared.length > 0) {
-        events.push({ type: "kernel.system.drift", payload: drift, timestampMs: Date.now() });
+        emit([{ type: "kernel.system.drift", payload: drift, timestampMs: Date.now() }]);
       }
     }
     if (message.type === "result") {
@@ -221,6 +229,29 @@ export async function runTurn(input: TurnInput): Promise<TurnOutput> {
     }
   }
   return { events, sdkSessionId, result };
+}
+
+/**
+ * One kernel turn. Throws only on kernel/transport failure (environment
+ * problems); a model "error" result arrives as data (result.isError).
+ */
+export async function runTurn(input: TurnInput): Promise<TurnOutput> {
+  const channel = resolveChannel(input.model);
+
+  const stream = query({
+    prompt: input.prompt,
+    options: {
+      systemPrompt: "You are an AgentOS assistant. Use the filesystem tools to inspect files when asked about the project.",
+      mcpServers: plansToMcpServers(input.toolMounts, input.sdkServers) as never,
+      allowedTools: input.allowedTools ?? allowedToolsFromPlans(input.toolMounts),
+      permissionMode: "default",
+      maxTurns: input.maxTurns ?? 6,
+      ...(input.resumeSdkSessionId ? { resume: input.resumeSdkSessionId } : {}),
+      env: { ...process.env, ...sdkEnvDelta(channel) },
+    },
+  });
+
+  return consumeStream(stream, { toolMounts: input.toolMounts, onEvent: input.onEvent });
 }
 
 /**
