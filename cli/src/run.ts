@@ -8,12 +8,14 @@ import { runPresetValidate, type CliResult } from "./preset-validate.js";
 import { runServe } from "./serve.js";
 
 const USAGE = [
-  "agentos — pluggable agent platform (P4)",
+  "agentos — pluggable agent platform (P5)",
   "",
   "usage:",
   "  agentos preset validate <file-or-dir>       load + reference-check manifests",
   "  agentos serve --chat [--preset <path>] [--session <key>] [--continue] [--verbose]",
   "                                              interactive REPL (needs a model channel env)",
+  "  agentos serve --web [--port 8787] [--preset <path>]",
+  "                                              SSE server + web console on 127.0.0.1",
 ];
 
 export async function run(argv: readonly string[]): Promise<CliResult> {
@@ -31,6 +33,8 @@ export async function run(argv: readonly string[]): Promise<CliResult> {
         args: rest,
         options: {
           chat: { type: "boolean" },
+          web: { type: "boolean" },
+          port: { type: "string" },
           preset: { type: "string", default: "config/presets/example.yml" },
           session: { type: "string" },
           continue: { type: "boolean" },
@@ -38,14 +42,19 @@ export async function run(argv: readonly string[]): Promise<CliResult> {
         },
         strict: true,
       });
-      if (!values.chat) {
-        return { exitCode: 2, lines: ["✗ serve requires --chat (P4 scope: REPL only)", ...USAGE.slice(2)] };
+      if (!values.chat && !values.web) {
+        return { exitCode: 2, lines: ["✗ serve requires --chat or --web", ...USAGE.slice(2)] };
+      }
+      if (values.chat && values.web) {
+        return { exitCode: 2, lines: ["✗ --chat and --web are mutually exclusive", ...USAGE.slice(2)] };
       }
       const exitCode = await runServe({
         preset: values.preset ?? "config/presets/example.yml",
         session: values.session,
         continue: values.continue,
         verbose: values.verbose,
+        web: values.web,
+        port: values.port === undefined ? undefined : Number(values.port),
       });
       return { exitCode, lines: [] }; // already streamed by the composition root
     }

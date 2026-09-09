@@ -15,6 +15,7 @@
   "dependencies": {
     "@agentos/adapter-claude-sdk": "workspace:*",
     "@agentos/core": "workspace:*",
-    "@agentos/entry-cli": "workspace:*"
+    "@agentos/entry-cli": "workspace:*",
+    "@agentos/entry-rest": "workspace:*"
   }
 }
