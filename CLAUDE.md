@@ -7,7 +7,7 @@
 3. `sdk` transport only: implemented inside `packages/adapters/**` (the sole place kernel imports are allowed).
 4. Declare `idempotent` honestly — a non-idempotent tool loses auto-retry by design.
 5. `${VAR}` placeholders in command/endpoint expand from the environment at load (missing var = hard error, not a silent empty mount); `enabled: false` keeps the file visible but unmounts it.
-6. Validate against the schema (until the P1b CLI exists: parse in a test, same pattern as `packages/contracts/src/__tests__`).
+6. Validate: `node cli/main.mjs preset validate config/presets/<preset>.yml` (loader-level behavior: `pnpm --filter @agentos/core test`).
 7. The registry drift check (declared vs discovered tools) at mount is the backstop; `config/tools/*.yml` allowedTools must mirror the server's REAL tool set (probe offline) so drift stays silent.
 
 ## Adding a ModelProvider
