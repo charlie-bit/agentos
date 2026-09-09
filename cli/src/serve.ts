@@ -167,7 +167,7 @@ export async function runServe(flags: ServeFlags): Promise<number> {
   const tally = () =>
     `${formatUsageSummary({ inputTokens: total.input, outputTokens: total.output, cacheReadTokens: total.cacheRead || undefined, cacheCreationTokens: total.cacheWrite || undefined })} | turns=${total.turns} | cost≈$${total.cost.toFixed(4)}${total.cost > 0 ? " (list-price; compat endpoints → channel billing is authoritative)" : ""}`;
 
-  process.on("SIGINT", () => {
+  const onTermSignal = () => {
     try {
       ledger.markStatus(entry.sessionRow.id, "aborted");
     } catch {
@@ -176,7 +176,11 @@ export async function runServe(flags: ServeFlags): Promise<number> {
     ledger.close();
     write("\n✗ aborted (ledger marked)\n");
     process.exit(130);
-  });
+  };
+  process.on("SIGINT", onTermSignal);
+  // SIGTERM is how docker/k8s/systemd stop processes — same graceful path.
+  // (Audit finding: a SIGTERM-only kill used to leave a zombie "running" row.)
+  process.on("SIGTERM", onTermSignal);
 
   const rl = createInterface({ input: process.stdin, output: process.stdout, prompt: "> " });
   // Buffered line queue: piped stdin emits lines WHILE a turn is in flight;
@@ -287,7 +291,7 @@ export async function runServeWeb(flags: ServeFlags): Promise<number> {
   });
   write(`● agentos serve --web | preset=${presetName} mounts=${plans.length}\n  console: ${server.url}\n  Ctrl+C exits cleanly (ledger stays zombie-free)\n`);
 
-  process.on("SIGINT", () => {
+  const onTermSignal = () => {
     let done = false;
     const finish = () => {
       if (done) return;
@@ -302,7 +306,13 @@ export async function runServeWeb(flags: ServeFlags): Promise<number> {
     };
     server.close().catch(() => undefined).then(finish);
     setTimeout(finish, 500).unref(); // hung sockets must never cost the signal its exit code
-  });
+  };
+  process.on("SIGINT", onTermSignal);
+  // SIGTERM = docker/k8s stop path; must behave identically to Ctrl+C.
+  // Known limitation (pre-existing, tracked): an in-flight chat's ledger row is
+  // not drained here — graceful drain of active runs is governance work (the
+  // sre-style drainActiveRuns pattern), not signal handling.
+  process.on("SIGTERM", onTermSignal);
 
   // park forever: the listening handle keeps the loop alive; SIGINT exits via
   // the handler above. Nothing below this line runs in normal operation.
