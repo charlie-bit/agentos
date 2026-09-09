@@ -3,5 +3,6 @@ packages:
   - "packages/adapters/*"
   - "packages/entry/*"
   - "cli"
+  - "apps/*"
 allowBuilds:
   esbuild: true
