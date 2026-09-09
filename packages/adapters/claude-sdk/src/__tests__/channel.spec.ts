@@ -5,7 +5,14 @@
  * covered by scripts/p2-smoke, not by unit tests.
  */
 import { describe, expect, it } from "vitest";
-import { resolveChannel, sdkEnvDelta, normalize } from "../index.js";
+import {
+  resolveChannel,
+  sdkEnvDelta,
+  normalize,
+  plansToMcpServers,
+  allowedToolsFromPlans,
+  collectDrift,
+} from "../index.js";
 
 const FAKE_ENV = {
   AGENTOS_SMOKE_BASE_URL: "https://channel.example/anthropic",
@@ -100,5 +107,55 @@ describe("normalize (synthetic SDK frames, kernel-free)", () => {
   it("unknown frame types never vanish silently", () => {
     const events = normalize(msg({ type: "future_thing" }));
     expect(events[0]?.type).toBe("kernel.future_thing");
+  });
+});
+
+describe("plan translation (P3): ToolMountPlan -> kernel shapes", () => {
+  const stdioPlan = {
+    key: "fs",
+    transport: "stdio" as const,
+    stdio: { command: "npx", args: ["-y", "server-filesystem", "/root"] },
+    allowedTools: ["read_file"],
+  };
+  const httpPlan = {
+    key: "gw",
+    transport: "http" as const,
+    http: { url: "https://mcp.example.com/rpc", headers: { Authorization: "Bearer fake" } },
+  };
+  const sdkPlan = { key: "bi", transport: "sdk" as const, sdk: { factoryName: "builtin" } };
+
+  it("stdio and http translate field-for-field; sdk needs its instance", () => {
+    const servers = plansToMcpServers([stdioPlan, httpPlan, sdkPlan], { builtin: { marker: true } });
+    expect(servers.fs).toEqual({ type: "stdio", command: "npx", args: ["-y", "server-filesystem", "/root"] });
+    expect(servers.gw).toEqual({ type: "http", url: "https://mcp.example.com/rpc", headers: { Authorization: "Bearer fake" } });
+    expect(servers.bi).toEqual({ type: "sdk", name: "builtin", instance: { marker: true } });
+  });
+
+  it("an sdk plan without a registered instance is skipped, not fabricated", () => {
+    expect(plansToMcpServers([sdkPlan], {})).toEqual({});
+  });
+
+  it("allowedTools derive to mcp__<key>__<tool>; unlisted plans contribute nothing", () => {
+    expect(allowedToolsFromPlans([stdioPlan, httpPlan])).toEqual(["mcp__fs__read_file"]);
+  });
+});
+
+describe("drift wiring (P3)", () => {
+  const plan = {
+    key: "fs",
+    transport: "stdio" as const,
+    stdio: { command: "srv" },
+    allowedTools: ["read_file", "gone_tool"],
+  };
+
+  it("collectDrift strips the kernel prefix and reports per-key in key/tool form", () => {
+    const drift = collectDrift([plan], ["mcp__fs__read_file", "mcp__fs__surprise", "mcp__other__x"]);
+    expect(drift).toEqual({ missing: ["fs/gone_tool"], undeclared: ["fs/surprise"] });
+  });
+
+  it("a clean init produces no drift event (normalize+collect stay quiet)", () => {
+    const discovered = ["mcp__fs__read_file", "mcp__fs__gone_tool"];
+    const drift = collectDrift([plan], discovered);
+    expect(drift).toEqual({ missing: [], undeclared: [] });
   });
 });

@@ -3,8 +3,12 @@
  * @anthropic-ai/claude-agent-sdk (ESLint-enforced seam).
  * Responsibilities, and nothing else:
  *   1) translate a ModelProviderManifest's env leases into the SDK's env;
- *   2) hand query() a minimal prompt + the filesystem MCP server;
- *   3) normalize the SDK message stream to contracts' RenderEvent.
+ *   2) translate NEUTRAL ToolMountPlans (from core/loader) into the SDK's
+ *      MCP server shapes — this translation is the only kernel-shape logic;
+ *   3) hand query() a minimal prompt + assembled servers;
+ *   4) normalize the SDK message stream to contracts' RenderEvent, checking
+ *      declared-vs-discovered tools at init (drift = warning event, never a
+ *      hard stop — missing tools degrade, the chain keeps running).
  * The model channel is vendor-agnostic: the adapter knows url+key
  * (Anthropic-compatible) only — which vendor sits behind the URL is env
  * content, not a code branch. The single exception is AWS Bedrock, and even
@@ -16,7 +20,8 @@
  * pre-approved read-only MCP tools, default permission mode — production
  * tightening is P5+ (governance module).
  */
-import type { ModelProviderManifest, RenderEvent } from "@agentos/contracts";
+import type { ModelProviderManifest, RenderEvent, ToolMountPlan } from "@agentos/contracts";
+import { driftReport } from "@agentos/core";
 import { query, type SDKMessage } from "@anthropic-ai/claude-agent-sdk";
 
 /** The subset of a model manifest the adapter actually consumes. */
@@ -58,18 +63,59 @@ export function sdkEnvDelta(channel: ResolvedChannel): Record<string, string> {
 }
 
 /**
- * P2 hand-built MCP mount — fields isomorphic to config/tools/mcp-filesystem.yml
- * (stdio + command + read-only allowlist). P3's loader assembles these from
- * manifests automatically; this literal is the seed of that mapping.
+ * Plan -> SDK MCP server config translation (the kernel-shape boundary).
+ * sdk plans need a live instance from the caller's registry (the opaque
+ * objects the loader saw by NAME); absent instance = the entry is skipped
+ * with no kernel call — consistent with the loader's degrade-not-fail rule.
  */
-function filesystemServer(repoRoot: string) {
-  return {
-    filesystem: {
-      type: "stdio" as const,
-      command: "npx",
-      args: ["-y", "@modelcontextprotocol/server-filesystem", repoRoot],
-    },
-  };
+export function plansToMcpServers(
+  plans: readonly ToolMountPlan[],
+  sdkServers?: Record<string, unknown>,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const plan of plans) {
+    if (plan.transport === "stdio" && plan.stdio) {
+      out[plan.key] = { type: "stdio", command: plan.stdio.command, ...(plan.stdio.args ? { args: plan.stdio.args } : {}) };
+    } else if (plan.transport === "http" && plan.http) {
+      out[plan.key] = { type: "http", url: plan.http.url, ...(plan.http.headers ? { headers: plan.http.headers } : {}) };
+    } else if (plan.transport === "sdk" && plan.sdk) {
+      const instance = sdkServers?.[plan.sdk.factoryName];
+      if (instance === undefined) continue;
+      out[plan.key] = { type: "sdk", name: plan.sdk.factoryName, instance };
+    }
+  }
+  return out;
+}
+
+/**
+ * Pre-approval list for the kernel: `mcp__<key>__<tool>` per declared bare
+ * name. Plans without an allowlist contribute nothing here — their tools
+ * fall to runtime permission behavior (P5 governance tightens this).
+ */
+export function allowedToolsFromPlans(plans: readonly ToolMountPlan[]): string[] {
+  return plans.flatMap((p) => (p.allowedTools ?? []).map((t) => `mcp__${p.key}__${t}`));
+}
+
+/**
+ * Aggregate declared-vs-discovered drift across mounted keys. Discovery names
+ * arrive kernel-prefixed (`mcp__<key>__<tool>`); each plan is checked against
+ * its own stripped slice, and reports are concatenated. Empty allowlist plan =
+ * pass-through per the drift contract (no alarms from it).
+ */
+export function collectDrift(
+  plans: readonly ToolMountPlan[],
+  discoveredFullNames: readonly string[],
+): { missing: string[]; undeclared: string[] } {
+  const missing: string[] = [];
+  const undeclared: string[] = [];
+  for (const plan of plans) {
+    const prefix = `mcp__${plan.key}__`;
+    const bare = discoveredFullNames.filter((n) => n.startsWith(prefix)).map((n) => n.slice(prefix.length));
+    const report = driftReport(plan.allowedTools ?? [], bare);
+    missing.push(...report.missing.map((t) => `${plan.key}/${t}`));
+    undeclared.push(...report.undeclared.map((t) => `${plan.key}/${t}`));
+  }
+  return { missing, undeclared };
 }
 
 export interface TurnInput {
@@ -77,9 +123,11 @@ export interface TurnInput {
   prompt: string;
   /** SDK session id to continue; absent = fresh conversation. */
   resumeSdkSessionId?: string;
-  /** Absolute path the filesystem MCP may read — normally the repo root. */
-  repoRoot: string;
-  /** Default: the read-only filesystem tools (see ALLOWED below). */
+  /** Neutral mount plans from core/loader — the ONLY way tools reach the kernel now. */
+  toolMounts: readonly ToolMountPlan[];
+  /** Instances for sdk-plan factories, keyed by factoryName. */
+  sdkServers?: Record<string, unknown>;
+  /** Explicit pre-approval override; default derives from plan allowlists (see allowedToolsFromPlans). */
   allowedTools?: string[];
   /** Kernel turn cap. Default 6 — hello-world needs tool round-trip + answer. */
   maxTurns?: number;
@@ -111,13 +159,6 @@ export interface TurnOutput {
   };
 }
 
-/** Pre-approved tool names for the MCP server key above (read-only subset). */
-export const DEFAULT_ALLOWED_TOOLS = [
-  "mcp__filesystem__read_file",
-  "mcp__filesystem__list_directory",
-  "mcp__filesystem__read_multiple_files",
-];
-
 /**
  * One kernel turn. Throws only on kernel/transport failure (environment
  * problems); a model "error" result arrives as data (result.isError).
@@ -132,8 +173,8 @@ export async function runTurn(input: TurnInput): Promise<TurnOutput> {
     prompt: input.prompt,
     options: {
       systemPrompt: "You are an AgentOS assistant. Use the filesystem tools to inspect files when asked about the project.",
-      mcpServers: filesystemServer(input.repoRoot),
-      allowedTools: input.allowedTools ?? DEFAULT_ALLOWED_TOOLS,
+      mcpServers: plansToMcpServers(input.toolMounts, input.sdkServers) as never,
+      allowedTools: input.allowedTools ?? allowedToolsFromPlans(input.toolMounts),
       permissionMode: "default",
       maxTurns: input.maxTurns ?? 6,
       ...(input.resumeSdkSessionId ? { resume: input.resumeSdkSessionId } : {}),
@@ -144,6 +185,14 @@ export async function runTurn(input: TurnInput): Promise<TurnOutput> {
   for await (const message of stream) {
     sdkSessionId = message.session_id ?? sdkSessionId;
     events.push(...normalize(message));
+    if (message.type === "system" && message.subtype === "init") {
+      // Drift is a WARNING event, not a hard stop: fewer tools must still run
+      // the chain (absent-degrade philosophy); governance consumes this in P5.
+      const drift = collectDrift(input.toolMounts, message.tools ?? []);
+      if (drift.missing.length + drift.undeclared.length > 0) {
+        events.push({ type: "kernel.system.drift", payload: drift, timestampMs: Date.now() });
+      }
+    }
     if (message.type === "result") {
       const u = message.usage as
         | {

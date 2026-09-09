@@ -2,9 +2,11 @@
 export {
   resolveChannel,
   sdkEnvDelta,
+  plansToMcpServers,
+  allowedToolsFromPlans,
+  collectDrift,
   runTurn,
   normalize,
-  DEFAULT_ALLOWED_TOOLS,
   type ModelLease,
   type ResolvedChannel,
   type TurnInput,
