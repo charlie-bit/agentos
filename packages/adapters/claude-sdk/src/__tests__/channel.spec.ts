@@ -86,12 +86,15 @@ describe("normalize (synthetic SDK frames, kernel-free)", () => {
     expect(normalize(msg({ type: "user", message: { content: "text" } }))).toEqual([]);
   });
 
-  it("result frame carries subtype + is_error as data", () => {
+  it("result frame carries subtype + is_error + usage/cost as data", () => {
     const events = normalize(
       msg({ type: "result", subtype: "success", is_error: false, duration_ms: 1, num_turns: 2, result: "ok", total_cost_usd: 0, usage: {}, modelUsage: {}, permission_denials: [] }),
     );
     expect(events[0]?.type).toBe("result");
-    expect(events[0]?.payload).toEqual({ subtype: "success", isError: false });
+    expect(events[0]?.payload).toEqual({ subtype: "success", isError: false, usage: {}, totalCostUsd: 0 });
+    // Endpoints that omit accounting: say so explicitly (null), never invent numbers.
+    const bare = normalize(msg({ type: "result", subtype: "success", is_error: false }));
+    expect(bare[0]?.payload).toEqual({ subtype: "success", isError: false, usage: null, totalCostUsd: null });
   });
 
   it("unknown frame types never vanish silently", () => {

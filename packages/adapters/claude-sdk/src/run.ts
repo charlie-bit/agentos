@@ -91,7 +91,24 @@ export interface TurnOutput {
   /** Kernel session id from the stream — store it in the ledger for resume. */
   sdkSessionId?: string;
   /** Terminal result facts (no transcript content). */
-  result?: { subtype: string; isError: boolean; numTurns?: number; totalCostUsd?: number };
+  result?: {
+    subtype: string;
+    isError: boolean;
+    numTurns?: number;
+    totalCostUsd?: number;
+    /**
+     * Kernel token accounting for this turn. Counts are vendor-neutral
+     * (whatever the endpoint reports); totalCostUsd is an Anthropic list-price
+     * estimate and is NOT reliable on non-Anthropic compatibility endpoints —
+     * there, channel-side billing is authoritative.
+     */
+    usage?: {
+      inputTokens?: number;
+      outputTokens?: number;
+      cacheReadTokens?: number;
+      cacheCreationTokens?: number;
+    };
+  };
 }
 
 /** Pre-approved tool names for the MCP server key above (read-only subset). */
@@ -128,11 +145,29 @@ export async function runTurn(input: TurnInput): Promise<TurnOutput> {
     sdkSessionId = message.session_id ?? sdkSessionId;
     events.push(...normalize(message));
     if (message.type === "result") {
+      const u = message.usage as
+        | {
+            input_tokens?: number;
+            output_tokens?: number;
+            cache_read_input_tokens?: number;
+            cache_creation_input_tokens?: number;
+          }
+        | undefined;
       result = {
         subtype: message.subtype,
         isError: message.is_error,
         numTurns: message.num_turns,
         totalCostUsd: message.total_cost_usd,
+        ...(u
+          ? {
+              usage: {
+                inputTokens: u.input_tokens,
+                outputTokens: u.output_tokens,
+                cacheReadTokens: u.cache_read_input_tokens,
+                cacheCreationTokens: u.cache_creation_input_tokens,
+              },
+            }
+          : {}),
       };
     }
   }
@@ -177,7 +212,12 @@ export function normalize(message: SDKMessage): RenderEvent[] {
       return [
         {
           type: "result",
-          payload: { subtype: message.subtype, isError: message.is_error },
+          payload: {
+            subtype: message.subtype,
+            isError: message.is_error,
+            usage: (message as { usage?: unknown }).usage ?? null,
+            totalCostUsd: message.total_cost_usd ?? null,
+          },
           timestampMs: ts,
         },
       ];
