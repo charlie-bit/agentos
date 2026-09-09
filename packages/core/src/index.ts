@@ -2,3 +2,4 @@
 // Modules: manifest (load + judge), session (ledger). Further modules per blueprint.
 export * from "./manifest/index.js";
 export * from "./session/index.js";
+export * from "./loader/index.js";
