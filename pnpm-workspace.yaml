@@ -1,6 +1,7 @@
 packages:
   - "packages/*"
   - "packages/adapters/*"
+  - "packages/entry/*"
   - "cli"
 allowBuilds:
   esbuild: true
