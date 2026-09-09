@@ -3,5 +3,9 @@
   "compilerOptions": {
     "noEmit": true
   },
-  "include": ["tool", "entry"]
+  "include": [
+    "tool",
+    "entry",
+    "entry-rest"
+  ]
 }
