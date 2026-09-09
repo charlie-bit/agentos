@@ -22,6 +22,22 @@ describe("validatePresetRefs — the happy chain", () => {
     expect(validatePresetRefs(validSet(), { entryNames: ["mock-chat"] })).toEqual([]);
   });
 
+  it("swap semantics: repointing the preset's model slot at another declared manifest passes with zero code changes", () => {
+    const loaded = [...validSet(), loadOne("alt/vendor-b.yml")];
+    const idx = loaded.findIndex((l) => l.manifest.kind === "preset");
+    const preset = loaded[idx]!;
+    // Minimal mutation of a LOADED manifest — the swap itself, not a hand-built object.
+    const swapped: LoadedManifest = {
+      source: preset.source,
+      manifest: { ...preset.manifest, model: "vendor-b" } as LoadedManifest["manifest"],
+    };
+    const errors = validatePresetRefs(
+      [...loaded.slice(0, idx), swapped, ...loaded.slice(idx + 1)],
+      { entryNames: ["mock-chat"] },
+    );
+    expect(errors).toEqual([]);
+  });
+
   it("reports the entry slot when no adapters are registered yet", () => {
     const errors = validatePresetRefs(validSet());
     expect(errors).toHaveLength(1);

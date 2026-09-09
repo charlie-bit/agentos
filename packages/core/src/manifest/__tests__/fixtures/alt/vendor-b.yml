@@ -1,0 +1,8 @@
+kind: model
+version: "1"
+name: vendor-b
+provider: vendor-b
+baseUrlEnv: VENDOR_B_BASE_URL
+credentialsEnv: VENDOR_B_API_KEY
+models:
+  general: vendor-b/chat
