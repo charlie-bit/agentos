@@ -17,8 +17,17 @@ import {
   planTools,
   openLedger,
   ledgerPathFromEnv,
+  resolveActiveModel,
+  HealthGate,
+  selectDialect,
+  appendAttribution,
+  formatAttributionLine,
+  type Attribution,
   type AnyManifest,
 } from "@agentos/core";
+import type { ModelProviderManifest } from "@agentos/contracts";
+import { dialect as compatDialect } from "@agentos/model-anthropic-compat";
+import { dialect as bedrockDialect } from "@agentos/model-bedrock";
 import { ENTRY_NAME as CLI_ENTRY, EntryCli, formatUsageSummary } from "@agentos/entry-cli";
 import { startServer, ENTRY_NAME as REST_ENTRY } from "@agentos/entry-rest";
 import { runTurn, type ModelLease } from "@agentos/adapter-claude-sdk";
@@ -30,15 +39,28 @@ export interface ServeFlags {
   verbose?: boolean;
   web?: boolean;
   port?: number;
+  /** P6 request-level override: manifest name OR alias; beats the preset slot. */
+  model?: string;
 }
 
 interface Assembly {
   presetName: string;
-  modelLease: ModelLease;
-  channelChecked: boolean;
+  /** The preset's model slot (before any request-level override). */
+  presetModel: string;
+  allModels: ModelProviderManifest[];
   plans: ReturnType<typeof planTools>["plans"];
   mounts: Array<{ key: string; transport: string; degraded?: boolean }>;
   repoRoot: string;
+}
+
+/** Routed turn-model: what runTurn needs + who to attribute the turn to. */
+interface RoutedModel {
+  lease: ModelLease;
+  manifestName: string;
+  provider: string;
+  alias?: string;
+  modelId?: string;
+  usageAttr?: Record<string, string>;
 }
 
 function findRepoRoot(start: string): string {
@@ -50,6 +72,27 @@ function findRepoRoot(start: string): string {
     dir = parent;
   }
   return start;
+}
+
+/** Build the attribution record from a finished turn (routing identity + kernel numbers). */
+function attributionFor(
+  out: Awaited<ReturnType<typeof runTurn>>,
+  routed: RoutedModel,
+  presetName: string,
+  session: string,
+): Attribution {
+  const u = out.result?.usage;
+  return {
+    tsMs: Date.now(),
+    preset: presetName,
+    session,
+    manifest: routed.manifestName,
+    provider: routed.provider,
+    alias: routed.alias,
+    modelId: routed.modelId,
+    usage: u ? { input: u.inputTokens, output: u.outputTokens, cacheRead: u.cacheReadTokens, cacheWrite: u.cacheCreationTokens } : undefined,
+    costUsd: typeof out.result?.totalCostUsd === "number" ? out.result.totalCostUsd : undefined,
+  };
 }
 
 function collectYml(dir: string): string[] {
@@ -98,29 +141,67 @@ function assemble(flags: ServeFlags): { ok: true; value: Assembly } | { ok: fals
   if (errors.length) return { ok: false, exitCode: 1, lines: errors.map((e) => `✗ ${e.path}: ${e.message}`) };
   for (const w of warnings) write(`⚠ ${w.key}: ${w.message}\n`);
 
-  const channel: ModelLease = process.env.AGENTOS_SMOKE_BASE_URL
-    ? { provider: model.provider, baseUrlEnv: "AGENTOS_SMOKE_BASE_URL", credentialsEnv: "AGENTOS_SMOKE_API_KEY" }
-    : { provider: model.provider, baseUrlEnv: model.baseUrlEnv, credentialsEnv: model.credentialsEnv };
-  if ((channel.baseUrlEnv && !process.env[channel.baseUrlEnv]) || (channel.credentialsEnv && !process.env[channel.credentialsEnv])) {
-    return {
-      ok: false,
-      exitCode: 1,
-      lines: [
-        `✗ model channel not configured (needs ${channel.baseUrlEnv ?? "baseUrlEnv"} + ${channel.credentialsEnv ?? "credentialsEnv"} in the environment; values are never printed)`,
-      ],
-    };
-  }
   return {
     ok: true,
     value: {
       presetName: preset.name,
-      modelLease: channel,
-      channelChecked: true,
+      presetModel: model.name,
+      allModels: manifests.filter((m): m is ModelProviderManifest => m.kind === "model"),
       plans,
       mounts: plans.map((p) => ({ key: p.key, transport: p.transport, degraded: false })).concat(
         warnings.map((w) => ({ key: w.key, transport: "sdk", degraded: true })),
       ),
       repoRoot,
+    },
+  };
+}
+
+/**
+ * P6 routing step (composition-root duty): priority -> alias, health gate
+ * with alias-level fallback, lease presence check. The smoke-harness env
+ * override (AGENTOS_SMOKE_*) beats manifest lease NAMES — same rule as P5,
+ * relocated, not changed.
+ */
+async function routeModel(flags: ServeFlags, asm: Assembly): Promise<{ ok: true; value: RoutedModel } | { ok: false; exitCode: number; lines: string[] }> {
+  const active = resolveActiveModel({ presetModel: asm.presetModel, override: flags.model, models: asm.allModels });
+  if (!active.ok) return { ok: false, exitCode: 1, lines: active.errors.map((e) => `✗ ${e.path}: ${e.message}${e.hint ? ` (${e.hint})` : ""}`) };
+  const { manifest } = active.active;
+
+  const gate = new HealthGate(async (m) =>
+    selectDialect(m) === "bedrock" ? bedrockDialect.healthCheck(m) : compatDialect.healthCheck(m),
+  );
+  const picked = await gate.pick(manifest, active.active.alias);
+  if (!picked.ok) {
+    return {
+      ok: false,
+      exitCode: 1,
+      lines: [
+        `✗ no healthy alias for model manifest "${manifest.name}":`,
+        ...Object.entries(picked.probes).map(([alias, r]) => `    ${alias}: ${r.ok ? "ok" : (r.reason ?? "probe failed")}`),
+      ],
+    };
+  }
+
+  const smokeLease = process.env.AGENTOS_SMOKE_BASE_URL
+    ? { baseUrlEnv: "AGENTOS_SMOKE_BASE_URL", credentialsEnv: "AGENTOS_SMOKE_API_KEY" }
+    : { baseUrlEnv: manifest.baseUrlEnv, credentialsEnv: manifest.credentialsEnv };
+  const lease: ModelLease = { provider: manifest.provider, ...smokeLease };
+  if ((lease.baseUrlEnv && !process.env[lease.baseUrlEnv]) || (lease.credentialsEnv && !process.env[lease.credentialsEnv])) {
+    return {
+      ok: false,
+      exitCode: 1,
+      lines: [`✗ model channel not configured (needs ${lease.baseUrlEnv ?? "baseUrlEnv"} + ${lease.credentialsEnv ?? "credentialsEnv"} in the environment; values are never printed)`],
+    };
+  }
+  return {
+    ok: true,
+    value: {
+      lease,
+      manifestName: manifest.name,
+      provider: manifest.provider,
+      alias: picked.alias,
+      modelId: picked.modelId,
+      usageAttr: manifest.usageAttr,
     },
   };
 }
@@ -143,7 +224,13 @@ export async function runServe(flags: ServeFlags): Promise<number> {
     for (const l of asm.lines) write(`${l}\n`);
     return asm.exitCode;
   }
-  const { presetName, modelLease, plans } = asm.value;
+  const { presetName, plans } = asm.value;
+  const routed = await routeModel(flags, asm.value);
+  if (!routed.ok) {
+    for (const l of routed.lines) write(`${l}\n`);
+    return routed.exitCode;
+  }
+  const { lease: modelLease, modelId } = routed.value;
 
   const externalKey = flags.session ?? (flags.continue ? "cli" : `cli-${Date.now()}`);
   const ledger = openLedger();
@@ -213,8 +300,11 @@ export async function runServe(flags: ServeFlags): Promise<number> {
       continue;
     }
     try {
-      const out = await runTurn({ model: modelLease, prompt: line, toolMounts: plans, resumeSdkSessionId: currentSdk });
+      const out = await runTurn({ model: modelLease, prompt: line, toolMounts: plans, resumeSdkSessionId: currentSdk, modelId });
       entry.render(out.events);
+      const attr = attributionFor(out, routed.value, presetName, externalKey);
+      write(`${formatAttributionLine(attr)}\n`);
+      appendAttribution(attr);
       if (out.sdkSessionId) {
         currentSdk = out.sdkSessionId;
         ledger.setSdkSessionId(entry.sessionRow.id, out.sdkSessionId);
@@ -259,7 +349,13 @@ export async function runServeWeb(flags: ServeFlags): Promise<number> {
     for (const l of asm.lines) write(`${l}\n`);
     return asm.exitCode;
   }
-  const { presetName, modelLease, plans, mounts, repoRoot } = asm.value;
+  const { presetName, plans, mounts, repoRoot } = asm.value;
+  const routed = await routeModel(flags, asm.value);
+  if (!routed.ok) {
+    for (const l of routed.lines) write(`${l}\n`);
+    return routed.exitCode;
+  }
+  const { lease: modelLease, modelId } = routed.value;
 
   const staticDir = join(repoRoot, "apps", "web", "dist");
   if (!existsSync(join(staticDir, "index.html"))) {
@@ -279,7 +375,13 @@ export async function runServeWeb(flags: ServeFlags): Promise<number> {
         toolMounts: plans,
         resumeSdkSessionId: ctx.resumeSdkSessionId,
         onEvent: ctx.emit,
+        modelId,
       });
+      // server-side attribution: stdout line + usage.log. The web UI is frozen
+      // for P5.1 visual review — attribution display there waits for that verdict.
+      const attr = attributionFor(out, routed.value, presetName, ctx.externalKey);
+      write(`${formatAttributionLine(attr)}\n`);
+      appendAttribution(attr);
       // the real runner has no confirm consumer yet (P7 kb_commit gating will
       // be the first); the out-of-band channel itself is conformance-proven.
       return { sdkSessionId: out.sdkSessionId };

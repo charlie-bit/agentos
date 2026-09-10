@@ -16,6 +16,7 @@ const USAGE = [
   "                                              interactive REPL (needs a model channel env)",
   "  agentos serve --web [--port 8787] [--preset <path>]",
   "                                              SSE server + web console on 127.0.0.1",
+  "  both accept --model <alias|manifest-name> (request-level, beats preset slot)",
 ];
 
 export async function run(argv: readonly string[]): Promise<CliResult> {
@@ -37,6 +38,7 @@ export async function run(argv: readonly string[]): Promise<CliResult> {
           port: { type: "string" },
           preset: { type: "string", default: "config/presets/example.yml" },
           session: { type: "string" },
+          model: { type: "string" },
           continue: { type: "boolean" },
           verbose: { type: "boolean" },
         },
@@ -51,6 +53,7 @@ export async function run(argv: readonly string[]): Promise<CliResult> {
       const exitCode = await runServe({
         preset: values.preset ?? "config/presets/example.yml",
         session: values.session,
+        model: values.model,
         continue: values.continue,
         verbose: values.verbose,
         web: values.web,

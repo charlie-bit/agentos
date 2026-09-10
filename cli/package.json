@@ -14,8 +14,11 @@
   },
   "dependencies": {
     "@agentos/adapter-claude-sdk": "workspace:*",
+    "@agentos/contracts": "workspace:*",
     "@agentos/core": "workspace:*",
     "@agentos/entry-cli": "workspace:*",
-    "@agentos/entry-rest": "workspace:*"
+    "@agentos/entry-rest": "workspace:*",
+    "@agentos/model-anthropic-compat": "workspace:*",
+    "@agentos/model-bedrock": "workspace:*"
   }
 }
