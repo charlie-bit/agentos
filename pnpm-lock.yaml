@@ -90,6 +90,9 @@ importers:
       '@agentos/adapter-claude-sdk':
         specifier: workspace:*
         version: link:../packages/adapters/claude-sdk
+      '@agentos/contracts':
+        specifier: workspace:*
+        version: link:../packages/contracts
       '@agentos/core':
         specifier: workspace:*
         version: link:../packages/core
@@ -99,6 +102,12 @@ importers:
       '@agentos/entry-rest':
         specifier: workspace:*
         version: link:../packages/entry/entry-rest
+      '@agentos/model-anthropic-compat':
+        specifier: workspace:*
+        version: link:../packages/providers/model-anthropic-compat
+      '@agentos/model-bedrock':
+        specifier: workspace:*
+        version: link:../packages/providers/model-bedrock
 
   packages/adapters/claude-sdk:
     dependencies:
@@ -108,6 +117,12 @@ importers:
       '@agentos/core':
         specifier: workspace:*
         version: link:../../core
+      '@agentos/model-anthropic-compat':
+        specifier: workspace:*
+        version: link:../../providers/model-anthropic-compat
+      '@agentos/model-bedrock':
+        specifier: workspace:*
+        version: link:../../providers/model-bedrock
       '@anthropic-ai/claude-agent-sdk':
         specifier: ^0.3.0
         version: 0.3.263(@anthropic-ai/sdk@0.124.0(zod@4.5.4))(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.5.4))(zod@4.5.4)
@@ -126,6 +141,12 @@ importers:
       '@agentos/entry-rest':
         specifier: workspace:*
         version: link:../entry/entry-rest
+      '@agentos/model-anthropic-compat':
+        specifier: workspace:*
+        version: link:../providers/model-anthropic-compat
+      '@agentos/model-bedrock':
+        specifier: workspace:*
+        version: link:../providers/model-bedrock
 
   packages/contracts:
     dependencies:
@@ -155,6 +176,24 @@ importers:
         version: link:../../core
 
   packages/entry/entry-rest:
+    dependencies:
+      '@agentos/contracts':
+        specifier: workspace:*
+        version: link:../../contracts
+      '@agentos/core':
+        specifier: workspace:*
+        version: link:../../core
+
+  packages/providers/model-anthropic-compat:
+    dependencies:
+      '@agentos/contracts':
+        specifier: workspace:*
+        version: link:../../contracts
+      '@agentos/core':
+        specifier: workspace:*
+        version: link:../../core
+
+  packages/providers/model-bedrock:
     dependencies:
       '@agentos/contracts':
         specifier: workspace:*
