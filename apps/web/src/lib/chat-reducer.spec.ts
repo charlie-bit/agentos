@@ -136,3 +136,52 @@ describe("drift, confirm, result", () => {
     expect(reduce(busy, { t: "session_switched" })).toEqual(initialState);
   });
 });
+
+describe("history hydration (P5.1 replay)", () => {
+  const history: Action = {
+    t: "hydrate",
+    items: [
+      { role: "user", text: "read the map" },
+      { role: "tool", text: '{"path":"a.md"}', toolName: "read_file" },
+      { role: "assistant", text: "here it is" },
+    ],
+  };
+
+  it("replays items in order, every entry in a TERMINAL state", () => {
+    const s = reduce(initialState, history);
+    expect(s.entries.map((e) => e.kind)).toEqual(["user", "tool", "assistant"]);
+    expect(assistant(s)[0]?.status).toBe("done");
+    expect(tools(s)[0]?.status).toBe("ok");
+    expect(tools(s)[0]?.name).toBe("read_file");
+    expect(s.conn).toBe("idle");
+  });
+
+  it("a failed historical tool call replays as error, not ok", () => {
+    const s = reduce(initialState, { t: "hydrate", items: [{ role: "tool", text: "{}", toolName: "kb_write", isError: true }] });
+    expect(tools(s)[0]?.status).toBe("error");
+  });
+
+  it("an empty history is a no-op, not a reset", () => {
+    const seeded = reduce(initialState, { t: "send", text: "typed before history arrived" });
+    expect(reduce(seeded, { t: "hydrate", items: [] })).toEqual(seeded);
+  });
+
+  it("hydration NEVER clobbers a turn already in flight", () => {
+    const live = run(initialState, [{ t: "send", text: "hi" }, { t: "stream_start" }, frame("assistant.text", { text: "partial" })]);
+    expect(reduce(live, history)).toEqual(live);
+  });
+
+  it("hydrated ids cannot collide with ids minted by later live turns", () => {
+    const s = run(initialState, [history, { t: "send", text: "next question" }]);
+    expect(new Set(s.entries.map((e) => e.id)).size).toBe(s.entries.length);
+  });
+
+  it("switching sessions clears the old chat, then the new history replaces it", () => {
+    const first = reduce(initialState, history);
+    const cleared = reduce(first, { t: "session_switched" });
+    expect(cleared.entries).toEqual([]);
+    const second = reduce(cleared, { t: "hydrate", items: [{ role: "user", text: "other session" }] });
+    expect(second.entries).toHaveLength(1);
+    expect(second.entries[0]).toMatchObject({ kind: "user", text: "other session" });
+  });
+});
