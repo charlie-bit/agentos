@@ -147,6 +147,19 @@ export const knowledgeManifestSchema = manifestEnvelopeSchema.extend({
   workspaceId: z.string().min(1).optional(),
   /** Env var name carrying the KB token; never the token. */
   tokenEnv: z.string().min(1).optional(),
+  /**
+   * P7a pure addition — content-legislation trigger gate (P7b). Deployment
+   * policy DATA, consumed ONLY by the cli `kb gate` query; no runtime layer
+   * reads it. absent = { minPerWeek: 3, windowDays: 7 }.
+   */
+  escalationGate: z
+    .strictObject({
+      /** Human-handoff events needed within the window to trigger the gate. */
+      minPerWeek: z.number().int().min(1),
+      /** Sliding window length in days, counted back from now. */
+      windowDays: z.number().int().min(1),
+    })
+    .optional(),
 });
 
 export type KnowledgeManifest = z.infer<typeof knowledgeManifestSchema>;
