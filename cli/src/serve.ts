@@ -33,7 +33,7 @@ import { dialect as compatDialect } from "@agentos/model-anthropic-compat";
 import { dialect as bedrockDialect } from "@agentos/model-bedrock";
 import { ENTRY_NAME as CLI_ENTRY, EntryCli, formatUsageSummary } from "@agentos/entry-cli";
 import { startServer, ENTRY_NAME as REST_ENTRY } from "@agentos/entry-rest";
-import { createInProcessServer, runTurn, type ModelLease } from "@agentos/adapter-claude-sdk";
+import { createInProcessServer, readTranscript, runTurn, type ModelLease } from "@agentos/adapter-claude-sdk";
 
 export interface ServeFlags {
   preset: string;
@@ -496,6 +496,12 @@ export async function runServeWeb(flags: ServeFlags): Promise<number> {
       return { sdkSessionId: out.sdkSessionId };
     },
     ledger,
+    // History replay (P5.1): the ONLY place that knows both halves — the ledger
+    // pointer belongs to core, the transcript format belongs to the adapter, and
+    // the workspace path convention (per-session cwd) is this root's own rule.
+    // entry-rest stays format-blind; it just calls what it was handed.
+    readTranscript: ({ sdkSessionId, externalKey }) =>
+      readTranscript(sdkSessionId, join(repoRoot, ".agentos", "workspaces", externalKey)),
     port: flags.port ?? 8787,
     dbPath,
     staticDir,

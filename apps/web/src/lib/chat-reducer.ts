@@ -24,6 +24,19 @@ export type Entry =
   | { kind: "thinking"; id: string; count: number; open: boolean }
   | { kind: "drift"; id: string; missing: string[]; undeclared: string[] };
 
+/**
+ * One history item as served by GET /api/sessions/:id/messages — the wire form
+ * of the neutral TranscriptEntry. Declared here rather than imported so the
+ * reducer keeps its "knows nothing about fetch" property.
+ */
+export interface HistoryItem {
+  role: "user" | "assistant" | "tool";
+  text: string;
+  toolName?: string;
+  isError?: boolean;
+  timestampMs?: number;
+}
+
 export interface Usage {
   input: number;
   output: number;
@@ -81,7 +94,8 @@ export type Action =
   | { t: "stream_end" }
   | { t: "frame"; frame: Frame }
   | { t: "confirm_resolved" }
-  | { t: "session_switched" };
+  | { t: "session_switched" }
+  | { t: "hydrate"; items: HistoryItem[] };
 
 export const initialState: State = {
   entries: [],
@@ -129,6 +143,27 @@ export function reduce(s: State, a: Action): State {
       return { ...s, pending: null };
     case "session_switched":
       return { ...initialState };
+    /**
+     * Replay past turns after a reload or a session switch (P5.1). Every
+     * hydrated entry lands in a TERMINAL state — history is finished by
+     * definition, so nothing may render as streaming or running. Ids carry an
+     * "h" prefix so they can never collide with the live "e" sequence, which is
+     * why seq is left untouched. Two guards: an in-flight turn is never
+     * clobbered (a late history response must not eat live text), and an empty
+     * history is a no-op rather than a state reset.
+     */
+    case "hydrate": {
+      if (s.conn !== "idle" || a.items.length === 0) return s;
+      const entries: Entry[] = a.items.map((h, i) => {
+        const id = `h${i}`;
+        if (h.role === "tool") {
+          return { kind: "tool", id, name: h.toolName ?? "?", input: h.text, status: h.isError === true ? "error" : "ok" };
+        }
+        if (h.role === "assistant") return { kind: "assistant", id, text: h.text, status: "done" };
+        return { kind: "user", id, text: h.text };
+      });
+      return { ...s, entries };
+    }
     case "frame": {
       const f = a.frame;
       const p = f.payload ?? {};

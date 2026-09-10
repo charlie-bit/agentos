@@ -3,7 +3,7 @@
  * The vocabulary is defined by @agentos/entry-rest (contract layer — this UI
  * is a shell swap, endpoints and frames are byte-identical to P5).
  */
-import type { Frame } from "./chat-reducer";
+import type { Frame, HistoryItem } from "./chat-reducer";
 
 const jget = async <T>(path: string): Promise<T> => (await fetch(path)).json() as Promise<T>;
 const jpost = async <T>(path: string, body: unknown): Promise<T> =>
@@ -29,6 +29,14 @@ export const getSessions = () => jget<{ sessions: SessionRow[] }>("/api/sessions
 export const getEscalations = () => jget<{ count: number }>("/api/escalations");
 export const escalate = (sessionId: string, reason?: string) => jpost<{ ok: boolean }>("/api/escalate", { sessionId, reason });
 export const answerConfirm = (requestId: string, approved: boolean) => jpost<{ ok: boolean }>("/api/confirm", { requestId, approved });
+
+/**
+ * Past turns for a session (read-only). The server answers 200 + [] for every
+ * "nothing to show" case — no pointer, no stored transcript, unreadable store —
+ * so a caller never has to distinguish "empty history" from "failed request".
+ */
+export const getMessages = (sessionId: string) =>
+  jget<{ entries: HistoryItem[] }>(`/api/sessions/${encodeURIComponent(sessionId)}/messages`);
 
 /** One chat turn: consume the SSE response frame by frame. */
 export async function chat(sessionId: string, message: string, onFrame: (frame: Frame) => void): Promise<void> {
