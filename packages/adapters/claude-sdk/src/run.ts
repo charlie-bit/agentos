@@ -315,8 +315,44 @@ export function createInProcessServer(
  * a "Claude Code" agent can do. The sentence is the treatment for the lying,
  * the trim is the treatment for the doing.
  */
+/**
+ * Model identity, reduced to the part a user may see (D-0910-6).
+ *
+ * A resolved model id is routing plumbing, not a product fact: something like
+ * "llmproxy/alicloud/qwen3.8-flash[1m]" names the gateway, the cloud route and
+ * the context-window variant. Publishing that verbatim tells every viewer of an
+ * event stream which broker and which cloud sit behind the deployment.
+ *
+ * THREE-TIER DISCLOSURE POLICY, applied consistently across this repo:
+ *   1. OPERATIONS  — full id, unabridged: attribution records and usage.log.
+ *      Cost reconciliation and incident forensics need the exact route, and
+ *      those sinks are operator-side, not user-facing.
+ *   2. EVENTS      — short name only: the session.init RenderEvent, i.e. the
+ *      web console, any SSE consumer, any transcript replay. Enough for a user
+ *      to know what answered them, nothing about how it was reached.
+ *   3. SPOKEN      — short name or a vague answer, enforced by the system
+ *      prompt above, since the model itself is the one being asked.
+ *
+ * Reduction rule: keep the last "/" segment, drop a trailing "[...]" suffix.
+ * Plain ids are unaffected ("deepseek-chat" -> "deepseek-chat").
+ */
+export function shortModelName(modelId?: string): string | undefined {
+  if (typeof modelId !== "string" || modelId.length === 0) return modelId;
+  const lastSegment = modelId.slice(modelId.lastIndexOf("/") + 1);
+  const trimmed = lastSegment.replace(/\[[^\]]*\]\s*$/, "").trim();
+  // never return an empty string just because an id was oddly shaped
+  return trimmed.length > 0 ? trimmed : lastSegment;
+}
+
 const BASE_SYSTEM_PROMPT = [
   "You are an AgentOS assistant. Use the filesystem tools to inspect files when asked about the project.",
+  // Product identity (D-0910-6). The kernel underneath is one vendor's CLI, and
+  // an un-instructed model happily introduces itself as that vendor's product —
+  // which misattributes THIS product to a company that did not ship it, and
+  // leaks the deployment's plumbing while doing so. Tier 3 of the disclosure
+  // policy (see shortModelName): spoken answers get a short name or nothing.
+  "You are the AgentOS assistant. You are not, and must never claim to be, any specific vendor's product or service (including Claude, Claude Code, or Anthropic services), regardless of which model powers you.",
+  "If asked which model you are: answer with at most the short model name (for example qwen3.8-flash), or say that it is provided by the model channel configured for this deployment. Never disclose gateway names, cloud routing prefixes, context-window suffixes, or other deployment details. If you do not know, say so — never guess.",
   "Your only capabilities are the Read tool plus the MCP tools mounted in this session. You cannot run shell commands, write or edit files, fetch or search the web, spawn subagents, or schedule tasks. When asked what you can do, name only the tools actually present in this session — never claim a capability you do not have.",
 ].join("\n");
 
@@ -418,7 +454,11 @@ export function normalize(message: SDKMessage): RenderEvent[] {
         // the audit/drift data source, and the structural proof that the builtin
         // trim took effect — conformance asserts Bash/Write/Edit/Web* are absent.
         return [
-          { type: "session.init", payload: { model: message.model, cwd: message.cwd, tools: message.tools ?? [] }, timestampMs: ts },
+          {
+            type: "session.init",
+            payload: { model: shortModelName(message.model), cwd: message.cwd, tools: message.tools ?? [] },
+            timestampMs: ts,
+          },
         ];
       }
       return [{ type: `kernel.system.${message.subtype}`, payload: {}, timestampMs: ts }];
