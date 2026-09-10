@@ -235,6 +235,10 @@ describe("clean-room options (buildQueryOptions)", () => {
     expect(buildQueryOptions(turnBase(), FAKE_ENV).settingSources).toEqual([]);
   });
 
+  it("skills is the empty set — even the kernel's first-party bundle is not auto-inherited", () => {
+    expect(buildQueryOptions(turnBase(), FAKE_ENV).skills).toEqual([]);
+  });
+
   it("workspaceDir becomes cwd; absent falls back to process.cwd() (smoke parity)", () => {
     expect(buildQueryOptions(turnBase({ workspaceDir: "/tmp/ws-1" }), FAKE_ENV).cwd).toBe("/tmp/ws-1");
     expect(buildQueryOptions(turnBase(), FAKE_ENV).cwd).toBe(process.cwd());

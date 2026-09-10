@@ -343,6 +343,12 @@ export function buildQueryOptions(
         ? [BASE_SYSTEM_PROMPT, ...input.systemPromptAdditions]
         : BASE_SYSTEM_PROMPT,
     settingSources: [],
+    // Probe-verified (D-0910-3 addendum): settingSources blocks host config/MCP
+    // (host's 8 servers -> 0) but the CLI's FIRST-PARTY bundled skills still
+    // enumerate (16 public names, no host ones). The SDK's documented `skills`
+    // option is "the single place to turn skills on" -> empty seals the last
+    // inherited surface: capability = manifest assembly + kernel built-in tools.
+    skills: [],
     mcpServers: plansToMcpServers(input.toolMounts, input.sdkServers) as never,
     allowedTools: [...new Set([...derived, "Read"])],
     permissionMode: "default",
