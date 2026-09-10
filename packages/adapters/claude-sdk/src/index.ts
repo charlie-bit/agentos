@@ -6,6 +6,7 @@ export {
   plansToMcpServers,
   allowedToolsFromPlans,
   collectDrift,
+  createInProcessServer,
   consumeStream,
   runTurn,
   normalize,

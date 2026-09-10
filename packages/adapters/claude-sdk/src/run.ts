@@ -20,11 +20,12 @@
  * pre-approved read-only MCP tools, default permission mode — production
  * tightening is P5+ (governance module).
  */
-import type { ModelProviderManifest, RenderEvent, ToolMountPlan } from "@agentos/contracts";
+import type { ModelProviderManifest, NeutralTool, RenderEvent, ToolMountPlan } from "@agentos/contracts";
 import { driftReport, selectDialect } from "@agentos/core";
 import { dialect as anthropicCompat } from "@agentos/model-anthropic-compat";
 import { dialect as bedrock } from "@agentos/model-bedrock";
-import { query, type SDKMessage } from "@anthropic-ai/claude-agent-sdk";
+import { createSdkMcpServer, query, type SDKMessage } from "@anthropic-ai/claude-agent-sdk";
+import { z } from "zod";
 
 /** The subset of a model manifest the adapter actually consumes. */
 export type ModelLease = Pick<ModelProviderManifest, "provider" | "baseUrlEnv" | "credentialsEnv">;
@@ -144,6 +145,8 @@ export interface TurnInput {
    * Absent = kernel default (P2-P5 behavior, smoke stays byte-equivalent).
    */
   modelId?: string;
+  /** Extra system-prompt segments (P7: knowledge pointer line). Base prompt stays first. */
+  systemPromptAdditions?: string[];
   /**
    * Incremental delivery (P5 additive, backward compatible): called per
    * normalized RenderEvent AS IT ARRIVES, before the turn resolves. Absent =
@@ -245,6 +248,49 @@ export async function consumeStream(
 }
 
 /**
+ * JSON Schema (NeutralTool vocabulary) -> the kernel's zod raw-shape dialect.
+ * This conversion is kernel-shape translation, so it lives HERE and nowhere else.
+ */
+function toZodShape(schema: NeutralTool["inputSchema"]): Record<string, z.ZodType> {
+  const required = new Set(schema.required ?? []);
+  const shape: Record<string, z.ZodType> = {};
+  for (const [key, def] of Object.entries(schema.properties)) {
+    const base: z.ZodType =
+      def.type === "number" ? z.number() : def.type === "boolean" ? z.boolean() : def.type === "array" ? z.array(z.unknown()) : z.string();
+    shape[key] = required.has(key) ? base : base.optional();
+  }
+  return shape;
+}
+
+/**
+ * Wrap neutral tool definitions as an in-process MCP server (P7: the sdk
+ * transport factory's first real use). Returns the kernel config object —
+ * register its `.instance` under your factory name via TurnInput.sdkServers.
+ * Handler results are JSON-stringified into a text block; tool output
+ * semantics stay in the neutral handlers, never here.
+ */
+export function createInProcessServer(
+  tools: readonly NeutralTool[],
+  serverName = "agentos-kb",
+): { type: "sdk"; name: string; instance: unknown } {
+  return createSdkMcpServer({
+    name: serverName,
+    version: "0.1.0",
+    tools: tools.map((t) => ({
+      name: t.name,
+      description: t.description,
+      inputSchema: toZodShape(t.inputSchema),
+      handler: async (args: Record<string, unknown>): Promise<{ content: { type: "text"; text: string }[] }> => {
+        const result = await t.handler(args ?? {});
+        return { content: [{ type: "text" as const, text: JSON.stringify(result ?? null) }] };
+      },
+    })),
+  }) as unknown as { type: "sdk"; name: string; instance: unknown };
+}
+
+const BASE_SYSTEM_PROMPT = "You are an AgentOS assistant. Use the filesystem tools to inspect files when asked about the project.";
+
+/**
  * One kernel turn. Throws only on kernel/transport failure (environment
  * problems); a model "error" result arrives as data (result.isError).
  */
@@ -254,7 +300,10 @@ export async function runTurn(input: TurnInput): Promise<TurnOutput> {
   const stream = query({
     prompt: input.prompt,
     options: {
-      systemPrompt: "You are an AgentOS assistant. Use the filesystem tools to inspect files when asked about the project.",
+      systemPrompt:
+        input.systemPromptAdditions && input.systemPromptAdditions.length > 0
+          ? [BASE_SYSTEM_PROMPT, ...input.systemPromptAdditions]
+          : BASE_SYSTEM_PROMPT,
       mcpServers: plansToMcpServers(input.toolMounts, input.sdkServers) as never,
       allowedTools: input.allowedTools ?? allowedToolsFromPlans(input.toolMounts),
       permissionMode: "default",
