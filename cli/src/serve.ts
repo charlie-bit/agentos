@@ -9,7 +9,7 @@
  * only assembles, pumps, and does ledger bookkeeping.
  */
 import { createInterface } from "node:readline";
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import {
   loadManifestDir,
@@ -23,7 +23,6 @@ import {
   appendAttribution,
   formatAttributionLine,
   buildKbTools,
-  KB_POINTER_LINE,
   type Attribution,
   type AnyManifest,
 } from "@agentos/core";
@@ -234,6 +233,7 @@ async function routeModel(flags: ServeFlags, asm: Assembly): Promise<{ ok: true;
 async function wireKnowledge(
   asm: Assembly,
   confirm: (req: Omit<ConfirmRequest, "requestId">) => Promise<ConfirmResult>,
+  workspaceDir: string,
 ): Promise<KbWiring | null> {
   const km = asm.knowledge;
   if (!km) return null;
@@ -244,7 +244,9 @@ async function wireKnowledge(
   const root = resolve(asm.repoRoot, km.mount.path);
   const draftsDir = join(asm.repoRoot, ".agentos", "kb-drafts");
   const receiptsLog = join(asm.repoRoot, ".agentos", "kb-receipts.jsonl");
-  const overviewFile = join(asm.repoRoot, ".agentos", "workspace", "kb-overview.md");
+  // the guide lives IN THE SESSION WORKSPACE (hotfix clean-room: the agent's
+  // file territory is its workspace, not the source repo)
+  const overviewFile = join(workspaceDir, "kb-overview.md");
   const provider = createMarkdownProvider({ name: km.provider, root, draftsDir });
   const tools = buildKbTools({
     provider,
@@ -275,7 +277,13 @@ async function wireKnowledge(
     return null;
   }
   await tools[0]?.handler({}); // kb_overview: render + persist the guide for the pointer line
-  return { plan: kbPlans[0], sdkServers: { kb: serverConfig.instance }, pointer: [KB_POINTER_LINE] };
+  return {
+    plan: kbPlans[0],
+    sdkServers: { kb: serverConfig.instance },
+    pointer: [
+      `Project knowledge guide: Read ${overviewFile} first (absolute path); then use kb_search for detail and kb_get_page to open a page.`,
+    ],
+  };
 }
 
 /* ------------------------------------------------------------------ chat -- */
@@ -368,7 +376,10 @@ export async function runServe(flags: ServeFlags): Promise<number> {
     const ans = (await ask()) ?? "";
     return { approved: /^(y|yes)$/i.test(ans.trim()), decidedBy: `cli-user:${ans.trim() || "no-answer"}`, timestampMs: Date.now() };
   };
-  const kb = await wireKnowledge(asm.value, chatConfirm);
+  // Hotfix clean-room: per-session workspace = the agent's legal file territory.
+  const workspaceDir = join(asm.value.repoRoot, ".agentos", "workspaces", externalKey);
+  mkdirSync(workspaceDir, { recursive: true });
+  const kb = await wireKnowledge(asm.value, chatConfirm, workspaceDir);
   const allPlans = kb ? [...plans, kb.plan] : plans;
 
   for (;;) {
@@ -388,6 +399,7 @@ export async function runServe(flags: ServeFlags): Promise<number> {
         toolMounts: allPlans,
         sdkServers: kb?.sdkServers,
         systemPromptAdditions: kb?.pointer,
+        workspaceDir,
         resumeSdkSessionId: currentSdk,
         modelId,
       });
@@ -459,13 +471,17 @@ export async function runServeWeb(flags: ServeFlags): Promise<number> {
     model: { provider: modelLease.provider, baseUrlEnv: modelLease.baseUrlEnv, credentialsEnv: modelLease.credentialsEnv },
     mounts,
     runner: async (ctx) => {
-      const kb = await wireKnowledge(asm.value, ctx.confirm);
+      // Hotfix clean-room: per-browser-session workspace (externalKey keyed).
+      const workspaceDir = join(asm.value.repoRoot, ".agentos", "workspaces", ctx.externalKey);
+      mkdirSync(workspaceDir, { recursive: true });
+      const kb = await wireKnowledge(asm.value, ctx.confirm, workspaceDir);
       const out = await runTurn({
         model: modelLease,
         prompt: ctx.prompt,
         toolMounts: kb ? [...plans, kb.plan] : plans,
         sdkServers: kb?.sdkServers,
         systemPromptAdditions: kb?.pointer,
+        workspaceDir,
         resumeSdkSessionId: ctx.resumeSdkSessionId,
         onEvent: ctx.emit,
         modelId,
