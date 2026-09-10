@@ -11,8 +11,16 @@ export {
   consumeStream,
   runTurn,
   normalize,
+  shortModelName,
   type ModelLease,
   type ResolvedChannel,
   type TurnInput,
   type TurnOutput,
 } from "./run.js";
+
+export {
+  readTranscript,
+  projectDirName,
+  type ReadTranscriptOptions,
+  type TranscriptWarning,
+} from "./transcript.js";
