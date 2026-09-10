@@ -33,6 +33,7 @@ import type {
   RenderEvent,
   SessionBinding,
   TenantRef,
+  TranscriptEntry,
 } from "@agentos/contracts";
 import type { Ledger, SessionRow } from "@agentos/core";
 
@@ -57,6 +58,19 @@ export interface ChatTurnOutcome {
 /** Injected at the composition root: production = kernel runTurn; tests = script. */
 export type TurnRunner = (ctx: ChatTurnContext) => Promise<ChatTurnOutcome>;
 
+/**
+ * History supplier, INJECTED for the same reason the runner is: the transcript
+ * lives in the kernel's private store, and this package must not learn that
+ * format (or import an adapter) to serve it. The composition root passes the
+ * adapter function; conformance passes a script. Contract: return neutral
+ * entries oldest-first, and never throw — an unreadable history is an empty
+ * history, not a failed request.
+ */
+export type TranscriptReader = (args: {
+  sdkSessionId: string;
+  externalKey: string;
+}) => TranscriptEntry[] | Promise<TranscriptEntry[]>;
+
 export interface StartServerOptions {
   presetName: string;
   /** Names only — values must never be reachable from this data. */
@@ -72,6 +86,8 @@ export interface StartServerOptions {
   staticDir?: string;
   /** Escalation JSONL sink. Default .agentos/escalations.log. */
   escalatePath?: string;
+  /** History supplier for GET /api/sessions/:id/messages. Absent = no replay. */
+  readTranscript?: TranscriptReader;
 }
 
 export interface RunningServer {
@@ -299,6 +315,35 @@ export async function startServer(o: StartServerOptions): Promise<RunningServer>
         return sendJson(res, 200, { sessions: rows });
       } finally {
         db.close();
+      }
+    }
+    // ---- history replay (READ-ONLY; this route never writes anything) ------
+    // The ledger keeps state + a POINTER; the conversation itself lives in the
+    // kernel's store, reachable only through the injected reader. Semantics are
+    // deliberately forgiving because history is a nicety, never load-bearing:
+    // unknown session, no pointer yet (session never took a turn), no reader
+    // wired, or an unreadable/corrupt store ALL answer 200 with an empty list.
+    // A 404/500 here would make a cosmetic gap look like a broken console.
+    // `:id` is the browser session id (the same value POST /api/chat takes), or
+    // a raw ledger externalKey — the sidebar has the latter, a reloading tab
+    // only the former.
+    const messages = /^\/api\/sessions\/([^/]+)\/messages$/.exec(path);
+    if (req.method === "GET" && messages) {
+      let raw: string;
+      try {
+        raw = decodeURIComponent(messages[1] ?? "");
+      } catch {
+        return sendJson(res, 200, { entries: [] }); // undecodable id: nothing to replay
+      }
+      if (raw.length === 0 || raw.length > 200) return sendJson(res, 200, { entries: [] });
+      const row = o.ledger.getByExternalKey(raw.startsWith("web-") ? raw : `web-${raw}`) ?? o.ledger.getByExternalKey(raw);
+      const pointer = row?.sdkSessionId ?? null;
+      if (!row || pointer === null || !o.readTranscript) return sendJson(res, 200, { entries: [] });
+      try {
+        const entries = await o.readTranscript({ sdkSessionId: pointer, externalKey: row.externalKey });
+        return sendJson(res, 200, { entries: Array.isArray(entries) ? entries : [] });
+      } catch {
+        return sendJson(res, 200, { entries: [] }); // reader blew up: degrade, never 500
       }
     }
     if (req.method === "GET" && path === "/api/escalations") {
