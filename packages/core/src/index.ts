@@ -3,3 +3,4 @@
 export * from "./manifest/index.js";
 export * from "./session/index.js";
 export * from "./loader/index.js";
+export * from "./routing/index.js";
