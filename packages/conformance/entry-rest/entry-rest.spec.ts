@@ -146,7 +146,9 @@ describe("out-of-band confirm", () => {
   it("pushes confirm.request, POST resolves it", async () => {
     let confirmResult = "";
     const { srv } = await boot(async ({ emit, confirm }) => {
-      const r = await confirm({ prompt: "Commit the draft?", timeoutMs: 4000 });
+      // 30s window: race against vitest's 5s default under load (semantics
+      // unchanged — the POST still resolves well before any timeout)
+      const r = await confirm({ prompt: "Commit the draft?", timeoutMs: 30_000 });
       confirmResult = `${r.approved}:${r.decidedBy}`;
       emit({ type: "result", payload: { subtype: "success", isError: false }, timestampMs: 1 });
       return {};
