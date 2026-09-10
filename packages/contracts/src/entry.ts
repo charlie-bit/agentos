@@ -18,6 +18,33 @@ export interface RenderEvent {
   readonly timestampMs?: number;
 }
 
+/**
+ * ONE replayable history item — the neutral currency of conversation replay
+ * (P5.1 additive). The kernel keeps a session's real transcript in its own
+ * private on-disk format; an EntryAdapter that wants to redraw a conversation
+ * after a page reload needs that content WITHOUT learning the format. This
+ * type is that seam: adapters translate their kernel's storage into these
+ * entries, entries carry no presentation semantics, and no consumer of this
+ * contract ever parses a kernel file.
+ *
+ * Deliberately the minimum that renders faithfully: who spoke, what was said,
+ * which tool ran, whether it failed, and when. Not a full message model — no
+ * ids, no block trees, no usage, no reasoning traces (internal thinking is the
+ * kernel's business, never replayed as content).
+ */
+export interface TranscriptEntry {
+  /** "tool" covers a tool invocation and its outcome as one replayable unit. */
+  readonly role: "user" | "assistant" | "tool";
+  /** Rendered text. For role "tool" this is the (possibly truncated) input. */
+  readonly text: string;
+  /** Present for role "tool" only. */
+  readonly toolName?: string;
+  /** role "tool": the call failed. Absent/false = succeeded. */
+  readonly isError?: boolean;
+  /** Unix epoch ms from the stored history; absent when the record carried none. */
+  readonly timestampMs?: number;
+}
+
 /** Mapping between the client-side session and the agent session it drives. */
 export interface SessionBinding {
   readonly clientSessionId: string;
