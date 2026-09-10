@@ -6,6 +6,7 @@
   "include": [
     "tool",
     "entry",
-    "entry-rest"
+    "entry-rest",
+    "model"
   ]
 }

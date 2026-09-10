@@ -6,13 +6,15 @@
   "description": "Contract-level conformance suites: black-box tests over the public API of core modules, asserting WHAT the contract promises, not how it is implemented. Fully offline (no spawns, no network). Swapping the runtime or kernel must NOT void these tests. First suite: tool (loader plans + drift).",
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "lint": "eslint tool entry entry-rest",
+    "lint": "eslint tool entry entry-rest model",
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
     "@agentos/contracts": "workspace:*",
     "@agentos/core": "workspace:*",
     "@agentos/entry-cli": "workspace:*",
-    "@agentos/entry-rest": "workspace:*"
+    "@agentos/entry-rest": "workspace:*",
+    "@agentos/model-anthropic-compat": "workspace:*",
+    "@agentos/model-bedrock": "workspace:*"
   }
 }
