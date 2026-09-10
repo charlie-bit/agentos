@@ -11,4 +11,8 @@ pm-skills-temp/
 
 # session ledger database (default location; path overridable via AGENTOS_SESSION_DB)
 .agentos/
+
+# knowledge socket: content never ships with the app; only the README is tracked
+knowledge-base/*
+!knowledge-base/README.md
 .claude/settings.local.json
