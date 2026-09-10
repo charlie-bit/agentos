@@ -306,7 +306,19 @@ export function createInProcessServer(
   }) as unknown as { type: "sdk"; name: string; instance: unknown };
 }
 
-const BASE_SYSTEM_PROMPT = "You are an AgentOS assistant. Use the filesystem tools to inspect files when asked about the project.";
+/**
+ * Base system prompt. Second segment is the capability self-report boundary
+ * (D-0910-4): the builtin menu is trimmed to Read (see buildQueryOptions), so
+ * a model that advertises Bash/network/subagent ability is misdescribing the
+ * PRODUCT to its user. Trimming alone does not fix that — the model cannot
+ * infer the trim from an absent tool, it just repeats whatever its priors say
+ * a "Claude Code" agent can do. The sentence is the treatment for the lying,
+ * the trim is the treatment for the doing.
+ */
+const BASE_SYSTEM_PROMPT = [
+  "You are an AgentOS assistant. Use the filesystem tools to inspect files when asked about the project.",
+  "Your only capabilities are the Read tool plus the MCP tools mounted in this session. You cannot run shell commands, write or edit files, fetch or search the web, spawn subagents, or schedule tasks. When asked what you can do, name only the tools actually present in this session — never claim a capability you do not have.",
+].join("\n");
 
 /**
  * One kernel turn. Throws only on kernel/transport failure (environment
@@ -330,6 +342,30 @@ type QueryOptions = NonNullable<Parameters<typeof query>[0]["options"]>;
  * allowedTools always unions "Read" (deduped): the kb-overview pointer and
  * session-workspace files require reading — Read is the ONLY builtin granted
  * (Write/Edit/Bash stay outside the whitelist, governance decision).
+ *
+ * BUILTIN SURFACE LAW (hotfix D-0910-4). Researched against the installed SDK
+ * type surface (@anthropic-ai/claude-agent-sdk 0.3.263, sdk.d.ts) rather than
+ * assumed, because the three knobs mean three different things:
+ *   - `allowedTools`  = AUTO-APPROVE without prompting. NOT an availability
+ *     gate; the SDK doc says verbatim "To restrict which tools are available,
+ *     use the `tools` option instead". Listing Read here only spares it the
+ *     permission prompt — it never hid Bash from the menu.
+ *   - `disallowedTools` = removed from the model's context AND blocked for
+ *     harness-internal direct calls. A denylist: correct but enumerative.
+ *   - `tools` = "the base set of available built-in tools"; `[]` disables all
+ *     builtins, `["Read"]` leaves exactly Read. An ALLOWLIST, and the only
+ *     knob that actually trims the advertised menu. Plumbed at runtime as the
+ *     `--tools` CLI flag; `mcpServers` travels separately (`--mcp-config`), so
+ *     trimming builtins leaves every mounted MCP tool intact.
+ * We therefore set `tools: ["Read"]` and deliberately do NOT add a
+ * `disallowedTools` denylist: an allowlist strictly dominates it here, since
+ * every builtin the SDK adds in a future release is excluded by construction,
+ * whereas a hand-kept denylist of Bash, Write, Edit, the Web tools, Task and
+ * cron rots silently
+ * the moment upstream ships a new tool. Before this clause the model was shown
+ * (and would advertise) the kernel's whole builtin menu: headless permission
+ * denial made execution fail safely, but the schemas still cost resident
+ * context and the surface became real the day permissionMode relaxes.
  */
 export function buildQueryOptions(
   input: TurnInput,
@@ -350,6 +386,8 @@ export function buildQueryOptions(
     // inherited surface: capability = manifest assembly + kernel built-in tools.
     skills: [],
     mcpServers: plansToMcpServers(input.toolMounts, input.sdkServers) as never,
+    // the availability gate (see BUILTIN SURFACE LAW above) — not allowedTools
+    tools: ["Read"],
     allowedTools: [...new Set([...derived, "Read"])],
     permissionMode: "default",
     maxTurns: input.maxTurns ?? 6,
@@ -376,7 +414,12 @@ export function normalize(message: SDKMessage): RenderEvent[] {
   switch (message.type) {
     case "system":
       if (message.subtype === "init") {
-        return [{ type: "session.init", payload: { model: message.model, cwd: message.cwd }, timestampMs: ts }];
+        // `tools` is the surface the KERNEL reports for this session (D-0910-4):
+        // the audit/drift data source, and the structural proof that the builtin
+        // trim took effect — conformance asserts Bash/Write/Edit/Web* are absent.
+        return [
+          { type: "session.init", payload: { model: message.model, cwd: message.cwd, tools: message.tools ?? [] }, timestampMs: ts },
+        ];
       }
       return [{ type: `kernel.system.${message.subtype}`, payload: {}, timestampMs: ts }];
     case "assistant": {
