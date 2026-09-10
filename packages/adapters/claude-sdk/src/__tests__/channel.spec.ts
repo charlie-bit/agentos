@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest";
 import {
   resolveChannel,
   sdkEnvDelta,
+  modelEnv,
   normalize,
   plansToMcpServers,
   allowedToolsFromPlans,
@@ -69,6 +70,24 @@ describe("sdkEnvDelta", () => {
 
   it("empty channel, empty delta", () => {
     expect(sdkEnvDelta({ useBedrock: false })).toEqual({});
+  });
+});
+
+describe("modelEnv (P6: kernel model selection)", () => {
+  it("resolved id becomes ANTHROPIC_MODEL", () => {
+    expect(modelEnv("vendor-b/big")).toEqual({ ANTHROPIC_MODEL: "vendor-b/big" });
+  });
+  it("absent id adds nothing (kernel default preserved = smoke parity)", () => {
+    expect(modelEnv(undefined)).toEqual({});
+  });
+});
+
+describe("resolveChannel delegates to dialects (P6 behavior-equivalence)", () => {
+  it("produces the identical shape the inline P2 logic produced", () => {
+    const generic = resolveChannel({ provider: "deepseek", baseUrlEnv: "AGENTOS_SMOKE_BASE_URL", credentialsEnv: "AGENTOS_SMOKE_API_KEY" }, FAKE_ENV);
+    expect(generic).toEqual({ baseUrl: FAKE_ENV.AGENTOS_SMOKE_BASE_URL, authToken: FAKE_ENV.AGENTOS_SMOKE_API_KEY, useBedrock: false });
+    const bw = resolveChannel({ provider: "aws-bedrock", credentialsEnv: "AWS_BEARER_TOKEN_BEDROCK" }, FAKE_ENV);
+    expect(bw).toEqual({ baseUrl: undefined, authToken: undefined, useBedrock: true });
   });
 });
 

@@ -2,6 +2,7 @@
 export {
   resolveChannel,
   sdkEnvDelta,
+  modelEnv,
   plansToMcpServers,
   allowedToolsFromPlans,
   collectDrift,

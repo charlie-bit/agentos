@@ -21,7 +21,9 @@
  * tightening is P5+ (governance module).
  */
 import type { ModelProviderManifest, RenderEvent, ToolMountPlan } from "@agentos/contracts";
-import { driftReport } from "@agentos/core";
+import { driftReport, selectDialect } from "@agentos/core";
+import { dialect as anthropicCompat } from "@agentos/model-anthropic-compat";
+import { dialect as bedrock } from "@agentos/model-bedrock";
 import { query, type SDKMessage } from "@anthropic-ai/claude-agent-sdk";
 
 /** The subset of a model manifest the adapter actually consumes. */
@@ -38,14 +40,20 @@ export interface ResolvedChannel {
 
 /**
  * Resolve env leases against a record (process.env by default — injectable so
- * tests never touch real credentials). Precedence: an explicit baseUrlEnv lease
- * wins even for aws-bedrock; the Bedrock switch applies only with no URL lease.
+ * tests never touch real credentials). P6 delegation, behavior-equivalent:
+ * dialect SELECTION lives in core (selectDialect), lease READING lives in the
+ * provider packages; this function only adapts the neutral ModelChannel to the
+ * adapter-local shape. Precedence rule unchanged (url lease beats bedrock).
  */
 export function resolveChannel(model: ModelLease, env: NodeJS.ProcessEnv = process.env): ResolvedChannel {
-  const baseUrl = model.baseUrlEnv ? env[model.baseUrlEnv] : undefined;
-  const authToken = model.credentialsEnv ? env[model.credentialsEnv] : undefined;
-  const useBedrock = !model.baseUrlEnv && model.provider === "aws-bedrock";
-  return { baseUrl, authToken, useBedrock };
+  const channel =
+    selectDialect(model) === "bedrock" ? bedrock.resolveChannel(model, env) : anthropicCompat.resolveChannel(model, env);
+  return { baseUrl: channel.baseUrl, authToken: channel.authToken, useBedrock: channel.nativeChain === "bedrock" };
+}
+
+/** Kernel model selection env: set ANTHROPIC_MODEL only when a model id was resolved upstream. */
+export function modelEnv(modelId?: string): Record<string, string> {
+  return modelId === undefined ? {} : { ANTHROPIC_MODEL: modelId };
 }
 
 /**
@@ -131,6 +139,11 @@ export interface TurnInput {
   allowedTools?: string[];
   /** Kernel turn cap. Default 6 — hello-world needs tool round-trip + answer. */
   maxTurns?: number;
+  /**
+   * Real model id resolved upstream (core/routing picked manifest+alias).
+   * Absent = kernel default (P2-P5 behavior, smoke stays byte-equivalent).
+   */
+  modelId?: string;
   /**
    * Incremental delivery (P5 additive, backward compatible): called per
    * normalized RenderEvent AS IT ARRIVES, before the turn resolves. Absent =
@@ -247,7 +260,7 @@ export async function runTurn(input: TurnInput): Promise<TurnOutput> {
       permissionMode: "default",
       maxTurns: input.maxTurns ?? 6,
       ...(input.resumeSdkSessionId ? { resume: input.resumeSdkSessionId } : {}),
-      env: { ...process.env, ...sdkEnvDelta(channel) },
+      env: { ...process.env, ...sdkEnvDelta(channel), ...modelEnv(input.modelId) },
     },
   });
 
