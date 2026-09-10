@@ -1,10 +1,16 @@
 # Knowledge mounted straight from a repository directory (the contract's
 # "path" mount). The knowledge base itself is a SEPARATE repository in real
-# deployments; this minimal dir exists so the example preset resolves fully.
+# deployments; P7a repointed this socket at knowledge-base/ (content is
+# gitignored — see knowledge-base/README.md; the old examples/docs mount was
+# a P1 placeholder corpus).
+# escalationGate = P7b trigger-window DATA, consumed only by `agentos kb gate`.
 kind: knowledge
 version: "1"
 name: local-markdown
 provider: markdown
 mount:
   type: path
-  path: ./examples/docs
+  path: ./knowledge-base
+escalationGate:
+  minPerWeek: 3
+  windowDays: 7
