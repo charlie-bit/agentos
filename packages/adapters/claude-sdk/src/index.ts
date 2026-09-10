@@ -7,6 +7,7 @@ export {
   allowedToolsFromPlans,
   collectDrift,
   createInProcessServer,
+  buildQueryOptions,
   consumeStream,
   runTurn,
   normalize,

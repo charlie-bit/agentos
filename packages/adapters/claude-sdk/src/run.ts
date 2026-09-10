@@ -117,12 +117,23 @@ export function collectDrift(
 ): { missing: string[]; undeclared: string[] } {
   const missing: string[] = [];
   const undeclared: string[] = [];
+  const planKeys = new Set(plans.map((p) => p.key));
   for (const plan of plans) {
     const prefix = `mcp__${plan.key}__`;
     const bare = discoveredFullNames.filter((n) => n.startsWith(prefix)).map((n) => n.slice(prefix.length));
     const report = driftReport(plan.allowedTools ?? [], bare);
     missing.push(...report.missing.map((t) => `${plan.key}/${t}`));
     undeclared.push(...report.undeclared.map((t) => `${plan.key}/${t}`));
+  }
+  // Hotfix global pass: ANY discovered mcp__<key>__ tool whose key is not a
+  // mounted plan is undeclared — the structural alarm for host leakage:
+  // the day the clean-room clause (settingSources:[]) ever lapses, borrowed
+  // host servers scream through this line immediately.
+  for (const name of discoveredFullNames) {
+    const m = /^mcp__([^_].*?)__/.exec(name);
+    if (m?.[1] !== undefined && !planKeys.has(m[1])) {
+      undeclared.push(`${m[1]}/${name.slice(`mcp__${m[1]}__`.length)}`);
+    }
   }
   return { missing, undeclared };
 }
@@ -147,6 +158,13 @@ export interface TurnInput {
   modelId?: string;
   /** Extra system-prompt segments (P7: knowledge pointer line). Base prompt stays first. */
   systemPromptAdditions?: string[];
+  /**
+   * HOTFIX clean-room: the session workspace — the agent's legal territory for
+   * file operations and pointer drops (kb guide, offloads), isolated from the
+   * source repository. Absent = process.cwd() (the pre-hotfix implicit
+   * behavior, kept so untouched callers like the smoke harness stay green).
+   */
+  workspaceDir?: string;
   /**
    * Incremental delivery (P5 additive, backward compatible): called per
    * normalized RenderEvent AS IT ARRIVES, before the turn resolves. Absent =
@@ -294,25 +312,49 @@ const BASE_SYSTEM_PROMPT = "You are an AgentOS assistant. Use the filesystem too
  * One kernel turn. Throws only on kernel/transport failure (environment
  * problems); a model "error" result arrives as data (result.isError).
  */
+type QueryOptions = NonNullable<Parameters<typeof query>[0]["options"]>;
+
+/**
+ * The clean-room kernel options, extracted as a pure function so the statute
+ * is unit-testable without spawning anything.
+ *
+ * CLEAN-ROOM LAW (hotfix D-0910-3): settingSources = [] — the product agent's
+ * capability surface comes 100% from manifest assembly (mcpServers, system
+ * prompt, tools are injected explicitly here); the host's user/project/local
+ * Claude configuration is NEVER loaded. Without this, operator-level MCP
+ * servers, skills, subagents and memory leak into the agent: identity drift,
+ * governance bypass (un-idempotentified tools invisible to drift checks),
+ * context eaten by host config, and internal tool surfaces exposed by an
+ * open-source demo. The host is not the product's environment.
+ *
+ * allowedTools always unions "Read" (deduped): the kb-overview pointer and
+ * session-workspace files require reading — Read is the ONLY builtin granted
+ * (Write/Edit/Bash stay outside the whitelist, governance decision).
+ */
+export function buildQueryOptions(
+  input: TurnInput,
+  env: NodeJS.ProcessEnv = process.env,
+): QueryOptions {
+  const channel = resolveChannel(input.model, env);
+  const derived = input.allowedTools ?? allowedToolsFromPlans(input.toolMounts);
+  return {
+    systemPrompt:
+      input.systemPromptAdditions && input.systemPromptAdditions.length > 0
+        ? [BASE_SYSTEM_PROMPT, ...input.systemPromptAdditions]
+        : BASE_SYSTEM_PROMPT,
+    settingSources: [],
+    mcpServers: plansToMcpServers(input.toolMounts, input.sdkServers) as never,
+    allowedTools: [...new Set([...derived, "Read"])],
+    permissionMode: "default",
+    maxTurns: input.maxTurns ?? 6,
+    cwd: input.workspaceDir ?? process.cwd(),
+    ...(input.resumeSdkSessionId ? { resume: input.resumeSdkSessionId } : {}),
+    env: { ...env, ...sdkEnvDelta(channel), ...modelEnv(input.modelId) },
+  };
+}
+
 export async function runTurn(input: TurnInput): Promise<TurnOutput> {
-  const channel = resolveChannel(input.model);
-
-  const stream = query({
-    prompt: input.prompt,
-    options: {
-      systemPrompt:
-        input.systemPromptAdditions && input.systemPromptAdditions.length > 0
-          ? [BASE_SYSTEM_PROMPT, ...input.systemPromptAdditions]
-          : BASE_SYSTEM_PROMPT,
-      mcpServers: plansToMcpServers(input.toolMounts, input.sdkServers) as never,
-      allowedTools: input.allowedTools ?? allowedToolsFromPlans(input.toolMounts),
-      permissionMode: "default",
-      maxTurns: input.maxTurns ?? 6,
-      ...(input.resumeSdkSessionId ? { resume: input.resumeSdkSessionId } : {}),
-      env: { ...process.env, ...sdkEnvDelta(channel), ...modelEnv(input.modelId) },
-    },
-  });
-
+  const stream = query({ prompt: input.prompt, options: buildQueryOptions(input) });
   return consumeStream(stream, { toolMounts: input.toolMounts, onEvent: input.onEvent });
 }
 
