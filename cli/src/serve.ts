@@ -22,15 +22,19 @@ import {
   selectDialect,
   appendAttribution,
   formatAttributionLine,
+  buildKbTools,
+  KB_POINTER_LINE,
   type Attribution,
   type AnyManifest,
 } from "@agentos/core";
-import type { ModelProviderManifest } from "@agentos/contracts";
+import { createMarkdownProvider } from "@agentos/knowledge-markdown";
+import { toolProviderManifestSchema } from "@agentos/contracts";
+import type { ConfirmRequest, ConfirmResult, KnowledgeManifest, ModelProviderManifest, NeutralTool, ToolProviderManifest } from "@agentos/contracts";
 import { dialect as compatDialect } from "@agentos/model-anthropic-compat";
 import { dialect as bedrockDialect } from "@agentos/model-bedrock";
 import { ENTRY_NAME as CLI_ENTRY, EntryCli, formatUsageSummary } from "@agentos/entry-cli";
 import { startServer, ENTRY_NAME as REST_ENTRY } from "@agentos/entry-rest";
-import { runTurn, type ModelLease } from "@agentos/adapter-claude-sdk";
+import { createInProcessServer, runTurn, type ModelLease } from "@agentos/adapter-claude-sdk";
 
 export interface ServeFlags {
   preset: string;
@@ -48,9 +52,18 @@ interface Assembly {
   /** The preset's model slot (before any request-level override). */
   presetModel: string;
   allModels: ModelProviderManifest[];
+  /** Preset knowledge slot manifest if loaded (P7 chain); undefined = no kb. */
+  knowledge?: KnowledgeManifest;
   plans: ReturnType<typeof planTools>["plans"];
   mounts: Array<{ key: string; transport: string; degraded?: boolean }>;
   repoRoot: string;
+}
+
+/** P7 knowledge chain wired into the P3 assembly line. */
+interface KbWiring {
+  plan: ReturnType<typeof planTools>["plans"][number];
+  sdkServers: Record<string, unknown>;
+  pointer: string[];
 }
 
 /** Routed turn-model: what runTurn needs + who to attribute the turn to. */
@@ -147,6 +160,7 @@ function assemble(flags: ServeFlags): { ok: true; value: Assembly } | { ok: fals
       presetName: preset.name,
       presetModel: model.name,
       allModels: manifests.filter((m): m is ModelProviderManifest => m.kind === "model"),
+      knowledge: manifests.find((m) => m.kind === "knowledge" && m.name === preset.knowledge) as KnowledgeManifest | undefined,
       plans,
       mounts: plans.map((p) => ({ key: p.key, transport: p.transport, degraded: false })).concat(
         warnings.map((w) => ({ key: w.key, transport: "sdk", degraded: true })),
@@ -204,6 +218,64 @@ async function routeModel(flags: ServeFlags, asm: Assembly): Promise<{ ok: true;
       usageAttr: manifest.usageAttr,
     },
   };
+}
+
+/* knowledge chain (P7) ------------------------------------------------------ */
+
+/**
+ * P7 knowledge chain mounted THROUGH the P3 assembly line: the in-process kb
+ * server is wrapped by the adapter (createSdkMcpServer stays kernel-exclusive
+ * there), registered as an sdk-transport ToolMountPlan synthesized in memory
+ * (config/ is P7b territory), so drift/allowlist bookkeeping is unified.
+ * mount type != path degrades with a warning (P8 ships the git-sync loader);
+ * no kb manifest = plain session. `confirm` is the entry's human gate:
+ * chat reuses the REPL queue (piped lines answer in order), web the SSE modal.
+ */
+async function wireKnowledge(
+  asm: Assembly,
+  confirm: (req: Omit<ConfirmRequest, "requestId">) => Promise<ConfirmResult>,
+): Promise<KbWiring | null> {
+  const km = asm.knowledge;
+  if (!km) return null;
+  if (km.mount.type !== "path") {
+    write(`⚠ knowledge "${km.name}": mount type "${km.mount.type}" needs the P8 sync loader — session runs without kb\n`);
+    return null;
+  }
+  const root = resolve(asm.repoRoot, km.mount.path);
+  const draftsDir = join(asm.repoRoot, ".agentos", "kb-drafts");
+  const receiptsLog = join(asm.repoRoot, ".agentos", "kb-receipts.jsonl");
+  const overviewFile = join(asm.repoRoot, ".agentos", "workspace", "kb-overview.md");
+  const provider = createMarkdownProvider({ name: km.provider, root, draftsDir });
+  const tools = buildKbTools({
+    provider,
+    confirmCapable: true,
+    bookRoot: root,
+    draftsDir,
+    receiptsLog,
+    workspaceOverviewFile: overviewFile,
+    confirm,
+    tenant: { tenantId: asm.presetName },
+  });
+  // factory name == manifest name == mount key: one identity, "kb".
+  const serverConfig = createInProcessServer(tools, "kb");
+  const kbManifest = toolProviderManifestSchema.parse({
+    kind: "tool",
+    version: "1",
+    name: "kb",
+    transport: "sdk",
+    auth: { mode: "none" },
+    allowedTools: tools.map((t: NeutralTool) => t.name),
+    schemaExchange: "json-schema",
+  }) as ToolProviderManifest;
+  const { plans: kbPlans, errors } = planTools([kbManifest], { sdkFactories: { kb: serverConfig.instance } });
+  if (errors.length > 0 || kbPlans[0] === undefined) {
+    write(
+      `⚠ kb plan failed — session runs without kb: ${errors.length ? errors.map((e) => `${e.path}: ${e.message}`).join("; ") : "sdk factory 'kb' produced no plan"}\n`,
+    );
+    return null;
+  }
+  await tools[0]?.handler({}); // kb_overview: render + persist the guide for the pointer line
+  return { plan: kbPlans[0], sdkServers: { kb: serverConfig.instance }, pointer: [KB_POINTER_LINE] };
 }
 
 /* ------------------------------------------------------------------ chat -- */
@@ -289,6 +361,16 @@ export async function runServe(flags: ServeFlags): Promise<number> {
   const ask = () =>
     queue.length ? Promise.resolve(queue.shift() as string) : closed ? Promise.resolve<string | null>(null) : new Promise<string | null>((res) => (waiter = res));
 
+  // Chat's human gate rides the SAME line queue: piped input answers prompts in
+  // order (question, then y/n, then /exit) — no stdin contention with a second readline.
+  const chatConfirm = async (req: Omit<ConfirmRequest, "requestId">): Promise<ConfirmResult> => {
+    write(`\n${req.prompt} [y/N] `);
+    const ans = (await ask()) ?? "";
+    return { approved: /^(y|yes)$/i.test(ans.trim()), decidedBy: `cli-user:${ans.trim() || "no-answer"}`, timestampMs: Date.now() };
+  };
+  const kb = await wireKnowledge(asm.value, chatConfirm);
+  const allPlans = kb ? [...plans, kb.plan] : plans;
+
   for (;;) {
     const raw = await ask();
     if (raw === null) break;
@@ -300,7 +382,15 @@ export async function runServe(flags: ServeFlags): Promise<number> {
       continue;
     }
     try {
-      const out = await runTurn({ model: modelLease, prompt: line, toolMounts: plans, resumeSdkSessionId: currentSdk, modelId });
+      const out = await runTurn({
+        model: modelLease,
+        prompt: line,
+        toolMounts: allPlans,
+        sdkServers: kb?.sdkServers,
+        systemPromptAdditions: kb?.pointer,
+        resumeSdkSessionId: currentSdk,
+        modelId,
+      });
       entry.render(out.events);
       const attr = attributionFor(out, routed.value, presetName, externalKey);
       write(`${formatAttributionLine(attr)}\n`);
@@ -369,10 +459,13 @@ export async function runServeWeb(flags: ServeFlags): Promise<number> {
     model: { provider: modelLease.provider, baseUrlEnv: modelLease.baseUrlEnv, credentialsEnv: modelLease.credentialsEnv },
     mounts,
     runner: async (ctx) => {
+      const kb = await wireKnowledge(asm.value, ctx.confirm);
       const out = await runTurn({
         model: modelLease,
         prompt: ctx.prompt,
-        toolMounts: plans,
+        toolMounts: kb ? [...plans, kb.plan] : plans,
+        sdkServers: kb?.sdkServers,
+        systemPromptAdditions: kb?.pointer,
         resumeSdkSessionId: ctx.resumeSdkSessionId,
         onEvent: ctx.emit,
         modelId,

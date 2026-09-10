@@ -19,6 +19,7 @@
     "@agentos/entry-cli": "workspace:*",
     "@agentos/entry-rest": "workspace:*",
     "@agentos/model-anthropic-compat": "workspace:*",
-    "@agentos/model-bedrock": "workspace:*"
+    "@agentos/model-bedrock": "workspace:*",
+    "@agentos/knowledge-markdown": "workspace:*"
   }
 }

@@ -6,6 +6,7 @@
 import { parseArgs } from "node:util";
 import { runPresetValidate, type CliResult } from "./preset-validate.js";
 import { runServe } from "./serve.js";
+import { runKbGate } from "./kb-gate.js";
 
 const USAGE = [
   "agentos — pluggable agent platform (P5)",
@@ -17,6 +18,7 @@ const USAGE = [
   "  agentos serve --web [--port 8787] [--preset <path>]",
   "                                              SSE server + web console on 127.0.0.1",
   "  both accept --model <alias|manifest-name> (request-level, beats preset slot)",
+  "  agentos kb gate                             P7b trigger: escalations vs window",
 ];
 
 export async function run(argv: readonly string[]): Promise<CliResult> {
@@ -28,6 +30,11 @@ export async function run(argv: readonly string[]): Promise<CliResult> {
       const target = args[0];
       if (!target || target.startsWith("-")) return { exitCode: 2, lines: ["✗ preset validate requires <file-or-dir>", ...USAGE.slice(2)] };
       return runPresetValidate(target);
+    }
+    case "kb": {
+      const [sub] = rest;
+      if (sub !== "gate") return { exitCode: 2, lines: ["✗ unknown kb subcommand (try: kb gate)", ...USAGE.slice(2)] };
+      return runKbGate();
     }
     case "serve": {
       const { values } = parseArgs({
