@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { openLedger } from "@agentos/core";
-import { startServer, type RunningServer, type TurnRunner } from "@agentos/entry-rest";
+import { startServer, type RunningServer, type TranscriptReader, type TurnRunner } from "@agentos/entry-rest";
 
 const tempDirs: string[] = [];
 const servers: RunningServer[] = [];
@@ -24,7 +24,10 @@ function makeStaticDir(dir: string): string {
   return dist;
 }
 
-async function boot(runner: TurnRunner): Promise<{ srv: RunningServer; dbPath: string; escPath: string }> {
+async function boot(
+  runner: TurnRunner,
+  readTranscript?: TranscriptReader,
+): Promise<{ srv: RunningServer; dbPath: string; escPath: string }> {
   const dir = mkdtempSync(join(tmpdir(), "agentos-rest-conf-"));
   tempDirs.push(dir);
   const dbPath = join(dir, "sessions.db");
@@ -42,6 +45,7 @@ async function boot(runner: TurnRunner): Promise<{ srv: RunningServer; dbPath: s
     dbPath,
     escalatePath: escPath,
     staticDir: makeStaticDir(dir),
+    ...(readTranscript ? { readTranscript } : {}),
   });
   servers.push(srv);
   return { srv, dbPath, escPath };
@@ -109,6 +113,31 @@ describe("SSE chat stream", () => {
     const res = await postJson(srv, "/api/chat", { sessionId: "ok", message: "go" });
     const types = (await readFrames(res)).map((f) => f.type);
     expect(types).toContain("session.meta"); // survived the junk frame, stream completed
+  });
+});
+
+describe("session.init tool surface (D-0910-4 audit channel)", () => {
+  /* The BLACKLIST itself is asserted where the kernel options are built
+     (adapters/claude-sdk channel.spec: tools === ["Read"]), because this
+     package is deliberately kernel-free — depending on the adapter would void
+     its "swap the kernel and these still pass" property. What belongs HERE is
+     the transport contract: the surface the kernel reported must reach the
+     client verbatim, or no auditor and no drift check can ever see it. */
+  it("the tools array reaches the browser verbatim, and carries no banned builtin", async () => {
+    const surface = ["Read", "mcp__fs__read_file", "mcp__kb__kb_search"];
+    const { srv } = await boot(async ({ emit }) => {
+      emit({ type: "session.init", payload: { model: "m", cwd: "/ws", tools: surface }, timestampMs: 1 });
+      emit({ type: "result", payload: { subtype: "success", isError: false }, timestampMs: 2 });
+      return {};
+    });
+    const frames = await readFrames(await postJson(srv, "/api/chat", { sessionId: "init-1", message: "hi" }));
+    const init = frames.find((f) => f.type === "session.init");
+    expect(init).toBeDefined();
+    const tools = (init?.payload as { tools?: string[] }).tools;
+    expect(tools).toEqual(surface);
+    for (const banned of ["Bash", "Write", "Edit", "WebFetch", "WebSearch"]) {
+      expect(JSON.stringify(tools)).not.toContain(banned);
+    }
   });
 });
 
@@ -237,5 +266,115 @@ describe("static serving + local binding", () => {
     expect(srv.address).toBe("127.0.0.1"); // bound interface, asserted at the source of truth
     const res = await fetch(`http://127.0.0.1:${srv.port}/healthz`);
     expect(((await res.json()) as { ok: boolean }).ok).toBe(true);
+  });
+});
+
+/**
+ * History replay endpoint. The reader is INJECTED here exactly as the
+ * composition root injects the adapter's real one: this suite proves the
+ * ROUTE's contract (shape + degradation) and never a file format, so
+ * entry-rest stays unaware that a kernel store even exists.
+ */
+describe("GET /api/sessions/:id/messages", () => {
+  const entries = [
+    { role: "user" as const, text: "read the map" },
+    { role: "tool" as const, text: '{"path":"a.md"}', toolName: "read_file", isError: false },
+    { role: "assistant" as const, text: "here is the row" },
+  ];
+
+  /** Drive one turn so the ledger row exists AND carries an sdk pointer. */
+  const seed = async (srv: RunningServer, id: string): Promise<void> => {
+    const res = await fetch(srv.url + "/api/chat", {
+      method: "POST",
+      body: JSON.stringify({ sessionId: id, message: "hi" }),
+      headers: { "content-type": "application/json" },
+    });
+    await res.text();
+  };
+
+  it("pointer plus a readable store returns the neutral entries, oldest first", async () => {
+    const seen: Array<{ sdkSessionId: string; externalKey: string }> = [];
+    const { srv } = await boot(
+      async () => ({ sdkSessionId: "sdk-1" }),
+      (args) => {
+        seen.push(args);
+        return entries;
+      },
+    );
+    await seed(srv, "abc");
+    const body = (await (await api(srv, "/api/sessions/abc/messages")).json()) as { entries: typeof entries };
+    expect(body.entries).toEqual(entries);
+    // the route hands the reader the LEDGER's pointer and key, nothing else
+    expect(seen).toEqual([{ sdkSessionId: "sdk-1", externalKey: "web-abc" }]);
+  });
+
+  it("a raw externalKey resolves as well as a bare browser id", async () => {
+    const { srv } = await boot(async () => ({ sdkSessionId: "sdk-1" }), () => entries);
+    await seed(srv, "abc");
+    const body = (await (await api(srv, "/api/sessions/web-abc/messages")).json()) as { entries: unknown[] };
+    expect(body.entries).toHaveLength(3);
+  });
+
+  /* Degradation: history is cosmetic, so EVERY failure is 200 + []. A 404 or a
+     500 here would dress a missing nicety up as a broken console. */
+
+  it("a session that never took a turn (no pointer) answers 200 and an empty list", async () => {
+    let called = 0;
+    const { srv } = await boot(
+      async () => ({}), // runner reports no sdkSessionId -> ledger pointer stays null
+      () => {
+        called += 1;
+        return entries;
+      },
+    );
+    await seed(srv, "no-pointer");
+    const res = await api(srv, "/api/sessions/no-pointer/messages");
+    expect(res.status).toBe(200);
+    expect((await res.json()) as { entries: unknown[] }).toEqual({ entries: [] });
+    expect(called).toBe(0); // no pointer -> the reader is never even consulted
+  });
+
+  it("an unknown session answers 200 and an empty list, not 404", async () => {
+    const { srv } = await boot(async () => ({ sdkSessionId: "sdk-1" }), () => entries);
+    const res = await api(srv, "/api/sessions/never-existed/messages");
+    expect(res.status).toBe(200);
+    expect((await res.json()) as { entries: unknown[] }).toEqual({ entries: [] });
+  });
+
+  it("a corrupt store (reader throws) answers 200 and an empty list, never 500", async () => {
+    const { srv } = await boot(
+      async () => ({ sdkSessionId: "sdk-1" }),
+      () => {
+        throw new Error("truncated jsonl");
+      },
+    );
+    await seed(srv, "corrupt");
+    const res = await api(srv, "/api/sessions/corrupt/messages");
+    expect(res.status).toBe(200);
+    expect((await res.json()) as { entries: unknown[] }).toEqual({ entries: [] });
+  });
+
+  it("a reader returning junk instead of an array is coerced to an empty list", async () => {
+    const { srv } = await boot(async () => ({ sdkSessionId: "sdk-1" }), () => "not an array" as never);
+    await seed(srv, "junk");
+    expect((await (await api(srv, "/api/sessions/junk/messages")).json()) as { entries: unknown[] }).toEqual({ entries: [] });
+  });
+
+  it("no reader wired at all still answers 200 and an empty list", async () => {
+    const { srv } = await boot(async () => ({ sdkSessionId: "sdk-1" }));
+    await seed(srv, "no-reader");
+    const res = await api(srv, "/api/sessions/no-reader/messages");
+    expect(res.status).toBe(200);
+    expect((await res.json()) as { entries: unknown[] }).toEqual({ entries: [] });
+  });
+
+  it("the route is read-only: a POST to it is not a route at all", async () => {
+    const { srv } = await boot(async () => ({ sdkSessionId: "sdk-1" }), () => entries);
+    await seed(srv, "abc");
+    const res = await postJson(srv, "/api/sessions/abc/messages", { entries: [{ role: "user", text: "injected" }] });
+    expect(res.status).toBe(404);
+    // and the stored history is untouched by the attempt
+    const after = (await (await api(srv, "/api/sessions/abc/messages")).json()) as { entries: unknown[] };
+    expect(after.entries).toHaveLength(3);
   });
 });

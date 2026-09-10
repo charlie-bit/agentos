@@ -15,6 +15,7 @@ import {
   collectDrift,
   consumeStream,
   buildQueryOptions,
+  shortModelName,
   type TurnInput,
 } from "../index.js";
 import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk";
@@ -271,5 +272,102 @@ describe("collectDrift global pass (structural leak alarm)", () => {
   it("declared keys behave exactly as before (no regression in the per-plan pass)", () => {
     const plan = { key: "fs", transport: "stdio" as const, stdio: { command: "x" }, allowedTools: ["read_file", "gone"] };
     expect(collectDrift([plan], ["mcp__fs__read_file"])).toEqual({ missing: ["fs/gone"], undeclared: [] });
+  });
+});
+
+describe("builtin tool surface (D-0910-4): the availability gate, not just auto-approve", () => {
+  const base: TurnInput = { model: { provider: "deepseek" }, prompt: "hi", toolMounts: [] };
+
+  it("tools is exactly [Read] — the kernel's builtin menu is trimmed at the source", () => {
+    expect(buildQueryOptions(base, FAKE_ENV).tools).toEqual(["Read"]);
+  });
+
+  it("the dangerous builtin family appears in NO option we send", () => {
+    const opts = buildQueryOptions(
+      { ...base, toolMounts: [{ key: "fs", transport: "stdio", stdio: { command: "srv" }, allowedTools: ["read_file"] }] },
+      FAKE_ENV,
+    );
+    const surface = JSON.stringify({ tools: opts.tools, allowedTools: opts.allowedTools });
+    for (const banned of ["Bash", "Write", "Edit", "WebFetch", "WebSearch", "Task", "Cron"]) {
+      expect(surface).not.toContain(banned);
+    }
+  });
+
+  it("Read stays auto-approved, and mounted MCP tools are unaffected by the trim", () => {
+    const opts = buildQueryOptions(
+      { ...base, toolMounts: [{ key: "fs", transport: "stdio", stdio: { command: "srv" }, allowedTools: ["read_file"] }] },
+      FAKE_ENV,
+    );
+    expect(opts.allowedTools).toContain("Read");
+    expect(opts.allowedTools).toContain("mcp__fs__read_file");
+    expect(opts.tools).toEqual(["Read"]); // MCP travels via mcpServers, not this list
+  });
+
+  it("the system prompt states the capability boundary (cures the 'I can run Bash' lie)", () => {
+    const prompt = buildQueryOptions(base, FAKE_ENV).systemPrompt;
+    const text = Array.isArray(prompt) ? prompt.join("\n") : String(prompt);
+    expect(text).toMatch(/only capabilities are the Read tool/i);
+    expect(text).toMatch(/cannot run shell commands/i);
+  });
+
+  it("session.init reports the kernel's ACTUAL tool surface (audit + drift data source)", () => {
+    const init = {
+      type: "system",
+      subtype: "init",
+      session_id: "s1",
+      model: "m",
+      cwd: "/ws",
+      tools: ["Read", "mcp__fs__read_file"],
+    } as unknown as SDKMessage;
+    const [event] = normalize(init);
+    expect(event?.type).toBe("session.init");
+    expect((event?.payload as { tools?: string[] }).tools).toEqual(["Read", "mcp__fs__read_file"]);
+  });
+
+  it("an init frame without a tools field degrades to an empty list, never undefined", () => {
+    const init = { type: "system", subtype: "init", session_id: "s1", model: "m", cwd: "/ws" } as unknown as SDKMessage;
+    expect((normalize(init)[0]?.payload as { tools?: string[] }).tools).toEqual([]);
+  });
+});
+
+describe("model identity disclosure (D-0910-6): three tiers, events get the short name", () => {
+  it("reduces a gateway-routed id to the bare model name", () => {
+    expect(shortModelName("llmproxy/alicloud/qwen3.8-flash[1m]")).toBe("qwen3.8-flash");
+  });
+
+  it("handles each shape independently: prefixes only, suffix only, neither", () => {
+    expect(shortModelName("vendor/route/deep/model-x")).toBe("model-x");
+    expect(shortModelName("deepseek-chat[200k]")).toBe("deepseek-chat");
+    expect(shortModelName("deepseek-chat")).toBe("deepseek-chat");
+  });
+
+  it("degenerate ids never become empty strings", () => {
+    expect(shortModelName("[1m]")).toBe("[1m]");
+    expect(shortModelName("")).toBe("");
+    expect(shortModelName(undefined)).toBeUndefined();
+  });
+
+  it("session.init publishes the SHORT name — no gateway, cloud route or window suffix", () => {
+    const init = {
+      type: "system",
+      subtype: "init",
+      session_id: "s1",
+      model: "llmproxy/alicloud/qwen3.8-flash[1m]",
+      cwd: "/ws",
+      tools: ["Read"],
+    } as unknown as SDKMessage;
+    const payload = normalize(init)[0]?.payload as { model?: string };
+    expect(payload.model).toBe("qwen3.8-flash");
+    const blob = JSON.stringify(payload);
+    for (const leak of ["llmproxy", "alicloud", "[1m]"]) expect(blob).not.toContain(leak);
+  });
+
+  it("the system prompt legislates product identity and model-disclosure limits", () => {
+    const prompt = buildQueryOptions({ model: { provider: "deepseek" }, prompt: "x", toolMounts: [] }, FAKE_ENV).systemPrompt;
+    const text = Array.isArray(prompt) ? prompt.join("\n") : String(prompt);
+    expect(text).toMatch(/not, and must never claim to be, any specific vendor's product/i);
+    expect(text).toMatch(/Claude Code/); // named explicitly so the denial is unambiguous
+    expect(text).toMatch(/at most the short model name/i);
+    expect(text).toMatch(/Never disclose gateway names, cloud routing prefixes/i);
   });
 });
