@@ -14,6 +14,8 @@ import {
   allowedToolsFromPlans,
   collectDrift,
   consumeStream,
+  buildQueryOptions,
+  type TurnInput,
 } from "../index.js";
 import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk";
 
@@ -170,8 +172,10 @@ describe("drift wiring (P3)", () => {
   };
 
   it("collectDrift strips the kernel prefix and reports per-key in key/tool form", () => {
+    // HOTFIX amendment: a foreign key (mcp__other__x) now ALSO alarms via the
+    // global pass; the old expectation encoded the leak-blindness this fixes.
     const drift = collectDrift([plan], ["mcp__fs__read_file", "mcp__fs__surprise", "mcp__other__x"]);
-    expect(drift).toEqual({ missing: ["fs/gone_tool"], undeclared: ["fs/surprise"] });
+    expect(drift).toEqual({ missing: ["fs/gone_tool"], undeclared: ["fs/surprise", "other/x"] });
   });
 
   it("a clean init produces no drift event (normalize+collect stay quiet)", () => {
@@ -213,5 +217,55 @@ describe("consumeStream + onEvent (P5 incremental delivery, synthetic kernel)", 
     });
     expect(out.events.length).toBe(4); // events still accumulate server-side
     expect(out.result?.isError).toBe(false);
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* HOTFIX D-0910-3: clean-room kernel statute — pure options, no spawn.       */
+
+const turnBase = (over: Partial<TurnInput> = {}): TurnInput => ({
+  model: { provider: "vendor-x", baseUrlEnv: "AGENTOS_SMOKE_BASE_URL", credentialsEnv: "AGENTOS_SMOKE_API_KEY" },
+  prompt: "hi",
+  toolMounts: [{ key: "fs", transport: "stdio", stdio: { command: "x" }, allowedTools: ["read_file"] }],
+  ...over,
+});
+
+describe("clean-room options (buildQueryOptions)", () => {
+  it("settingSources is the empty set — host config is NOT the product's environment", () => {
+    expect(buildQueryOptions(turnBase(), FAKE_ENV).settingSources).toEqual([]);
+  });
+
+  it("workspaceDir becomes cwd; absent falls back to process.cwd() (smoke parity)", () => {
+    expect(buildQueryOptions(turnBase({ workspaceDir: "/tmp/ws-1" }), FAKE_ENV).cwd).toBe("/tmp/ws-1");
+    expect(buildQueryOptions(turnBase(), FAKE_ENV).cwd).toBe(process.cwd());
+  });
+
+  it("allowedTools unions Read only — Write/Edit/Bash never granted", () => {
+    const tools = buildQueryOptions(turnBase(), FAKE_ENV).allowedTools ?? [];
+    expect(tools).toContain("Read");
+    expect(tools).toContain("mcp__fs__read_file");
+    for (const banned of ["Write", "Edit", "Bash", "NotebookEdit"]) expect(tools).not.toContain(banned);
+    // deduped + override path keeps the same guarantee:
+    const overridden = buildQueryOptions(turnBase({ allowedTools: ["Read", "mcp__x__y"] }), FAKE_ENV).allowedTools ?? [];
+    expect(overridden.filter((t) => t === "Read")).toHaveLength(1);
+  });
+
+  it("leases resolve through the INJECTED env (pure function, zero process.env reads)", () => {
+    const o = buildQueryOptions(turnBase(), FAKE_ENV);
+    expect(o.env?.ANTHROPIC_BASE_URL).toBe("https://channel.example/anthropic");
+    expect(o.env?.ANTHROPIC_AUTH_TOKEN).toBe("sk-fake-not-a-real-key-000000");
+  });
+});
+
+describe("collectDrift global pass (structural leak alarm)", () => {
+  it("a discovered mcp__ghost-server__x with no mounted plan screams undeclared", () => {
+    const plan = { key: "fs", transport: "stdio" as const, stdio: { command: "x" }, allowedTools: ["read_file"] };
+    const drift = collectDrift([plan], ["mcp__fs__read_file", "mcp__ghost-server__sneaky_tool"]);
+    expect(drift.missing).toEqual([]);
+    expect(drift.undeclared).toContain("ghost-server/sneaky_tool");
+  });
+  it("declared keys behave exactly as before (no regression in the per-plan pass)", () => {
+    const plan = { key: "fs", transport: "stdio" as const, stdio: { command: "x" }, allowedTools: ["read_file", "gone"] };
+    expect(collectDrift([plan], ["mcp__fs__read_file"])).toEqual({ missing: ["fs/gone"], undeclared: [] });
   });
 });
