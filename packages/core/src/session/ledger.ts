@@ -27,6 +27,8 @@ export interface SessionRow {
   preset: string;
   createdAtMs: number;
   lastActiveMs: number;
+  /** User-given label; null means "no title set, display the key". */
+  title: string | null;
 }
 
 export interface NewSession {
@@ -43,8 +45,16 @@ export interface Ledger {
   /** Status transition; unknown ids and values are rejected. */
   markStatus(id: string, status: SessionStatus): void;
   setSdkSessionId(id: string, sdkSessionId: string): void;
+  /** User-given label. Empty/whitespace-only or null clears it back to unset.
+   * Returns the normalized value actually stored, so callers never need a
+   * second read-back just to echo what was saved. */
+  setTitle(id: string, title: string | null): string | null;
   /** Refresh last_active_ms to now. */
   touch(id: string): void;
+  /** Hard delete — the ledger row only (the kernel's own transcript, if any,
+   * is untouched: deleting a session removes it from the sidebar/resume list,
+   * it does not shred history). Unknown id fails loudly, same as every other verb. */
+  deleteSession(id: string): void;
   close(): void;
 }
 
@@ -62,6 +72,7 @@ interface DbRow {
   preset: string;
   created_at_ms: number;
   last_active_ms: number;
+  title: string | null;
 }
 
 function toRow(r: DbRow): SessionRow {
@@ -74,6 +85,7 @@ function toRow(r: DbRow): SessionRow {
     preset: r.preset,
     createdAtMs: r.created_at_ms,
     lastActiveMs: r.last_active_ms,
+    title: r.title,
   };
 }
 
@@ -92,6 +104,14 @@ export function openLedger(dbPath: string = ledgerPathFromEnv()): Ledger {
       last_active_ms INTEGER NOT NULL
     )`,
   );
+  // Additive migration for DBs created before `title` existed (D-0910-7-ish:
+  // pointer/status schema is a disk artifact, so new columns must ALTER, not
+  // just appear in CREATE TABLE IF NOT EXISTS). Re-running this is a no-op.
+  try {
+    db.exec(`ALTER TABLE sessions ADD COLUMN title TEXT`);
+  } catch {
+    /* column already present */
+  }
 
   const mustExist = (id: string, changes: number | bigint) => {
     if (Number(changes) === 0) throw new Error(`session not found: ${id}`);
@@ -109,6 +129,7 @@ export function openLedger(dbPath: string = ledgerPathFromEnv()): Ledger {
         preset: s.preset,
         createdAtMs: now,
         lastActiveMs: now,
+        title: null,
       };
       db.prepare(
         `INSERT INTO sessions (id, entry, external_key, status, sdk_session_id, preset, created_at_ms, last_active_ms)
@@ -136,8 +157,16 @@ export function openLedger(dbPath: string = ledgerPathFromEnv()): Ledger {
     setSdkSessionId(id: string, sdkSessionId: string) {
       mustExist(id, db.prepare("UPDATE sessions SET sdk_session_id = ? WHERE id = ?").run(sdkSessionId, id).changes);
     },
+    setTitle(id: string, title: string | null) {
+      const normalized = title !== null && title.trim().length > 0 ? title.trim().slice(0, 200) : null;
+      mustExist(id, db.prepare("UPDATE sessions SET title = ? WHERE id = ?").run(normalized, id).changes);
+      return normalized;
+    },
     touch(id: string) {
       mustExist(id, db.prepare("UPDATE sessions SET last_active_ms = ? WHERE id = ?").run(Date.now(), id).changes);
+    },
+    deleteSession(id: string) {
+      mustExist(id, db.prepare("DELETE FROM sessions WHERE id = ?").run(id).changes);
     },
     close() {
       db.close();
