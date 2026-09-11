@@ -14,6 +14,7 @@ export {
   runTurn,
   normalize,
   shortModelName,
+  BASE_SYSTEM_PROMPT,
   type ModelLease,
   type ResolvedChannel,
   type TurnInput,

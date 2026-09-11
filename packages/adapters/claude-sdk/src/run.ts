@@ -396,7 +396,8 @@ export function shortModelName(modelId?: string): string | undefined {
   return trimmed.length > 0 ? trimmed : lastSegment;
 }
 
-const BASE_SYSTEM_PROMPT = [
+/** Exported so a composition root (cli serve --web) can surface it read-only, e.g. in a status/config view. */
+export const BASE_SYSTEM_PROMPT = [
   "You are an AgentOS assistant. Use the filesystem tools to inspect files when asked about the project.",
   // Product identity (D-0910-6). The kernel underneath is one vendor's CLI, and
   // an un-instructed model happily introduces itself as that vendor's product —

@@ -33,7 +33,7 @@ import { dialect as compatDialect } from "@agentos/model-anthropic-compat";
 import { dialect as bedrockDialect } from "@agentos/model-bedrock";
 import { ENTRY_NAME as CLI_ENTRY, EntryCli, formatUsageSummary } from "@agentos/entry-cli";
 import { startServer, ENTRY_NAME as REST_ENTRY } from "@agentos/entry-rest";
-import { createInProcessServer, readTranscript, runTurn, type ModelLease } from "@agentos/adapter-claude-sdk";
+import { BASE_SYSTEM_PROMPT, createInProcessServer, readTranscript, runTurn, type ModelLease } from "@agentos/adapter-claude-sdk";
 
 export interface ServeFlags {
   preset: string;
@@ -505,6 +505,7 @@ export async function runServeWeb(flags: ServeFlags): Promise<number> {
     port: flags.port ?? 8787,
     dbPath,
     staticDir,
+    systemPrompt: BASE_SYSTEM_PROMPT,
   });
   write(`● agentos serve --web | preset=${presetName} mounts=${plans.length}\n  console: ${server.url}\n  Ctrl+C exits cleanly (ledger stays zombie-free)\n`);
 
