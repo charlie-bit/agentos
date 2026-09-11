@@ -5,17 +5,20 @@ import type { Usage } from "../lib/chat-reducer";
 import { Button } from "./ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
 
-/** cumulative result-frame usage + escalation telemetry (contract: escalate verb). */
+/** cumulative result-frame usage + attribution + escalation telemetry. */
 export function UsageBar({
   usage,
   escalations,
   sessionId,
   onEscalated,
+  modelShort,
 }: {
   usage: Usage;
   escalations: number;
   sessionId: string;
   onEscalated: (count: number) => void;
+  /** Short model name from session.init (D-0910-6 tier-2); full id never crosses the wire. */
+  modelShort: string | null;
 }) {
   const [pressed, setPressed] = useState<"idle" | "sending" | "done">("idle");
   const click = async () => {
@@ -35,6 +38,13 @@ export function UsageBar({
           {usage.cacheRead > 0 && <> · cache_rd {num(usage.cacheRead)}</>}
           {usage.cacheWrite > 0 && <> · cache_wr {num(usage.cacheWrite)}</>} · ≈${usage.cost.toFixed(4)}
         </span>
+        {/* Attribution line (④a): WHO answered and HOW it is billed. Short name
+            only — gateway/route/window suffixes are operations-side facts. */}
+        {modelShort !== null && (
+          <span className="font-mono text-muted" title="answered by the model channel configured for this deployment">
+            · by {modelShort}
+          </span>
+        )}
         <Tooltip>
           <TooltipTrigger asChild>
             <span className="cursor-help underline decoration-dotted">billing caveat</span>

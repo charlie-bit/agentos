@@ -17,7 +17,7 @@
  * credentials) — the same black-box precedent as the entry suites.
  */
 import { describe, expect, it } from "vitest";
-import { buildQueryOptions, fsRootsFromPlans } from "@agentos/adapter-claude-sdk";
+import { buildQueryOptions, canUseToolFromPlans, fsRootsFromPlans } from "@agentos/adapter-claude-sdk";
 import type { ToolMountPlan } from "@agentos/contracts";
 
 const FAKE_ENV = {
@@ -73,5 +73,35 @@ describe("sandbox-roots contract (D-0910-7): the grant mirrors the declaration",
     );
     expect(opts.additionalDirectories).toBeUndefined();
     expect("additionalDirectories" in opts).toBe(false);
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* ④a execution-side hard gate: canUseTool mirrors the declared menu.         */
+
+describe("canUseTool hard gate (④a): execution mirrors the advertisement", () => {
+  it("ALLOW: Read and every mcp__<mounted-key>__* pass the gate", () => {
+    const plans = [
+      stdioPlan("mcp-filesystem", ["/repo"]),
+      { key: "kb", transport: "sdk", sdk: { factoryName: "kb" } } as ToolMountPlan,
+    ];
+    const gate = canUseToolFromPlans(plans);
+    expect(gate("Read")).toBe(true);
+    expect(gate("mcp__mcp-filesystem__read_file")).toBe(true);
+    expect(gate("mcp__kb__kb_commit")).toBe(true);
+  });
+
+  it("DENY: banned builtins and unmounted mcp keys are refused — structured deny, never a throw", () => {
+    const plans = [stdioPlan("mcp-filesystem", ["/repo"])];
+    const gate = canUseToolFromPlans(plans);
+    for (const banned of ["Bash", "Write", "Edit", "WebFetch", "Task"]) expect(gate(banned)).toBe(false);
+    expect(gate("mcp__ghost-server__sneaky")).toBe(false); // not a mounted key
+  });
+
+  it("mount-key matching is exact: mcp__mcp-filesystem-x__read_file is NOT mcp-filesystem", () => {
+    const plans = [stdioPlan("mcp-filesystem", ["/repo"])];
+    const gate = canUseToolFromPlans(plans);
+    expect(gate("mcp__mcp-filesystem-x__read_file")).toBe(false); // different key, must not prefix-match
+    expect(gate("mcp__mcp-filesystem__read_file")).toBe(true);
   });
 });

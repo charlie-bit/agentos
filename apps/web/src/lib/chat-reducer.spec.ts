@@ -185,3 +185,51 @@ describe("history hydration (P5.1 replay)", () => {
     expect(second.entries[0]).toMatchObject({ kind: "user", text: "other session" });
   });
 });
+
+/* -------------------------------------------------------------------------- */
+/* ④a migration: attribution capture + the execution-gate denied frame.       */
+/* Every NEW frame type lands with its own migration asserts; the h/e id      */
+/* non-collision guarantee is re-proven with the new vocabulary present.      */
+
+describe("④a attribution (session.init → modelShort)", () => {
+  it("session.init captures the SHORT model name; the full id never has a field to land in", () => {
+    const s = reduce(initialState, frame("session.init", { model: "qwen3.8-flash" }));
+    expect(s.modelShort).toBe("qwen3.8-flash");
+  });
+
+  it("a model-less init frame keeps the previous attribution (never nulls it)", () => {
+    const seeded = reduce(initialState, frame("session.init", { model: "deepseek-chat" }));
+    const s = reduce(seeded, frame("session.init", { model: "" }));
+    expect(s.modelShort).toBe("deepseek-chat");
+  });
+
+  it("attribution survives the result frame and a full turn (cumulative, not per-turn)", () => {
+    const s = run(initialState, [
+      frame("session.init", { model: "qwen3.8-flash" }),
+      frame("assistant.text", { text: "hi" }),
+      frame("result", { subtype: "success", isError: false, usage: { input_tokens: 1, output_tokens: 2 } }),
+    ]);
+    expect(s.modelShort).toBe("qwen3.8-flash");
+    expect(s.conn).toBe("idle");
+  });
+});
+
+describe("④a tool.denied (execution-gate frame → visible refused block)", () => {
+  it("a denied call renders as an ERROR tool block with the refusal reason, not a hang", () => {
+    const s = reduce(initialState, frame("tool.denied", { tool: "Bash", reason: "outside the mounted menu" }));
+    expect(tools(s)).toHaveLength(1);
+    expect(tools(s)[0]).toMatchObject({ kind: "tool", name: "Bash", status: "error" });
+    expect(tools(s)[0]?.input).toContain("outside the mounted menu");
+  });
+
+  it("denied frames coexist with hydrated history: new vocabulary, same h/e id guarantee", () => {
+    const s = run(initialState, [
+      { t: "hydrate", items: [{ role: "tool", text: "{}", toolName: "read_file" }] },
+      frame("tool.denied", { tool: "Write", reason: "denied by policy" }),
+      { t: "send", text: "after" },
+    ]);
+    const ids = s.entries.map((e) => e.id);
+    expect(new Set(ids).size).toBe(ids.length); // no h/e collision with the new frame type
+    expect(s.entries.filter((e) => e.kind === "tool").map((t) => t.name)).toEqual(["read_file", "Write"]);
+  });
+});

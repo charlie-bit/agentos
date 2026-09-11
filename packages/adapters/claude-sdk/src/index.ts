@@ -6,6 +6,7 @@ export {
   plansToMcpServers,
   allowedToolsFromPlans,
   fsRootsFromPlans,
+  canUseToolFromPlans,
   collectDrift,
   createInProcessServer,
   buildQueryOptions,

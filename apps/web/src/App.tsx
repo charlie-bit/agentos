@@ -44,7 +44,7 @@ export default function App() {
           <Composer busy={state.conn !== "idle"} onSend={(t) => void send(t)} />
         </div>
       </div>
-      <UsageBar usage={state.usage} escalations={escalations} sessionId={sessionId} onEscalated={setEscalations} />
+      <UsageBar usage={state.usage} escalations={escalations} sessionId={sessionId} onEscalated={setEscalations} modelShort={state.modelShort} />
       <ConfirmModal pending={state.pending} onResolved={resolveConfirm} />
     </div>
   );

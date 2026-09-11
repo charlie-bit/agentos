@@ -75,6 +75,10 @@ export interface Frame {
     requestId?: string;
     prompt?: string;
     subject?: unknown;
+    /** session.init / session.meta attribution fields (④a display layer). */
+    model?: string;
+    /** tool.denied frame (④a execution gate): why the call was refused. */
+    reason?: string;
   } | null;
 }
 
@@ -86,6 +90,13 @@ export interface State {
   pending: PendingConfirm | null;
   resumed: boolean;
   seq: number;
+  /**
+   * Short model name from the session.init frame (D-0910-6 tier-2: events
+   * carry the short name only). Attribution display (④a): the user may see
+   * WHAT answered, never the gateway/route/window suffix of the full id.
+   * Absent until the first init frame of a live turn arrives.
+   */
+  modelShort: string | null;
 }
 
 export type Action =
@@ -105,6 +116,7 @@ export const initialState: State = {
   pending: null,
   resumed: false,
   seq: 0,
+  modelShort: null,
 };
 
 /* helpers ------------------------------------------------------------------ */
@@ -170,6 +182,16 @@ export function reduce(s: State, a: Action): State {
       switch (f.type) {
         case "session.meta":
           return { ...s, conn: "streaming", resumed: p.resumed === true };
+        /**
+         * Attribution capture (④a): the init frame already carries the SHORT
+         * model name (D-0910-6 tier-2 — the adapter reduces the id before it
+         * ever reaches the stream). We only store it; the full id never exists
+         * on this side of the wire, so the display layer cannot leak it.
+         */
+        case "session.init": {
+          const modelShort = typeof p.model === "string" && p.model.length > 0 ? p.model : s.modelShort;
+          return { ...s, conn: "streaming", modelShort };
+        }
         case "assistant.text": {
           const last = s.entries[s.entries.length - 1];
           if (last?.kind === "assistant" && last.status === "streaming") {
@@ -214,6 +236,23 @@ export function reduce(s: State, a: Action): State {
             }
           }
           return s; // result for nothing running: ignore, never corrupt
+        }
+        /**
+         * Execution-side hard gate (④a): the kernel DENIED a call outside the
+         * mounted menu. Rendered as a failed tool block so the refusal is
+         * visible in the conversation, not swallowed.
+         */
+        case "tool.denied": {
+          const closed = closeOpen(s);
+          const id = `e${s.seq}`;
+          return {
+            ...s,
+            seq: s.seq + 1,
+            entries: [
+              ...closed,
+              { kind: "tool", id, name: String(p.tool ?? "?"), input: String(p.reason ?? "denied"), status: "error" as const },
+            ],
+          };
         }
         case "kernel.system.drift": {
           const closed = closeOpen(s);

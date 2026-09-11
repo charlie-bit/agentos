@@ -20,7 +20,8 @@
  * pre-approved read-only MCP tools, default permission mode — production
  * tightening is P5+ (governance module).
  */
-import { isAbsolute } from "node:path";
+import { appendFileSync } from "node:fs";
+import { isAbsolute, join } from "node:path";
 import type { ModelProviderManifest, NeutralTool, RenderEvent, ToolMountPlan } from "@agentos/contracts";
 import { driftReport, selectDialect } from "@agentos/core";
 import { dialect as anthropicCompat } from "@agentos/model-anthropic-compat";
@@ -135,6 +136,25 @@ export function fsRootsFromPlans(
   }
   if (workspaceDir !== undefined) roots.add(workspaceDir);
   return [...roots];
+}
+
+/**
+ * D-0910-4 followup (④a): the EXECUTION-side mirror of the builtin-menu
+ * allowlist. The menu trim (tools: ["Read"]) removes undeclared tools from
+ * the ADVERTISED surface, but a model that insists on a banned call anyway
+ * would otherwise reach the kernel's default permission behavior — the
+ * execution surface keeps a gap the advertisement closed. This gate closes
+ * it: allow exactly `Read` + `mcp__<mounted-key>__*`; everything else gets
+ * a structured DENY (never a throw — the turn survives, the lie surfaces as
+ * a `tool.denied` RenderEvent so the user SEES the refusal, not a hang).
+ */
+export function canUseToolFromPlans(plans: readonly ToolMountPlan[]): (toolName: string) => boolean {
+  const mountKeys = new Set(plans.map((p) => p.key));
+  return (toolName: string): boolean => {
+    if (toolName === "Read") return true;
+    const m = /^mcp__([^_].*?)__/.exec(toolName);
+    return m?.[1] !== undefined && mountKeys.has(m[1]);
+  };
 }
 
 /**
@@ -472,8 +492,38 @@ export function buildQueryOptions(
 }
 
 export async function runTurn(input: TurnInput): Promise<TurnOutput> {
-  const stream = query({ prompt: input.prompt, options: buildQueryOptions(input) });
-  return consumeStream(stream, { toolMounts: input.toolMounts, onEvent: input.onEvent });
+  const opts = buildQueryOptions(input);
+  const gate = canUseToolFromPlans(input.toolMounts);
+  // Execution-side hard gate (④a, see canUseToolFromPlans): a call outside
+  // the menu mirror gets a structured deny — never a throw. Each denial also
+  // lands one JSONL line in .agentos/audit.jsonl (usage.log's sibling dir):
+  // the local-only execution audit — no reporting, the log is the record.
+  const denied: RenderEvent[] = [];
+  const auditedOpts = {
+    ...opts,
+    canUseTool: (async (toolName: string) => {
+      if (gate(toolName)) return { behavior: "allow" as const };
+      const event: RenderEvent = {
+        type: "tool.denied",
+        payload: { tool: toolName, reason: "outside the mounted menu (execution mirror of the declared surface)" },
+        timestampMs: Date.now(),
+      };
+      denied.push(event);
+      try {
+        appendFileSync(join(process.env.AGENTOS_AUDIT_DIR ?? ".agentos", "audit.jsonl"), JSON.stringify({ ts: Date.now(), tool: toolName }) + "\n");
+      } catch {
+        /* audit sink failure must never kill the turn */
+      }
+      return { behavior: "deny" as const, message: `${toolName} is not part of this deployment's tool surface (denied by policy)` };
+    }) as unknown as NonNullable<Parameters<typeof query>[0]["options"]>["canUseTool"],
+  };
+  const out = await consumeStream(query({ prompt: input.prompt, options: auditedOpts }), {
+    toolMounts: input.toolMounts,
+    onEvent: input.onEvent,
+  });
+  // Denied events ride at the head of the turn's stream (they fire during
+  // execution, before the result frame) — prepended so the UI sees them.
+  return denied.length > 0 ? { ...out, events: [...denied, ...out.events] } : out;
 }
 
 /**
