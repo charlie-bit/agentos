@@ -39,3 +39,11 @@ jobs:
 
       - name: Lint
         run: pnpm lint
+
+      # P7b knowledge legislation hook: lint the book socket. Content is
+      # gitignored today, so CI lints an EMPTY directory — the step's
+      # contract is "lint runs and honestly reports 0 pages", which must be
+      # green; the day the book repo is vendored/remote-mounted, the same
+      # step guards real content without edits.
+      - name: KB lint (book socket)
+        run: node cli/main.mjs kb lint knowledge-base --strict

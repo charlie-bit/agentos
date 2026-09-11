@@ -8,3 +8,9 @@ export {
 } from "./writeback.js";
 export { renderIndex, renderOverview } from "./render.js";
 export { buildKbTools, KB_POINTER_LINE, type KbToolContext } from "./tools.js";
+export {
+  splitFrontmatter,
+  validatePageFrontmatter,
+  type FrontmatterIssue,
+  type FrontmatterVerdict,
+} from "./frontmatter.js";

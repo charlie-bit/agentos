@@ -38,7 +38,11 @@ export interface CommitDraftResult {
   appended: boolean;
 }
 
-const DRAFT_HEADER_LINES = 3; // "<!-- agentos draft -->", "<!-- target -->", ""
+// 2 header lines on disk: writePage writes "<!-- agentos draft -->\n<!-- target -->\n"
+// followed by the body's first line (the historical value 3 ate the body's
+// first line — invisible until the first frontmatter-carrying page lost its
+// opening fence; fixed with P7b's founding content, human-approved 2026-09-11).
+const DRAFT_HEADER_LINES = 2;
 
 function refuse(reason: string): never {
   throw new Error(`kb_commit refused: ${reason}`);

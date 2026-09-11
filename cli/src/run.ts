@@ -3,10 +3,13 @@
  * (no third-party deps, by design). validate/usage stay data-only runners;
  * serve --chat streams interactively and returns only its exit code.
  */
+import { join } from "node:path";
 import { parseArgs } from "node:util";
 import { runPresetValidate, type CliResult } from "./preset-validate.js";
 import { runServe } from "./serve.js";
 import { runKbGate } from "./kb-gate.js";
+import { runKbLint } from "./kb-lint.js";
+import { runKbStale } from "./kb-stale.js";
 
 const USAGE = [
   "agentos — pluggable agent platform (P5)",
@@ -19,6 +22,8 @@ const USAGE = [
   "                                              SSE server + web console on 127.0.0.1",
   "  both accept --model <alias|manifest-name> (request-level, beats preset slot)",
   "  agentos kb gate                             P7b trigger: escalations vs window",
+  "  agentos kb lint <dir> [--json] [--strict]  frontmatter conformance (exit 1 = errors)",
+  "  agentos kb stale [<dir>]                    re-verification queue (most overdue first)",
 ];
 
 export async function run(argv: readonly string[]): Promise<CliResult> {
@@ -32,9 +37,26 @@ export async function run(argv: readonly string[]): Promise<CliResult> {
       return runPresetValidate(target);
     }
     case "kb": {
-      const [sub] = rest;
-      if (sub !== "gate") return { exitCode: 2, lines: ["✗ unknown kb subcommand (try: kb gate)", ...USAGE.slice(2)] };
-      return runKbGate();
+      const [sub, ...args] = rest;
+      if (sub === "gate") {
+        // --include <file>: explicit merge of an archived escalation log
+        // (D-0910-8). Backups are never auto-counted; naming one is the opt-in.
+        const include: string[] = [];
+        for (let i = 0; i < args.length; i += 1) {
+          if (args[i] === "--include") {
+            const v = args[i + 1];
+            if (!v || v.startsWith("-")) return { exitCode: 2, lines: ["✗ --include requires a file path"] };
+            include.push(v);
+            i += 1;
+          } else {
+            return { exitCode: 2, lines: [`✗ unknown kb gate flag ${JSON.stringify(args[i])}`] };
+          }
+        }
+        return runKbGate("config", join(".agentos", "escalations.log"), Date.now, include);
+      }
+      if (sub === "lint") return runKbLint(args);
+      if (sub === "stale") return runKbStale(args);
+      return { exitCode: 2, lines: ["✗ unknown kb subcommand (try: kb gate | kb lint | kb stale)", ...USAGE.slice(2)] };
     }
     case "serve": {
       const { values } = parseArgs({
