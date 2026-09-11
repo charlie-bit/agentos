@@ -171,6 +171,98 @@ describe("session ledger behavior", () => {
   });
 });
 
+describe("PATCH /api/sessions/:id/title", () => {
+  const patch = (srv: RunningServer, id: string, body: unknown) =>
+    api(srv, `/api/sessions/${id}/title`, { method: "PATCH", body: JSON.stringify(body), headers: { "content-type": "application/json" } });
+
+  const seedRow = async (srv: RunningServer, sessionId: string): Promise<string> => {
+    await readFrames(await postJson(srv, "/api/chat", { sessionId, message: "hi" }));
+    const list = (await (await api(srv, "/api/sessions")).json()) as { sessions: Array<{ id: string; external_key: string }> };
+    return list.sessions.find((s) => s.external_key === `web-${sessionId}`)!.id;
+  };
+
+  it("sets a title, which then comes back on GET /api/sessions", async () => {
+    const { srv } = await boot(async () => ({ sdkSessionId: "sdk-1" }));
+    const id = await seedRow(srv, "rename-me");
+    const res = await patch(srv, id, { title: "Ledger outage 09-11" });
+    expect(res.status).toBe(200);
+    expect((await res.json()) as { title: string }).toEqual({ ok: true, title: "Ledger outage 09-11" });
+    const list = (await (await api(srv, "/api/sessions")).json()) as { sessions: Array<{ id: string; title: string | null }> };
+    expect(list.sessions.find((s) => s.id === id)?.title).toBe("Ledger outage 09-11");
+  });
+
+  it("trims whitespace and normalizes empty/whitespace-only to null", async () => {
+    const { srv } = await boot(async () => ({ sdkSessionId: "sdk-1" }));
+    const id = await seedRow(srv, "clear-me");
+    await patch(srv, id, { title: "  padded  " });
+    expect(((await (await patch(srv, id, { title: "  padded  " })).json()) as { title: string }).title).toBe("padded");
+    const cleared = await patch(srv, id, { title: "   " });
+    expect(((await cleared.json()) as { title: string | null }).title).toBeNull();
+  });
+
+  it("null clears an existing title back to unset", async () => {
+    const { srv } = await boot(async () => ({ sdkSessionId: "sdk-1" }));
+    const id = await seedRow(srv, "null-me");
+    await patch(srv, id, { title: "temporary" });
+    const res = await patch(srv, id, { title: null });
+    expect(((await res.json()) as { title: string | null }).title).toBeNull();
+  });
+
+  it("unknown id answers 404, malformed title answers 400", async () => {
+    const { srv } = await boot(async () => ({ sdkSessionId: "sdk-1" }));
+    const missing = await patch(srv, "no-such-row", { title: "x" });
+    expect(missing.status).toBe(404);
+    const id = await seedRow(srv, "bad-body");
+    const badType = await patch(srv, id, { title: 42 });
+    expect(badType.status).toBe(400);
+  });
+});
+
+describe("DELETE /api/sessions/:id", () => {
+  const seedRow = async (srv: RunningServer, sessionId: string): Promise<string> => {
+    await readFrames(await postJson(srv, "/api/chat", { sessionId, message: "hi" }));
+    const list = (await (await api(srv, "/api/sessions")).json()) as { sessions: Array<{ id: string; external_key: string }> };
+    return list.sessions.find((s) => s.external_key === `web-${sessionId}`)!.id;
+  };
+
+  it("removes the row; it no longer appears on GET /api/sessions", async () => {
+    const { srv } = await boot(async () => ({ sdkSessionId: "sdk-1" }));
+    const id = await seedRow(srv, "delete-me");
+    const res = await api(srv, `/api/sessions/${id}`, { method: "DELETE" });
+    expect(res.status).toBe(200);
+    expect((await res.json()) as { ok: boolean }).toEqual({ ok: true });
+    const list = (await (await api(srv, "/api/sessions")).json()) as { sessions: Array<{ id: string }> };
+    expect(list.sessions.some((s) => s.id === id)).toBe(false);
+  });
+
+  it("unknown id answers 404, and a second delete of the same id also answers 404", async () => {
+    const { srv } = await boot(async () => ({ sdkSessionId: "sdk-1" }));
+    const missing = await api(srv, "/api/sessions/no-such-row", { method: "DELETE" });
+    expect(missing.status).toBe(404);
+    const id = await seedRow(srv, "twice");
+    expect((await api(srv, `/api/sessions/${id}`, { method: "DELETE" })).status).toBe(200);
+    expect((await api(srv, `/api/sessions/${id}`, { method: "DELETE" })).status).toBe(404);
+  });
+
+  it("deleting one session leaves an unrelated one untouched", async () => {
+    const { srv } = await boot(async () => ({ sdkSessionId: "sdk-1" }));
+    const a = await seedRow(srv, "keep-a");
+    const b = await seedRow(srv, "drop-b");
+    await api(srv, `/api/sessions/${b}`, { method: "DELETE" });
+    const list = (await (await api(srv, "/api/sessions")).json()) as { sessions: Array<{ id: string }> };
+    expect(list.sessions.some((s) => s.id === a)).toBe(true);
+    expect(list.sessions.some((s) => s.id === b)).toBe(false);
+  });
+
+  it("the route does not also answer GET or POST — those still resolve to their own routes", async () => {
+    const { srv } = await boot(async () => ({ sdkSessionId: "sdk-1" }));
+    const id = await seedRow(srv, "method-check");
+    // GET /api/sessions/:id is not a defined route at all (only /:id/title and
+    // /:id/messages are) — this proves DELETE didn't accidentally widen it.
+    expect((await api(srv, `/api/sessions/${id}`)).status).toBe(404);
+  });
+});
+
 describe("out-of-band confirm", () => {
   it("pushes confirm.request, POST resolves it", async () => {
     let confirmResult = "";

@@ -88,6 +88,9 @@ export interface StartServerOptions {
   escalatePath?: string;
   /** History supplier for GET /api/sessions/:id/messages. Absent = no replay. */
   readTranscript?: TranscriptReader;
+  /** The base system prompt actually sent to the model — surfaced read-only on
+   * GET /api/status for the config-inspection dialog. Absent = field omitted. */
+  systemPrompt?: string;
 }
 
 export interface RunningServer {
@@ -302,6 +305,7 @@ export async function startServer(o: StartServerOptions): Promise<RunningServer>
         preset: o.presetName,
         model: { provider: o.model.provider, baseUrlEnv: o.model.baseUrlEnv ?? null, credentialsEnv: o.model.credentialsEnv ?? null },
         mounts: o.mounts,
+        systemPrompt: o.systemPrompt ?? null,
         ...entry.statusSnapshot(),
       });
     }
@@ -310,11 +314,46 @@ export async function startServer(o: StartServerOptions): Promise<RunningServer>
       const db = new DatabaseSync(o.dbPath, { readOnly: true });
       try {
         const rows = db
-          .prepare("SELECT id, external_key, status, preset, last_active_ms FROM sessions ORDER BY last_active_ms DESC LIMIT 100")
+          .prepare("SELECT id, external_key, status, preset, last_active_ms, title FROM sessions ORDER BY last_active_ms DESC LIMIT 100")
           .all() as Array<Record<string, unknown>>;
         return sendJson(res, 200, { sessions: rows });
       } finally {
         db.close();
+      }
+    }
+    // ---- title rename (WRITE; the only write route this GET-heavy list has) -
+    // Keyed by ledger id (what GET /api/sessions already hands the sidebar),
+    // not externalKey — no ambiguity, no forgiving-resolution rules needed.
+    const titleMatch = /^\/api\/sessions\/([^/]+)\/title$/.exec(path);
+    if (req.method === "PATCH" && titleMatch) {
+      const id = decodeURIComponent(titleMatch[1] ?? "");
+      const body = await readJson(req);
+      const rawTitle = body?.title;
+      if (rawTitle !== null && rawTitle !== undefined && typeof rawTitle !== "string") {
+        return sendJson(res, 400, { error: "title must be a string or null" });
+      }
+      try {
+        const title = o.ledger.setTitle(id, typeof rawTitle === "string" ? rawTitle : null);
+        return sendJson(res, 200, { ok: true, title });
+      } catch {
+        return sendJson(res, 404, { error: "session not found" });
+      }
+    }
+    // ---- delete (WRITE; immediate, no soft-delete/undo) --------------------
+    // Removes the ledger row only — the kernel's own JSONL transcript, if any,
+    // is untouched (the row is a pointer, not the content). This does NOT
+    // cancel an in-flight turn on that session: no cancellation token exists
+    // between here and the kernel today, so "delete while running" just makes
+    // the eventual result/error write fail loudly (route-level catch → the SSE
+    // stream, if still open, just ends) rather than silently resurrect the row.
+    const deleteMatch = /^\/api\/sessions\/([^/]+)$/.exec(path);
+    if (req.method === "DELETE" && deleteMatch) {
+      const id = decodeURIComponent(deleteMatch[1] ?? "");
+      try {
+        o.ledger.deleteSession(id);
+        return sendJson(res, 200, { ok: true });
+      } catch {
+        return sendJson(res, 404, { error: "session not found" });
       }
     }
     // ---- history replay (READ-ONLY; this route never writes anything) ------
