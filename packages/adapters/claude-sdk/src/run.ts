@@ -20,6 +20,7 @@
  * pre-approved read-only MCP tools, default permission mode — production
  * tightening is P5+ (governance module).
  */
+import { isAbsolute } from "node:path";
 import type { ModelProviderManifest, NeutralTool, RenderEvent, ToolMountPlan } from "@agentos/contracts";
 import { driftReport, selectDialect } from "@agentos/core";
 import { dialect as anthropicCompat } from "@agentos/model-anthropic-compat";
@@ -103,6 +104,37 @@ export function plansToMcpServers(
  */
 export function allowedToolsFromPlans(plans: readonly ToolMountPlan[]): string[] {
   return plans.flatMap((p) => (p.allowedTools ?? []).map((t) => `mcp__${p.key}__${t}`));
+}
+
+/**
+ * D-0910-7 (NEW-1) fs-MCP ∩ clean-room closure. Evidence chain: with the
+ * clean-room cwd (workspaceDir), the kernel answers the stdio filesystem
+ * server's MCP roots/list with {cwd} alone, and server-filesystem 2026.8.x
+ * REPLACES its argv-declared roots with that answer — argv root=repo was
+ * silently overridden, so the mount was up but its declared surface was
+ * unreachable ("mounted but lying"). The kernel's official grant knob is the
+ * SDK's `additionalDirectories` (docs: roots/list = launch dir ∪ every
+ * additional working directory) — we compute the root set from the MOUNT
+ * PLANS themselves, never a code constant:
+ *     fsRoots = unique( every absolute path in every stdio plan's args
+ *                        ∪ workspaceDir )
+ * Clean-room semantics unchanged: the reachable surface IS the declared
+ * surface — this CLOSES the gap the hotfix opened, it does not bypass it.
+ * Paths are absolute-path-filtered (isAbsolute), so flag-like args ("-y",
+ * package names) never leak into the grant list.
+ */
+export function fsRootsFromPlans(
+  plans: readonly ToolMountPlan[],
+  workspaceDir?: string,
+): string[] {
+  const roots = new Set<string>();
+  for (const plan of plans) {
+    for (const arg of plan.stdio?.args ?? []) {
+      if (isAbsolute(arg)) roots.add(arg);
+    }
+  }
+  if (workspaceDir !== undefined) roots.add(workspaceDir);
+  return [...roots];
 }
 
 /**
@@ -409,6 +441,7 @@ export function buildQueryOptions(
 ): QueryOptions {
   const channel = resolveChannel(input.model, env);
   const derived = input.allowedTools ?? allowedToolsFromPlans(input.toolMounts);
+  const fsRoots = fsRootsFromPlans(input.toolMounts, input.workspaceDir);
   return {
     systemPrompt:
       input.systemPromptAdditions && input.systemPromptAdditions.length > 0
@@ -428,6 +461,11 @@ export function buildQueryOptions(
     permissionMode: "default",
     maxTurns: input.maxTurns ?? 6,
     cwd: input.workspaceDir ?? process.cwd(),
+    // D-0910-7: grant the kernel exactly the roots the plans declared (see
+    // fsRootsFromPlans) so roots/list answers the stdio servers' truth. With no
+    // stdio plans and no workspaceDir this is [] and the key stays absent —
+    // the smoke path (no workspaceDir) is untouched, byte-compatible.
+    ...(fsRoots.length > 0 ? { additionalDirectories: fsRoots } : {}),
     ...(input.resumeSdkSessionId ? { resume: input.resumeSdkSessionId } : {}),
     env: { ...env, ...sdkEnvDelta(channel), ...modelEnv(input.modelId) },
   };

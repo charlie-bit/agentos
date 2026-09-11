@@ -5,6 +5,7 @@ export {
   modelEnv,
   plansToMcpServers,
   allowedToolsFromPlans,
+  fsRootsFromPlans,
   collectDrift,
   createInProcessServer,
   buildQueryOptions,

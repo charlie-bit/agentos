@@ -135,6 +135,9 @@ importers:
 
   packages/conformance:
     dependencies:
+      '@agentos/adapter-claude-sdk':
+        specifier: workspace:*
+        version: link:../adapters/claude-sdk
       '@agentos/contracts':
         specifier: workspace:*
         version: link:../contracts

@@ -12,6 +12,7 @@ import {
   normalize,
   plansToMcpServers,
   allowedToolsFromPlans,
+  fsRootsFromPlans,
   collectDrift,
   consumeStream,
   buildQueryOptions,
@@ -369,5 +370,47 @@ describe("model identity disclosure (D-0910-6): three tiers, events get the shor
     expect(text).toMatch(/Claude Code/); // named explicitly so the denial is unambiguous
     expect(text).toMatch(/at most the short model name/i);
     expect(text).toMatch(/Never disclose gateway names, cloud routing prefixes/i);
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* D-0910-7 (NEW-1): fsRoots — roots grant must mirror the declared mount.    */
+/* The kernel answers stdio servers' MCP roots/list with cwd ∪ additional     */
+/* directories; without an explicit grant the argv-declared root was silently */
+/* overridden ("mounted but lying"). These pin the computation AND the wiring */
+
+describe("fsRoots (D-0910-7): declared root set → kernel grant", () => {
+  it("workspace-only plan set: stdio args with NO absolute path grant only the workspace", () => {
+    const plan = { key: "fs", transport: "stdio" as const, stdio: { command: "srv", args: ["-y", "pkg-name"] } };
+    expect(fsRootsFromPlans([plan], "/tmp/ws-1")).toEqual(["/tmp/ws-1"]);
+    // wiring: that single root is what the kernel receives
+    const opts = buildQueryOptions(turnBase({ toolMounts: [plan], workspaceDir: "/tmp/ws-1" }), FAKE_ENV);
+    expect(opts.additionalDirectories).toEqual(["/tmp/ws-1"]);
+  });
+
+  it("multi-plan dedup: two stdio plans sharing a root + distinct roots + workspace union, each once", () => {
+    const a = { key: "fs", transport: "stdio" as const, stdio: { command: "npx", args: ["-y", "@mcp/fs", "/repo"] } };
+    const b = { key: "fs2", transport: "stdio" as const, stdio: { command: "npx", args: ["-y", "@mcp/fs", "/repo", "/data"] } };
+    const http = { key: "remote", transport: "http" as const, http: { url: "https://x/rpc" } };
+    const roots = fsRootsFromPlans([a, b, http], "/tmp/ws-1");
+    expect(roots.sort()).toEqual(["/data", "/repo", "/tmp/ws-1"].sort());
+    // flags and package names never leak into the grant list
+    expect(roots).not.toContain("-y");
+    expect(roots).not.toContain("@mcp/fs");
+    // wiring matches the computation exactly — grant = declared surface
+    const opts = buildQueryOptions(turnBase({ toolMounts: [a, b, http], workspaceDir: "/tmp/ws-1" }), FAKE_ENV);
+    expect((opts.additionalDirectories ?? []).sort()).toEqual(roots.sort());
+  });
+
+  it("no stdio plans and no workspaceDir → key absent (smoke path untouched)", () => {
+    // SEMANTIC NOTE: scripts/p2-smoke.mjs calls runTurn WITHOUT workspaceDir —
+    // cwd falls back to process.cwd() and roots/list already covers it, so
+    // this path never had the NEW-1 sandbox gap; the grant key must stay
+    // absent there so the smoke harness stays byte-compatible.
+    expect(fsRootsFromPlans([], undefined)).toEqual([]);
+    const http = { key: "remote", transport: "http" as const, http: { url: "https://x/rpc" } };
+    expect(fsRootsFromPlans([http], undefined)).toEqual([]);
+    const opts = buildQueryOptions(turnBase({ toolMounts: [http] }), FAKE_ENV);
+    expect(opts.additionalDirectories).toBeUndefined();
   });
 });

@@ -12,6 +12,7 @@
   "dependencies": {
     "@agentos/contracts": "workspace:*",
     "@agentos/core": "workspace:*",
+    "@agentos/adapter-claude-sdk": "workspace:*",
     "@agentos/entry-cli": "workspace:*",
     "@agentos/entry-rest": "workspace:*",
     "@agentos/model-anthropic-compat": "workspace:*",
