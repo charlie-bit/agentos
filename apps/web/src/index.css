@@ -1,36 +1,65 @@
 /*
- * Tailwind v4 + shadcn-style token layer. Single accent (teal), neutral
- * grays, system stacks, prefers-color-scheme dual theme. No CDN, no fonts
- * to fetch — offline honest.
+ * Tailwind v4 + shadcn semantic token layer (public shadcn/ui semantic
+ * structure, OKLCH values, emerald accent). Full surface set with -foreground
+ * pairs; dual theme via prefers-color-scheme; the dark base carries a faint
+ * blue cast — never pure black. Motion keyframes and aesthetic utilities are
+ * hand-written standard CSS — zero new dependencies, offline honest.
  */
 @import "tailwindcss";
 
 :root {
-  --background: #fafafa;
-  --foreground: #111317;
-  --card: #ffffff;
-  --muted: #6b7280;
-  --border: #e4e6ea;
-  --primary: #0d9488;
-  --primary-fg: #ffffff;
-  --ok: #059669;
-  --warn: #b45309;
-  --err: #dc2626;
-  --run: #2563eb;
+  --background: oklch(0.987 0.002 250);
+  --foreground: oklch(0.155 0.012 250);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.155 0.012 250);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.155 0.012 250);
+  --primary: oklch(0.45 0.15 160);
+  --primary-foreground: oklch(0.985 0.01 160);
+  --secondary: oklch(0.962 0.004 250);
+  --secondary-foreground: oklch(0.21 0.012 250);
+  --muted: oklch(0.962 0.004 250);
+  --muted-foreground: oklch(0.545 0.015 250);
+  --accent: oklch(0.962 0.004 250);
+  --accent-foreground: oklch(0.21 0.012 250);
+  --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: oklch(0.985 0 0);
+  --border: oklch(0.913 0.008 250);
+  --input: oklch(0.913 0.008 250);
+  --ring: oklch(0.7 0.17 160);
+  /* status accents, harmonized with the emerald primary */
+  --ok: oklch(0.596 0.145 163.225);
+  --warn: oklch(0.555 0.163 48.998);
+  --err: oklch(0.577 0.245 27.325);
+  --run: oklch(0.546 0.245 262.881);
+  --radius: 0.5rem;
 }
+
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0f1113;
-    --foreground: #e7e9ea;
-    --card: #16181c;
-    --muted: #99a0aa;
-    --border: #292d34;
-    --primary: #2dd4bf;
-    --primary-fg: #06231e;
-    --ok: #34d399;
-    --warn: #fbbf24;
-    --err: #f87171;
-    --run: #60a5fa;
+    --background: oklch(0.14 0.012 250);
+    --foreground: oklch(0.97 0.005 250);
+    --card: oklch(0.175 0.014 250);
+    --card-foreground: oklch(0.97 0.005 250);
+    --popover: oklch(0.19 0.014 250);
+    --popover-foreground: oklch(0.97 0.005 250);
+    --primary: oklch(0.68 0.17 160);
+    --primary-foreground: oklch(0.21 0.05 160);
+    --secondary: oklch(0.225 0.014 250);
+    --secondary-foreground: oklch(0.97 0.005 250);
+    --muted: oklch(0.225 0.014 250);
+    --muted-foreground: oklch(0.705 0.018 250);
+    --accent: oklch(0.245 0.016 250);
+    --accent-foreground: oklch(0.97 0.005 250);
+    --destructive: oklch(0.704 0.191 22.216);
+    --destructive-foreground: oklch(0.14 0.012 250);
+    --border: oklch(0.272 0.015 250);
+    --input: oklch(0.272 0.015 250);
+    --ring: oklch(0.68 0.17 160);
+    --ok: oklch(0.765 0.177 163.223);
+    --warn: oklch(0.828 0.189 84.429);
+    --err: oklch(0.704 0.191 22.216);
+    --run: oklch(0.707 0.165 254.624);
   }
 }
 
@@ -38,15 +67,96 @@
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
-  --color-muted: var(--muted);
-  --color-border: var(--border);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-fg);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
   --color-ok: var(--ok);
   --color-warn: var(--warn);
   --color-err: var(--err);
   --color-run: var(--run);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
   --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --animate-fade-in: fade-in 0.3s ease-out both;
+  --animate-accordion-down: accordion-down 0.2s ease-out;
+  --animate-accordion-up: accordion-up 0.2s ease-out;
+  --animate-shimmer: shimmer 2.5s linear infinite;
+}
+
+/* motion keyframes — hand-written standard CSS, no animation package */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+/* height-variable collapse; the var is what Radix exposes on the content box */
+@keyframes accordion-down {
+  from {
+    height: 0;
+  }
+  to {
+    height: var(--radix-collapsible-content-height, 100%);
+  }
+}
+@keyframes accordion-up {
+  from {
+    height: var(--radix-collapsible-content-height, 100%);
+  }
+  to {
+    height: 0;
+  }
+}
+@keyframes shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+/* aesthetic utilities — public CSS techniques, no copied text from anywhere */
+@utility text-brand-gradient {
+  background-image: linear-gradient(
+    in oklab,
+    var(--primary),
+    color-mix(in oklab, var(--primary) 55%, white)
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+@utility panel-glow {
+  box-shadow:
+    0 0 0 1px color-mix(in oklab, var(--primary) 30%, transparent),
+    0 8px 32px -8px color-mix(in oklab, var(--primary) 25%, transparent);
+}
+
+@utility focus-glow {
+  &:focus-visible {
+    outline: none;
+    border-color: var(--ring);
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 30%, transparent);
+  }
 }
 
 html,

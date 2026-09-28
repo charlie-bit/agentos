@@ -32,7 +32,7 @@ export function UsageBar({
   const num = (n: number) => n.toLocaleString();
   return (
     <TooltipProvider delayDuration={200}>
-      <footer className="flex items-center gap-3 border-t border-border px-4 py-1.5 text-[11px] text-muted">
+      <footer className="flex items-center gap-3 border-t border-border px-4 py-1.5 text-[11px] text-muted-foreground">
         <span className="font-mono">
           in {num(usage.input)} · out {num(usage.output)}
           {usage.cacheRead > 0 && <> · cache_rd {num(usage.cacheRead)}</>}
@@ -41,7 +41,7 @@ export function UsageBar({
         {/* Attribution line (④a): WHO answered and HOW it is billed. Short name
             only — gateway/route/window suffixes are operations-side facts. */}
         {modelShort !== null && (
-          <span className="font-mono text-muted" title="answered by the model channel configured for this deployment">
+          <span className="font-mono text-muted-foreground" title="answered by the model channel configured for this deployment">
             · by {modelShort}
           </span>
         )}

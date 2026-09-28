@@ -4,7 +4,7 @@
  * through the ledger pointer — the client just changes which key it sends).
  */
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
-import { chat, getMessages, sessionId as initialSessionId } from "./api";
+import { chat, getMessages, SESSION_KEY, sessionId as initialSessionId } from "./api";
 import { initialState, reduce, type Frame } from "./chat-reducer";
 
 export function useAgentChat() {
@@ -58,7 +58,7 @@ export function useAgentChat() {
 
   const pickSession = useCallback((browserId: string) => {
     try {
-      localStorage.setItem("agentos.web.session", browserId);
+      localStorage.setItem(SESSION_KEY, browserId);
     } catch {
       /* ephemeral */
     }
@@ -66,5 +66,16 @@ export function useAgentChat() {
     dispatch({ t: "session_switched" });
   }, []);
 
-  return { state, send, sessionId, pickSession, resolveConfirm: () => dispatch({ t: "confirm_resolved" }) };
+  /** Fresh browser id => fresh ledger row. Nothing exists server-side until the
+   * first send, which is exactly how a first-time visitor behaves. */
+  const newSession = useCallback(() => pickSession(crypto.randomUUID()), [pickSession]);
+
+  return {
+    state,
+    send,
+    sessionId,
+    pickSession,
+    newSession,
+    resolveConfirm: () => dispatch({ t: "confirm_resolved" }),
+  };
 }

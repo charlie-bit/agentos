@@ -1,10 +1,11 @@
 import { Boxes, TriangleAlert } from "lucide-react";
 import type { StatusResponse } from "../lib/api";
 import { Badge } from "./ui/badge";
+import { ConfigDialog } from "./ConfigDialog";
 
 /** GET /api/status — the plugin sockets as built: mounts + degradation + drift. */
 export function StatusStrip({ status }: { status: StatusResponse | null }) {
-  if (!status) return <header className="flex items-center gap-2 border-b border-border px-4 py-2 text-xs text-muted">loading status…</header>;
+  if (!status) return <header className="flex items-center gap-2 border-b border-border px-4 py-2 text-xs text-muted-foreground">loading status…</header>;
   const driftCount = status.lastDrift ? status.lastDrift.missing.length + status.lastDrift.undeclared.length : 0;
   return (
     <header className="flex items-center gap-2 border-b border-border px-4 py-2">
@@ -21,6 +22,7 @@ export function StatusStrip({ status }: { status: StatusResponse | null }) {
           <span className="opacity-60">·{m.transport}</span>
         </Badge>
       ))}
+      <ConfigDialog status={status} />
       <span className="flex-1" />
       {driftCount > 0 ? (
         <Badge className="border-warn text-warn" title={JSON.stringify(status.lastDrift)}>

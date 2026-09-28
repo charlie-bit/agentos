@@ -11,10 +11,12 @@ const jpost = async <T>(path: string, body: unknown): Promise<T> =>
 
 export interface StatusResponse {
   preset: string;
-  model: { provider: string };
+  /** baseUrlEnv/credentialsEnv are env-var NAMES — entry-rest never puts values on the wire. */
+  model: { provider: string; baseUrlEnv?: string | null; credentialsEnv?: string | null };
   mounts: Array<{ key: string; transport: string; degraded?: boolean }>;
   lastDrift: { missing: string[]; undeclared: string[] } | null;
   waitingConfirms: number;
+  systemPrompt: string | null;
 }
 export interface SessionRow {
   id: string;
@@ -22,6 +24,7 @@ export interface SessionRow {
   status: string;
   preset: string;
   last_active_ms: number;
+  title: string | null;
 }
 
 export const getStatus = () => jget<StatusResponse>("/api/status");
@@ -29,6 +32,20 @@ export const getSessions = () => jget<{ sessions: SessionRow[] }>("/api/sessions
 export const getEscalations = () => jget<{ count: number }>("/api/escalations");
 export const escalate = (sessionId: string, reason?: string) => jpost<{ ok: boolean }>("/api/escalate", { sessionId, reason });
 export const answerConfirm = (requestId: string, approved: boolean) => jpost<{ ok: boolean }>("/api/confirm", { requestId, approved });
+
+/** Rename (or, with title=null/"", clear) a session's ledger-side label. */
+export const renameSession = async (id: string, title: string | null): Promise<{ ok: boolean; title: string | null }> =>
+  (
+    await fetch(`/api/sessions/${encodeURIComponent(id)}/title`, {
+      method: "PATCH",
+      body: JSON.stringify({ title }),
+      headers: { "content-type": "application/json" },
+    })
+  ).json() as Promise<{ ok: boolean; title: string | null }>;
+
+/** Immediate, no-undo removal of a ledger row (does not touch kernel transcripts). */
+export const deleteSession = async (id: string): Promise<{ ok: boolean }> =>
+  (await fetch(`/api/sessions/${encodeURIComponent(id)}`, { method: "DELETE" })).json() as Promise<{ ok: boolean }>;
 
 /**
  * Past turns for a session (read-only). The server answers 200 + [] for every
@@ -69,9 +86,12 @@ export async function chat(sessionId: string, message: string, onFrame: (frame: 
   }
 }
 
+/** localStorage key for the browser identity (shared, never re-spelled elsewhere). */
+export const SESSION_KEY = "agentos.web.session";
+
 /** Browser identity: uuid persisted in localStorage (server maps it to the ledger row). */
 export function sessionId(): string {
-  const KEY = "agentos.web.session";
+  const KEY = SESSION_KEY;
   let id: string | null = null;
   try {
     id = localStorage.getItem(KEY);

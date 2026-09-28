@@ -30,16 +30,16 @@ export function ConfirmModal({
   return (
     <Dialog open onOpenChange={(o) => !o && onResolved()}>
       <DialogContent>
-        <DialogTitle className="text-[11px] font-medium uppercase tracking-wide text-muted">
+        <DialogTitle className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
           confirmation requested
         </DialogTitle>
         <p className="my-2 text-sm">{pending.prompt}</p>
         {pending.subject !== null && (
-          <pre className="mb-2 overflow-x-auto rounded bg-background p-2 font-mono text-[11px] text-muted">
+          <pre className="mb-2 overflow-x-auto rounded bg-background p-2 font-mono text-[11px] text-muted-foreground">
             {JSON.stringify(pending.subject, null, 2)}
           </pre>
         )}
-        <DialogDescription className="mb-3 text-[11px] text-muted">
+        <DialogDescription className="mb-3 text-[11px] text-muted-foreground">
           unanswered requests are auto-denied by the server (timeout policy lives entry-side).
         </DialogDescription>
         <div className="flex justify-end gap-2">
