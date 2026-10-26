@@ -40,7 +40,34 @@ export function ConfigDialog({ status }: { status: StatusResponse | null }) {
 
             <section>
               <div className="mb-1 font-semibold text-foreground">Model</div>
-              <div className="font-mono text-muted-foreground">{status.model.provider}</div>
+              <div className="font-mono text-muted-foreground">
+                {status.model.provider}
+                {status.dialect ? ` · dialect ${status.dialect}` : ""}
+              </div>
+              <div className="text-[11px] text-muted-foreground">
+                {status.model.baseUrlEnv ? `url env: ${status.model.baseUrlEnv}` : "no url lease"} ·{" "}
+                {status.model.credentialsEnv ? `key env: ${status.model.credentialsEnv}` : "no key lease"}
+              </div>
+            </section>
+
+            <section>
+              <div className="mb-1 font-semibold text-foreground">Channel (entry)</div>
+              <div className="font-mono text-muted-foreground">
+                {status.entry ? `${status.entry.name} · confirm ${status.entry.confirm ? "capable" : "unavailable (kb read-only)"}` : "not disclosed"}
+              </div>
+            </section>
+
+            <section>
+              <div className="mb-1 font-semibold text-foreground">Knowledge</div>
+              {status.knowledge ? (
+                <div className="space-y-0.5 font-mono text-muted-foreground">
+                  <div>{status.knowledge.name}</div>
+                  <div className="text-[11px]">{status.knowledge.manifestPath ?? "synthesized at runtime"}</div>
+                  <div className="text-[11px]">mount type: {status.knowledge.mountType ?? "—"}</div>
+                </div>
+              ) : (
+                <div className="text-muted-foreground">no knowledge socket mounted</div>
+              )}
             </section>
 
             <section>
@@ -48,12 +75,21 @@ export function ConfigDialog({ status }: { status: StatusResponse | null }) {
               {status.mounts.length === 0 ? (
                 <div className="text-muted-foreground">no tools mounted</div>
               ) : (
-                <ul className="space-y-0.5 font-mono text-muted-foreground">
+                <ul className="space-y-1 font-mono text-muted-foreground">
                   {status.mounts.map((m) => (
-                    <li key={m.key}>{toolLabel(m.key)}</li>
+                    <li key={m.key}>
+                      <div>{toolLabel(m.key)}</div>
+                      <div className="text-[11px]">
+                        {m.manifestPath ?? "synthesized at runtime"} · {m.transport}
+                        {m.degraded ? " · ⚠ absent/degraded" : ""}
+                      </div>
+                    </li>
                   ))}
                 </ul>
               )}
+              <div className="mt-1 text-[11px] text-muted-foreground">
+                Paths are repository-relative. Credentials appear only as env-var NAMES; values are never on the wire.
+              </div>
             </section>
 
             <section>

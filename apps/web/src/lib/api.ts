@@ -80,7 +80,10 @@ export interface StatusResponse {
   preset: string;
   /** baseUrlEnv/credentialsEnv are env-var NAMES — entry-rest never puts values on the wire. */
   model: { provider: string; baseUrlEnv?: string | null; credentialsEnv?: string | null };
-  mounts: Array<{ key: string; transport: string; degraded?: boolean }>;
+  mounts: Array<{ key: string; transport: string; degraded?: boolean; manifestPath?: string }>;
+  knowledge?: { name: string; manifestPath?: string | null; mountType?: string | null } | null;
+  entry?: { name: string; confirm: boolean } | null;
+  dialect?: string | null;
   lastDrift: { missing: string[]; undeclared: string[] } | null;
   waitingConfirms: number;
   systemPrompt: string | null;
