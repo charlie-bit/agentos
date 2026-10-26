@@ -6,26 +6,19 @@
  * Zero external dependencies: the probe uses the global fetch (injectable for
  * offline conformance), AbortSignal.timeout for the 5s bound.
  */
-import {
-  resolveModelAlias,
-  type ModelChannel,
-  type ModelLeaseLike,
-  type ProbeResult,
-} from "@agentos/core";
+import type { ModelChannel, ModelDialect, ModelHealthOptions, ModelLeaseSpec, ModelProbeResult } from "@agentos/contracts";
+import { resolveModelAlias } from "@agentos/core";
 
 /** Lease values enter from an injected env record only (memory; never logged). */
-export function resolveChannel(lease: ModelLeaseLike, env: NodeJS.ProcessEnv = process.env): ModelChannel {
+export function resolveChannel(lease: ModelLeaseSpec, env: NodeJS.ProcessEnv = process.env): ModelChannel {
   return {
     baseUrl: lease.baseUrlEnv ? env[lease.baseUrlEnv] : undefined,
     authToken: lease.credentialsEnv ? env[lease.credentialsEnv] : undefined,
   };
 }
 
-export interface HealthOptions {
-  fetchFn?: (url: string, init?: RequestInit) => Promise<{ status: number }>;
-  timeoutMs?: number;
-  env?: NodeJS.ProcessEnv;
-}
+/** Local alias for the contract's probe options. */
+export type HealthOptions = ModelHealthOptions;
 
 /** Probed when no url is leased; a public, documented default endpoint. */
 export const DEFAULT_BASE_URL = "https://api.anthropic.com";
@@ -37,7 +30,7 @@ export const DEFAULT_BASE_URL = "https://api.anthropic.com";
  * (auth failures arrive as kernel turn errors, not routing gates).
  * Network error / timeout => ok:false with a human reason.
  */
-export async function healthCheck(lease: ModelLeaseLike, opts: HealthOptions = {}): Promise<ProbeResult> {
+export async function healthCheck(lease: ModelLeaseSpec, opts: HealthOptions = {}): Promise<ModelProbeResult> {
   const channel = resolveChannel(lease, opts.env ?? process.env);
   const base = (channel.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, "");
   const headers: Record<string, string> = { "anthropic-version": "2023-06-01" };
@@ -56,8 +49,8 @@ export async function healthCheck(lease: ModelLeaseLike, opts: HealthOptions = {
   }
 }
 
-export const dialect = {
-  tag: "anthropic-compat" as const,
+export const dialect: ModelDialect = {
+  tag: "anthropic-compat",
   resolveChannel,
   healthCheck,
   resolveModel: (models: Readonly<Record<string, string>>, alias: string): string => resolveModelAlias(models, alias),

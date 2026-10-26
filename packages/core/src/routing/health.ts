@@ -9,14 +9,10 @@
  * manifest+alias with an injectable clock so conformance can prove "no
  * repeat probe within TTL" without wall-waiting.
  */
-import type { ModelProviderManifest } from "@agentos/contracts";
+import type { ModelProbeResult, ModelProviderManifest } from "@agentos/contracts";
 
-export interface ProbeResult {
-  ok: boolean;
-  latencyMs?: number;
-  /** Human line when ok:false (why the endpoint looked dead). */
-  reason?: string;
-}
+/** The dialect probe verdict — one type, from contracts (spec #202). */
+export type ProbeResult = ModelProbeResult;
 
 export type Probe = (manifest: ModelProviderManifest, alias: string) => Promise<ProbeResult>;
 

@@ -13,7 +13,7 @@
 ## Adding a ModelProvider
 
 1. New alias / endpoint / pricing for an existing vendor: add `config/models/<name>.yml` (`ModelProviderManifest`) — zero code.
-2. New vendor dialect: implement `ModelProviderRuntime` (healthCheck + resolveModel) in `packages/providers/model-<vendor>/`.
+2. New vendor dialect: implement the contract's `ModelDialect` (tag + resolveChannel + healthCheck + resolveModel) in `packages/providers/model-<vendor>/` and export it as `dialect` — `@agentos/contracts` `ModelDialect` is the ONE provider-runtime type (spec #202). `healthCheck(lease, { env })` takes options, never a bare env record.
 3. Endpoint and credentials enter as env-var names only; inline secrets are schema-rejected anyway.
 4. Point the preset's `model:` slot at the manifest name.
 

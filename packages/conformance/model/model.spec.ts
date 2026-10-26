@@ -134,10 +134,10 @@ describe("probe semantics (compat dialect, injected fetch)", () => {
 
 describe("bedrock presence health (no network at all)", () => {
   it("profile present -> ok", async () => {
-    expect(await bedrock.healthCheck({ provider: "aws-bedrock" }, { AWS_PROFILE: "x" })).toMatchObject({ ok: true });
+    expect(await bedrock.healthCheck({ provider: "aws-bedrock" }, { env: { AWS_PROFILE: "x" } })).toMatchObject({ ok: true });
   });
   it("empty env -> not-ok with an actionable, human reason", async () => {
-    const r = await bedrock.healthCheck({ provider: "aws-bedrock" }, {});
+    const r = await bedrock.healthCheck({ provider: "aws-bedrock" }, { env: {} });
     expect(r.ok).toBe(false);
     expect(r.reason).toContain("AWS_PROFILE");
   });
@@ -234,5 +234,19 @@ describe("attribution record + JSONL log", () => {
       "model: m/a→m/real | in=1 out=2 | cost≈$0.5000",
     );
     expect(formatAttributionLine({ tsMs: 1, manifest: "m", provider: "p" })).toBe("model: m/kernel-default");
+  });
+});
+
+describe("ModelDialect is the one provider-runtime contract (spec #202)", () => {
+  it("both shipped dialects expose the same four members", () => {
+    for (const d of [compat, bedrock]) {
+      expect(typeof d.tag).toBe("string");
+      expect(d.tag.length).toBeGreaterThan(0);
+      expect(typeof d.resolveChannel).toBe("function");
+      expect(typeof d.healthCheck).toBe("function");
+      expect(typeof d.resolveModel).toBe("function");
+      expect(d.resolveModel({ general: "real-model-id" }, "general")).toBe("real-model-id");
+      expect(() => d.resolveModel({}, "missing")).toThrow(/unknown model alias/);
+    }
   });
 });

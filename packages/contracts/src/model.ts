@@ -31,15 +31,60 @@ export const modelProviderManifestSchema = manifestEnvelopeSchema.extend({
   usageAttr: z.record(z.string(), z.string()).optional(),
 });
 
-/** Per-request runtime surface that core uses through the adapter seam. */
-export interface ModelProviderRuntime {
+/**
+ * Per-request runtime surface — the ONE provider-runtime type in the repo
+ * (spec #202). It mirrors what a dialect actually needs to do: resolve the
+ * lease into a channel, probe liveness, and map alias → model id. The two
+ * shipped dialects (model-anthropic-compat, model-bedrock) declare
+ * `dialect: ModelDialect`, and a new vendor runtime implements exactly this.
+ */
+export interface ModelLeaseSpec {
+  /** Vendor tag from the manifest (free-form; selection rules live in core). */
+  readonly provider: string;
+  /** Env var NAME carrying the base URL; never the URL itself. */
+  readonly baseUrlEnv?: string;
+  /** Env var NAME carrying the credential; never the value. */
+  readonly credentialsEnv?: string;
+}
+
+/** Neutral channel values: memory-only, never logged, never persisted, never on the wire. */
+export interface ModelChannel {
+  /** Endpoint URL, when leased via env. */
+  readonly baseUrl?: string;
+  /** Credential value for that URL, read from env at this boundary only. */
+  readonly authToken?: string;
+  /** Vendor-native credential-chain marker (e.g. "bedrock"): no url/key here. */
+  readonly nativeChain?: string;
+}
+
+export interface ModelProbeResult {
+  readonly ok: boolean;
+  readonly latencyMs?: number;
+  /** Human line when ok:false (why the endpoint looked dead). */
+  readonly reason?: string;
+}
+
+export interface ModelHealthOptions {
+  /** Env source; injectable so tests never read real credentials. */
+  readonly env?: NodeJS.ProcessEnv;
+  /** Probe budget; dialect default when absent. */
+  readonly timeoutMs?: number;
+  /** Injectable transport for offline conformance. */
+  readonly fetchFn?: (url: string, init?: RequestInit) => Promise<{ status: number }>;
+}
+
+export interface ModelDialect {
+  /** Stable dialect identity (e.g. "anthropic-compat", "bedrock"). */
+  readonly tag: string;
+  /** Resolve env leases into a neutral channel. */
+  resolveChannel(lease: ModelLeaseSpec, env?: NodeJS.ProcessEnv): ModelChannel;
   /**
-   * Cheap liveness probe. latencyMs = probe round trip in ms; absent = not measured.
-   * Report unhealthy as ok:false — throwing is reserved for transport failure, not bad health.
+   * Cheap liveness probe. Report unhealthy as ok:false — throwing is reserved
+   * for transport failure, not bad health.
    */
-  healthCheck(): Promise<{ ok: boolean; latencyMs?: number }>;
-  /** alias → real model id. Unknown alias throws: that is misconfiguration, not a runtime state. */
-  resolveModel(alias: string): string;
+  healthCheck(lease: ModelLeaseSpec, opts?: ModelHealthOptions): Promise<ModelProbeResult>;
+  /** alias → real model id. Unknown alias throws: misconfiguration, not a runtime state. */
+  resolveModel(models: Readonly<Record<string, string>>, alias: string): string;
 }
 
 export type ModelProviderManifest = z.infer<typeof modelProviderManifestSchema>;

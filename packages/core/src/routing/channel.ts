@@ -7,25 +7,12 @@
  * never persisted, never on an event stream — same hygiene law as ToolMountPlan.
  */
 
-/** The manifest subset every dialect consumes. */
-export interface ModelLeaseLike {
-  provider: string;
-  baseUrlEnv?: string;
-  credentialsEnv?: string;
-}
-
-export interface ModelChannel {
-  /** Anthropic-compatible endpoint URL, when leased via env. */
-  baseUrl?: string;
-  /** Credential value for that URL, read from env at this boundary only. */
-  authToken?: string;
-  /**
-   * Vendor-native credential chain marker (e.g. "bedrock"): no url/key here —
-   * the kernel's documented switch owns the chain. Mutually exclusive with a
-   * leased baseUrl in practice (selection encodes that rule).
-   */
-  nativeChain?: string;
-}
+/**
+ * The manifest subset every dialect consumes — the contract's ModelLeaseSpec
+ * (spec #202: exactly one provider-runtime type in the repo).
+ */
+export type ModelLeaseLike = import("@agentos/contracts").ModelLeaseSpec;
+export type ModelChannel = import("@agentos/contracts").ModelChannel;
 
 export type DialectTag = "anthropic-compat" | "bedrock";
 
