@@ -51,8 +51,10 @@ export interface ServeFlags {
 
 export interface Assembly {
   presetName: string;
-  /** The preset's model slot (before any request-level override). */
+  /** The preset's model slot (before any channel/request-level override). */
   presetModel: string;
+  /** preset.channelModels — middle routing layer (spec #208). */
+  channelModels?: Record<string, string>;
   allModels: ModelProviderManifest[];
   /** Preset knowledge slot manifest if loaded (P7 chain); undefined = no kb. */
   knowledge?: KnowledgeManifest;
@@ -184,6 +186,7 @@ export function assemble(flags: ServeFlags): { ok: true; value: Assembly } | { o
     value: {
       presetName: preset.name,
       presetModel: model.name,
+      ...(preset.channelModels ? { channelModels: preset.channelModels } : {}),
       allModels: manifests.filter((m): m is ModelProviderManifest => m.kind === "model"),
       knowledge: manifests.find((m) => m.kind === "knowledge" && m.name === preset.knowledge) as KnowledgeManifest | undefined,
       plans,
@@ -200,7 +203,15 @@ export function assemble(flags: ServeFlags): { ok: true; value: Assembly } | { o
  * relocated, not changed.
  */
 async function routeModel(flags: ServeFlags, asm: Assembly): Promise<{ ok: true; value: RoutedModel } | { ok: false; exitCode: number; lines: string[] }> {
-  const active = resolveActiveModel({ presetModel: asm.presetModel, override: flags.model, models: asm.allModels });
+  const active = resolveActiveModel({
+    presetModel: asm.presetModel,
+    override: flags.model,
+    // The mounted entry IS the channel: cli REPL vs web console may each pin
+    // their own model in preset.channelModels.
+    channel: flags.web ? "rest" : "cli",
+    ...(asm.channelModels ? { channelModels: asm.channelModels } : {}),
+    models: asm.allModels,
+  });
   if (!active.ok) return { ok: false, exitCode: 1, lines: active.errors.map((e) => `✗ ${e.path}: ${e.message}${e.hint ? ` (${e.hint})` : ""}`) };
   const { manifest } = active.active;
 

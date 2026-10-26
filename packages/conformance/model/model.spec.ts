@@ -300,3 +300,56 @@ describe("ModelDialect is the one provider-runtime contract (spec #202)", () => 
     }
   });
 });
+
+describe("three-layer routing priority (spec #208)", () => {
+  const models = [
+    manifest({ name: "global-model", models: { general: "vendor-a/global" } }),
+    manifest({ name: "channel-model", provider: "vendor-b", models: { general: "vendor-b/channel" } }),
+    manifest({ name: "request-model", provider: "vendor-c", models: { general: "vendor-c/request" } }),
+  ];
+
+  it("channel override beats the preset slot", () => {
+    const r = resolveActiveModel({
+      presetModel: "global-model",
+      channel: "rest",
+      channelModels: { rest: "channel-model" },
+      models,
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.active.manifest.name).toBe("channel-model");
+    expect(r.active.source).toBe("channel");
+    expect(r.active.modelId).toBe("vendor-b/channel");
+  });
+
+  it("request override beats the channel override", () => {
+    const r = resolveActiveModel({
+      presetModel: "global-model",
+      override: "request-model",
+      channel: "rest",
+      channelModels: { rest: "channel-model" },
+      models,
+    });
+    expect(r.ok && r.active.source).toBe("override");
+    expect(r.ok && r.active.manifest.name).toBe("request-model");
+  });
+
+  it("a channel with no entry uses the preset slot", () => {
+    const r = resolveActiveModel({ presetModel: "global-model", channel: "cli", channelModels: { rest: "channel-model" }, models });
+    expect(r.ok && r.active.source).toBe("preset");
+  });
+
+  it("an unresolvable channel entry fails loudly, naming the config path", () => {
+    const r = resolveActiveModel({ presetModel: "global-model", channel: "rest", channelModels: { rest: "ghost" }, models });
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.errors[0]?.path).toBe("channelModels.rest");
+  });
+
+  it("a channel entry may name an alias, not just a manifest", () => {
+    const multi = [manifest({ name: "multi", provider: "vendor-m", models: { fast: "vendor-m/fast", deep: "vendor-m/deep" } })];
+    const r = resolveActiveModel({ presetModel: "multi", channel: "cli", channelModels: { cli: "deep" }, models: multi });
+    expect(r.ok && r.active.alias).toBe("deep");
+    expect(r.ok && r.active.modelId).toBe("vendor-m/deep");
+  });
+});
