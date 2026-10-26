@@ -148,7 +148,7 @@
 70. **serve --chat 交互流**：终端 SSE 式交互对话，`--session` / `--continue` / `--verbose` 生效。
 71. **entry-rest 四动词**：REST 适配器实现四动词，`confirm` 走 out-of-band 帧。
 72. **只读路由面**：`GET /healthz`、`GET /api/status`、`GET /api/sessions` —— status 含配置检查（含 system prompt 披露）。
-73. **写路由面**：`PATCH /api/sessions/:id`（改名）、`DELETE /api/sessions/:id`（删除）——REST 面上仅有的写路由。
+73. **写路由面**：`PATCH /api/sessions/:id/title`（改名，body `{title}`）、`DELETE /api/sessions/:id`（删除）——REST 面上仅有的写路由。
 74. **历史回放**：`GET /api/sessions/:id/messages` 返回中立 entry 序列供前端 hydrate。
 75. **对话端点**：`POST /api/chat` SSE 流式返回事件流。
 76. **门禁端点**：`POST /api/escalate` / `GET /api/escalations` / `POST /api/confirm` —— out-of-band 确认闭环。
@@ -374,7 +374,7 @@
 
 231. **README Quick Start 修复**：README.md:247-257 双语均写 `npm install`——实际 pnpm workspace；写 Node ≥20，实际 engines ≥22 且 node:sqlite 需 ≥22.5。验收：双语 Quick Start 逐条可从零跑通。
 232. **README 字段示例与 schema 对齐**：`idempotent: true # required` 实为 optional（tool.ts:42）；`envRouting: non-prod` 标量示例 vs schema 数组（tool.ts:46）。验收：README 每个 yml 示例对 schema 字符级合法。
-233. **#73 路由形状对齐**：spec 承诺 `PATCH /api/sessions/:id`，代码是 `/title` 后缀且 web 已依赖——修 spec 文字（最省）或别名路由。验收：spec 文字与路由正则逐字符一致。
+233. **#73 路由形状对齐**：spec 原文承诺 `PATCH /api/sessions/:id`，代码是 `/title` 后缀且 web 已依赖——**已采用修 spec 文字**（2026-10-26：改为 `PATCH /api/sessions/:id/title`，与 `entry-rest` 路由正则一致）。验收：spec 文字与路由正则逐字符一致。
 234. **#59 kb lint 链接+索引**：kb-lint.ts:77-81 现只查 frontmatter；补相对链接存在性检查 + README 索引一致性。验收：一本含死链的书 exit 1 并点名文件+目标。
 235. **Implementation Order 表标注现状**：README.md:136-145 的 Step 0-5 表混"已做/计划"（Slack entry 不存在、Step 5 未跑），读者无法分辨。验收：表中每行标 shipped/planned。
 236. **README 纪律表第 5 行兑现或降格**：">10KB 落盘"在 #206 落地前是纸面承诺；落地后保留，否则改写为计划。验收：纪律表每行能指到代码（#99 的执行面）。
@@ -473,4 +473,5 @@
 
 *配对文档：[progress.md](progress.md)（逐点状态）。对标判决：[gap-vs-sre-triage-copilot.md](gap-vs-sre-triage-copilot.md)。
 Spec 修订规则：点只能增或改验收标准，不许悄悄删——删除必须留 changelog。v2（2026-10-26）：1–100 冻结为基线，新增 101–200；v2 差异化定位一句话——"sre-triage-copilot 是一个 SRE 分诊产品，AgentOS 是做出任意分诊产品的框架：它的全部功能面，在我们的世界里要么是 preset 文件、要么是 config/*.yml、要么是 examples/，没有一样需要写进内核"。
+v3.1（2026-10-26）：#73 的 PATCH 路由文字修正为 `/api/sessions/:id/title`（与代码正则一致，属"只修验收标准措辞"，点未删除）；#233 相应标注为已采用此方案。
 v3（2026-10-26）：全量代码审计后新增 201–307（107 点）——每个 PARTIAL/MISSING 的收口任务、每个审计新发现缺陷、每处死代码各成一点；目标态 = 1–307 全绿即 100 分。审计口径：DONE 不重立点，证据一律 file:line。*
