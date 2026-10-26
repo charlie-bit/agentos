@@ -470,3 +470,78 @@ describe("GET /api/sessions/:id/messages", () => {
     expect(after.entries).toHaveLength(3);
   });
 });
+
+describe("concurrent tabs (spec #216)", () => {
+  /** Consume an SSE response, invoking onFrame as frames arrive; resolves with all frames. */
+  async function consumeStream(res: Response, onFrame: (f: Record<string, unknown>) => void): Promise<Array<Record<string, unknown>>> {
+    const reader = res.body!.getReader();
+    const decoder = new TextDecoder();
+    const frames: Array<Record<string, unknown>> = [];
+    let buf = "";
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      let split: number;
+      while ((split = buf.indexOf("\n\n")) >= 0) {
+        const chunk = buf.slice(0, split);
+        buf = buf.slice(split + 2);
+        const line = chunk.split("\n").find((l) => l.startsWith("data: "));
+        if (!line) continue;
+        const frame = JSON.parse(line.slice(6)) as Record<string, unknown>;
+        frames.push(frame);
+        onFrame(frame);
+      }
+    }
+    return frames;
+  }
+
+  it("each tab's confirm arrives on its own stream and resolves its own turn", async () => {
+    const verdicts: Record<string, boolean> = {};
+    const { srv } = await boot(async (ctx) => {
+      const answer = await ctx.confirm({ prompt: `approve ${ctx.externalKey}` });
+      verdicts[ctx.externalKey] = answer.approved;
+      ctx.emit({ type: "result", payload: { subtype: "success", isError: false }, timestampMs: Date.now() });
+      return {};
+    });
+
+    const firstConfirm = new Map<string, (requestId: string) => void>();
+    const requestIds = new Map<string, string>();
+    const waitForConfirm = (tab: string) =>
+      new Promise<string>((resolve) => {
+        firstConfirm.set(tab, resolve);
+        if (requestIds.has(tab)) resolve(requestIds.get(tab) as string);
+      });
+
+    const runTab = async (tab: string) => {
+      const res = await postJson(srv, "/api/chat", { sessionId: tab, message: "go" });
+      return consumeStream(res, (frame) => {
+        if (frame.type !== "confirm.request") return;
+        const payload = frame.payload as { requestId?: string; prompt?: string };
+        requestIds.set(tab, payload.requestId ?? "");
+        // the prompt proves the frame belongs to this tab's turn
+        expect(payload.prompt).toContain(`web-${tab}`);
+        firstConfirm.get(tab)?.(payload.requestId ?? "");
+      });
+    };
+
+    const tabA = runTab("a");
+    const tabB = runTab("b");
+    const [reqA, reqB] = await Promise.all([waitForConfirm("a"), waitForConfirm("b")]);
+    expect(reqA).not.toBe(reqB);
+
+    // Answer A yes and B no — interleaved order on purpose.
+    await postJson(srv, "/api/confirm", { requestId: reqB, approved: false });
+    await postJson(srv, "/api/confirm", { requestId: reqA, approved: true });
+
+    const [framesA, framesB] = await Promise.all([tabA, tabB]);
+    const confirmsA = framesA.filter((f) => f.type === "confirm.request");
+    const confirmsB = framesB.filter((f) => f.type === "confirm.request");
+    expect(confirmsA).toHaveLength(1);
+    expect(confirmsB).toHaveLength(1);
+    expect((confirmsA[0]?.payload as { requestId: string }).requestId).toBe(reqA);
+    expect((confirmsB[0]?.payload as { requestId: string }).requestId).toBe(reqB);
+    expect(verdicts["web-a"]).toBe(true);
+    expect(verdicts["web-b"]).toBe(false);
+  });
+});

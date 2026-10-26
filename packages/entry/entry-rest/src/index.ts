@@ -125,10 +125,12 @@ const JSON_TYPES: Record<string, string> = {
 };
 
 /**
- * NOTE (P5 scope): `boundKey` is a per-request hand-off, not a per-stream
- * context — simultaneous chats from different browser tabs could interleave
- * the bind. Acceptable for a single-user local console; a per-request EntryRest
- * instance is the P6 fix if concurrency ever matters.
+ * Concurrency law (spec #216): the HTTP surface addresses a session by an
+ * EXPLICIT externalKey on every call (`sessionFor` / `renderFor` /
+ * `confirmFor`). There is no mutable "current request" slot for the server to
+ * race on — two tabs streaming at once each write only their own key.
+ * `bind()` survives solely to satisfy the four-verb EntryAdapter shape for
+ * single-request embedders; the server never calls it.
  */
 export class EntryRest implements EntryAdapter {
   readonly capabilities = CAPABILITIES;
@@ -154,16 +156,25 @@ export class EntryRest implements EntryAdapter {
 
   /** Same browser sessionId => same ledger row => same binding (idempotent). */
   async session(): Promise<SessionBinding> {
-    const key = this.requireBound();
+    return this.sessionFor(this.requireBound());
+  }
+
+  /** Explicit-key session binding — the only form the HTTP surface uses. */
+  async sessionFor(externalKey: string): Promise<SessionBinding> {
     const row =
-      this.opts.ledger.getByExternalKey(key) ??
-      this.opts.ledger.createSession({ entry: ENTRY_NAME, externalKey: key, preset: this.opts.presetName });
-    return { clientSessionId: key, agentSessionId: row.id };
+      this.opts.ledger.getByExternalKey(externalKey) ??
+      this.opts.ledger.createSession({ entry: ENTRY_NAME, externalKey, preset: this.opts.presetName });
+    return { clientSessionId: externalKey, agentSessionId: row.id };
   }
 
   /** SSE delivery; malformed events / dead sockets must never propagate. */
   render(events: RenderEvent[]): void {
-    const key = this.boundKey;
+    this.renderFor(this.boundKey ?? "", events);
+  }
+
+  /** Explicit-key SSE delivery (see the concurrency law above). */
+  renderFor(externalKey: string, events: RenderEvent[]): void {
+    const key = externalKey;
     if (!key) return;
     for (const res of this.streams.get(key) ?? []) {
       for (const event of events ?? []) {
@@ -183,7 +194,12 @@ export class EntryRest implements EntryAdapter {
 
   /** Out-of-band gate: push confirm.request, await POST /api/confirm or deny. */
   confirm(req: ConfirmRequest): Promise<ConfirmResult> {
-    const key = this.boundKey ?? "";
+    return this.confirmFor(this.boundKey ?? "", req);
+  }
+
+  /** Explicit-key human gate (see the concurrency law above). */
+  confirmFor(externalKey: string, req: ConfirmRequest): Promise<ConfirmResult> {
+    const key = externalKey;
     const sockets = this.streams.get(key) ?? [];
     if (sockets.length === 0) {
       return Promise.resolve({ approved: false, decidedBy: "no-channel", timestampMs: Date.now() });
@@ -422,8 +438,7 @@ export async function startServer(o: StartServerOptions): Promise<RunningServer>
         return sendJson(res, 400, { error: "sessionId and message are required strings" });
       }
       const externalKey = `web-${sessionId}`;
-      entry.bind(externalKey);
-      const binding = await entry.session();
+      const binding = await entry.sessionFor(externalKey);
       const row: SessionRow | undefined = o.ledger.getByExternalKey(externalKey);
       res.writeHead(200, {
         "content-type": "text/event-stream",
@@ -443,14 +458,8 @@ export async function startServer(o: StartServerOptions): Promise<RunningServer>
           prompt: message,
           externalKey,
           resumeSdkSessionId: row?.sdkSessionId ?? undefined,
-          emit: (ev) => {
-            entry.bind(externalKey);
-            entry.render([ev]);
-          },
-          confirm: (partial) => {
-            entry.bind(externalKey);
-            return entry.confirm({ ...partial, requestId: randomUUID() });
-          },
+          emit: (ev) => entry.renderFor(externalKey, [ev]),
+          confirm: (partial) => entry.confirmFor(externalKey, { ...partial, requestId: randomUUID() }),
         });
         if (out.sdkSessionId && row) {
           o.ledger.setSdkSessionId(row.id, out.sdkSessionId);
