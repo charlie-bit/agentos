@@ -4,7 +4,7 @@
 
 AgentOS is a **pluggable Agent execution framework**: one Harness kernel for the agent loop, session management, and sandboxing; three Provider contracts (Model / Tool / Knowledge) that can be swapped at any time — **switch your stack by editing one preset file, zero code changes required**.
 
-[Chinese docs](README_zh-CN.md) · [Design docs](.docs/)
+[Chinese docs](README_zh-CN.md) · [Design docs](.docs/) · [Security](SECURITY.md)
 
 ---
 

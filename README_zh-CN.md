@@ -4,7 +4,7 @@
 
 AgentOS 是**可插拔的 Agent 执行框架**：一个 Harness 内核承载 agent 循环、会话和沙箱；三层 Provider 契约（Model / Tool / Knowledge）让模型、工具、知识库随时更换——**换业务 = 换 preset 文件，不动任何代码**。
 
-[English](README.md) · [中文文档](.docs/)
+[English](README.md) · [设计文档](.docs/) · [安全策略](SECURITY.md)
 
 ---
 
