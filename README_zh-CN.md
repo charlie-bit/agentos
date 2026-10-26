@@ -236,25 +236,31 @@ LangGraph · CrewAI · AutoGen · 自定义框架
 
 ### 环境要求
 
-- Node.js ≥ 20
-- TypeScript ≥ 5.4
+- **Node.js ≥ 22.5** —— ledger 使用内置 `node:sqlite` 驱动，该能力从 22.5 起存在（根 package.json 的 `engines` 写作 `>=22`）
+- **pnpm ≥ 9** —— 本仓库是 pnpm workspace，`npm install` 不会链接 workspace 包
 
 ### 安装
 
 ```bash
 git clone https://github.com/charlie-bit/agentos.git
 cd agentos
-npm install
+pnpm install
+pnpm build          # 先让 workspace 包产出 dist/，之后才能运行
 ```
 
 ### 开发
 
 ```bash
-# 运行测试
-npm test
+# 全 workspace
+pnpm -r test
+pnpm -r typecheck
+pnpm -r lint
 
-# 类型检查
-npm run typecheck
+# 单个包
+pnpm --filter @agentos/core test
+
+# 校验随仓库发布的 preset（无副作用）
+node cli/main.mjs preset validate config/presets/example.yml
 ```
 
 ### 贡献

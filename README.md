@@ -236,25 +236,33 @@ Three approaches, **Route C recommended**:
 
 ### Requirements
 
-- Node.js ≥ 20
-- TypeScript ≥ 5.4
+- **Node.js ≥ 22.5** — the ledger uses the built-in `node:sqlite` driver, which
+  exists from 22.5 (`engines` in the root package.json says `>=22`)
+- **pnpm ≥ 9** — this is a pnpm workspace; `npm install` will not link the
+  workspace packages
 
 ### Install
 
 ```bash
 git clone https://github.com/charlie-bit/agentos.git
 cd agentos
-npm install
+pnpm install
+pnpm build          # workspace packages emit dist/ before anything runs
 ```
 
 ### Development
 
 ```bash
-# Run tests
-npm test
+# Everything, across the workspace
+pnpm -r test
+pnpm -r typecheck
+pnpm -r lint
 
-# Type check
-npm run typecheck
+# One package
+pnpm --filter @agentos/core test
+
+# Validate the shipped preset (no side effects)
+node cli/main.mjs preset validate config/presets/example.yml
 ```
 
 ### Contributing
