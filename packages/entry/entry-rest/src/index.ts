@@ -622,17 +622,28 @@ export async function startServer(o: StartServerOptions): Promise<RunningServer>
       };
       const limit = intParam("limit", 100, 1, 500);
       const offset = intParam("offset", 0, 0, Number.MAX_SAFE_INTEGER);
-      if (!existsSync(o.dbPath)) return sendJson(res, 200, { sessions: [], limit, offset, total: 0, hasMore: false });
+      // Server-side search (spec #267): a bounded substring match over the
+      // user-visible labels only (title / external key) — never transcripts.
+      const rawQ = url.searchParams.get("q");
+      if (rawQ !== null && rawQ.length > 200) return sendJson(res, 400, { error: "q must be at most 200 chars" });
+      const q = rawQ === null ? null : rawQ.trim();
+      if (!existsSync(o.dbPath)) return sendJson(res, 200, { sessions: [], limit, offset, total: 0, hasMore: false, q });
       const db = new DatabaseSync(o.dbPath, { readOnly: true });
       try {
+        const where =
+          q === null || q.length === 0 ? "" : " WHERE title LIKE ? ESCAPE '\\' OR external_key LIKE ? ESCAPE '\\'";
+        const like = `%${(q ?? "").replace(/[\\%_]/g, (m) => `\\${m}`)}%`;
+        const params = q === null || q.length === 0 ? [limit, offset] : [like, like, limit, offset];
         const rows = db
           .prepare(
-            "SELECT id, external_key, status, preset, last_active_ms, title FROM sessions ORDER BY last_active_ms DESC, id DESC LIMIT ? OFFSET ?",
+            `SELECT id, external_key, status, preset, last_active_ms, title FROM sessions${where} ORDER BY last_active_ms DESC, id DESC LIMIT ? OFFSET ?`,
           )
-          .all(limit, offset) as Array<Record<string, unknown>>;
-        const totalRow = db.prepare("SELECT COUNT(*) AS n FROM sessions").get() as { n: number | bigint } | undefined;
-        const total = Number(totalRow?.n ?? 0);
-        return sendJson(res, 200, { sessions: rows, limit, offset, total, hasMore: offset + rows.length < total });
+          .all(...params) as Array<Record<string, unknown>>;
+        const countRow = db
+          .prepare(`SELECT COUNT(*) AS n FROM sessions${where}`)
+          .get(...(q === null || q.length === 0 ? [] : [like, like])) as { n: number | bigint } | undefined;
+        const total = Number(countRow?.n ?? 0);
+        return sendJson(res, 200, { sessions: rows, limit, offset, total, hasMore: offset + rows.length < total, q });
       } finally {
         db.close();
       }

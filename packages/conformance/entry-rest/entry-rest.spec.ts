@@ -1200,3 +1200,32 @@ describe("turn error taxonomy (spec #264)", () => {
     expect(result.isError).toBe(true);
   });
 });
+
+describe("GET /api/sessions?q= (spec #267)", () => {
+  it("filters by title or external key, and only those", async () => {
+    const { srv, dbPath } = await boot(async () => ({}));
+    const ledger = openLedger(dbPath);
+    const a = ledger.createSession({ entry: "rest", externalKey: "web-alpha", preset: "p" });
+    ledger.setTitle(a.id, "checkout latency");
+    ledger.markStatus(a.id, "idle");
+    const b = ledger.createSession({ entry: "rest", externalKey: "web-beta", preset: "p" });
+    ledger.setTitle(b.id, "mysql failover");
+    ledger.markStatus(b.id, "idle");
+    ledger.close();
+
+    const byTitle = (await (await api(srv, "/api/sessions?q=checkout")).json()) as {
+      sessions: Array<{ external_key: string }>;
+      total: number;
+    };
+    expect(byTitle.sessions.map((s) => s.external_key)).toEqual(["web-alpha"]);
+    expect(byTitle.total).toBe(1);
+
+    const byKey = (await (await api(srv, "/api/sessions?q=beta")).json()) as { sessions: Array<{ external_key: string }> };
+    expect(byKey.sessions.map((s) => s.external_key)).toEqual(["web-beta"]);
+
+    const wildcard = (await (await api(srv, "/api/sessions?q=%25")).json()) as { sessions: unknown[] };
+    expect(wildcard.sessions).toEqual([]); // LIKE metacharacters are escaped, not honoured
+
+    expect((await api(srv, `/api/sessions?q=${"x".repeat(201)}`)).status).toBe(400);
+  });
+});
