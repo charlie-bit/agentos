@@ -23,6 +23,7 @@ import {
   appendAttribution,
   formatAttributionLine,
   buildKbTools,
+  kbPointerLine,
   type Attribution,
   type AnyManifest,
 } from "@agentos/core";
@@ -282,9 +283,7 @@ export async function wireKnowledge(
   return {
     plan: kbPlans[0],
     sdkServers: { kb: serverConfig.instance },
-    pointer: [
-      `Project knowledge guide: Read ${overviewFile} first (absolute path); then use kb_search for detail and kb_get_page to open a page.`,
-    ],
+    pointer: [kbPointerLine(overviewFile)],
   };
 }
 

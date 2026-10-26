@@ -139,5 +139,14 @@ function pageIdFromLedger(receiptsLog: string, receiptId: string): string | unde
   return undefined;
 }
 
-/** Public prompt line pointing a session at the rendered guide. */
-export const KB_POINTER_LINE = "Project knowledge: read ./kb-overview.md first (already generated); then kb_search for detail, kb_get_page to open a page.";
+/**
+ * Public prompt line pointing a session at the rendered guide — ONE definition
+ * (spec #245). The composition root passes the absolute path it actually
+ * wrote; the bare constant remains for callers that use the default location.
+ */
+export function kbPointerLine(overviewPath = "./kb-overview.md"): string {
+  return `Project knowledge guide: Read ${overviewPath} first (already generated); then use kb_search for detail and kb_get_page to open a page.`;
+}
+
+/** Default-location pointer line (same text as kbPointerLine()). */
+export const KB_POINTER_LINE = kbPointerLine();
