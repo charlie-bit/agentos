@@ -20,6 +20,8 @@ export interface PlanOptions {
   env?: NodeJS.ProcessEnv;
   /** Registered sdk factories (name -> opaque object; loader never invokes them). */
   sdkFactories?: Record<string, unknown>;
+  /** Deployment environment label; defaults to env.AGENTOS_ENV. */
+  environment?: string;
 }
 
 export interface MountWarning {
@@ -56,8 +58,26 @@ export function planTools(manifests: readonly ToolProviderManifest[], opts: Plan
   const errors: ManifestError[] = [];
   const warnings: MountWarning[] = [];
 
+  const currentEnv = opts.environment ?? env.AGENTOS_ENV;
+
   for (const m of manifests) {
     if (m.enabled === false) continue; // declared, deliberately unmounted — kept in config for diff visibility
+
+    // envRouting executor (spec #207): the field is a MOUNT concern, so the
+    // loader is the one that acts on it. Absent = every environment. A
+    // restricted manifest with no environment selected stays unmounted and
+    // says so — silently mounting into an unknown env would defeat the point.
+    if (m.envRouting !== undefined && (currentEnv === undefined || !m.envRouting.includes(currentEnv))) {
+      warnings.push({
+        key: m.name,
+        path: "envRouting",
+        message:
+          currentEnv === undefined
+            ? `restricted to [${m.envRouting.join(", ")}] and no environment is selected (${"AGENTOS_ENV"}) — not mounted`
+            : `restricted to [${m.envRouting.join(", ")}], current env is "${currentEnv}" — not mounted`,
+      });
+      continue;
+    }
 
     const errorsBefore = errors.length;
     let candidate: Record<string, unknown>;

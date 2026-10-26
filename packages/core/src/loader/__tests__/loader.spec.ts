@@ -160,3 +160,41 @@ describe('"edit the yml, change the tool set" — executable proof', () => {
     expect(after.plans.map((p) => p.key).sort()).toEqual(["filesystem", "gateway"]);
   });
 });
+
+describe("planTools — envRouting executor (spec #207)", () => {
+  const m = {
+    kind: "tool",
+    version: "1",
+    name: "prod-only",
+    transport: "stdio",
+    command: "npx -y example-server",
+    auth: { mode: "none" },
+    envRouting: ["prod"],
+    schemaExchange: "json-schema",
+  } as ToolProviderManifest;
+
+  it("mounts when the deployment env matches", () => {
+    const { plans, warnings } = planTools([m], { env: {}, environment: "prod" });
+    expect(plans.map((p) => p.key)).toEqual(["prod-only"]);
+    expect(warnings).toEqual([]);
+  });
+
+  it("stays unmounted in another environment, with a structured warning", () => {
+    const { plans, warnings, errors } = planTools([m], { env: {}, environment: "non-prod" });
+    expect(plans).toEqual([]);
+    expect(errors).toEqual([]);
+    expect(warnings[0]).toMatchObject({ key: "prod-only", path: "envRouting" });
+  });
+
+  it("reads AGENTOS_ENV when no explicit environment is given", () => {
+    expect(planTools([m], { env: { AGENTOS_ENV: "prod" } }).plans).toHaveLength(1);
+    expect(planTools([m], { env: { AGENTOS_ENV: "staging" } }).plans).toHaveLength(0);
+  });
+
+  it("absent envRouting mounts everywhere (no silent restriction)", () => {
+    const free = { ...m, name: "everywhere", envRouting: undefined } as ToolProviderManifest;
+    for (const environment of ["prod", "non-prod", undefined]) {
+      expect(planTools([free], { env: {}, ...(environment ? { environment } : {}) }).plans).toHaveLength(1);
+    }
+  });
+});
