@@ -40,6 +40,11 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      # spec #240: a single-language README change is incomplete. Structural
+      # comparison (heading skeleton + fence count), not a text diff.
+      - name: Bilingual README check
+        run: node scripts/check-bilingual.mjs
+
       # P7b knowledge legislation hook: lint the book socket. Content is
       # gitignored today, so CI lints an EMPTY directory — the step's
       # contract is "lint runs and honestly reports 0 pages", which must be
