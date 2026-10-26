@@ -260,6 +260,26 @@ one is true, adding Postgres is cost without a reason.
 
 ---
 
+## Data directory
+
+Every runtime artifact lives under one root — `.agentos/` — from day one
+(#135). Nothing is mirrored, nothing syncs: this layout IS the deployment's
+state, and moving it is a copy.
+
+| Path | Contents |
+|------|----------|
+| `sessions.db` | the ledger (ids, status, titles, kernel pointers) |
+| `workspaces/<key>/` | per-session scratch + `tool-results/` offload files |
+| `kb-drafts/` | uncommitted knowledge drafts (invisible to search) |
+| `kb-receipts.jsonl` | draft → commit ledger |
+| `usage.log` | per-turn attribution metadata |
+| `escalations.log`, `audit.jsonl` | human-handoff + execution-gate records |
+
+Logs in this tree are metadata-only; `SECURITY.md` records what is never
+written.
+
+---
+
 ## Quick Start
 
 ### Requirements

@@ -256,6 +256,23 @@ LangGraph · CrewAI · AutoGen · 自定义框架
 
 ---
 
+## 数据目录
+
+所有运行时产物从第一天起就只落一个根目录——`.agentos/`（#135）。不做镜像、不做同步：这个布局本身就是部署状态，迁移 = 拷贝。
+
+| 路径 | 内容 |
+|------|------|
+| `sessions.db` | ledger（id / 状态 / 标题 / 内核指针） |
+| `workspaces/<key>/` | 每会话工作区 + `tool-results/` 落盘文件 |
+| `kb-drafts/` | 未提交知识草稿（对搜索不可见） |
+| `kb-receipts.jsonl` | 草稿 → 提交台账 |
+| `usage.log` | 每轮用量归因元数据 |
+| `escalations.log`、`audit.jsonl` | 人工移交 + 执行门禁记录 |
+
+此树中的日志只记元数据；永不写入的内容见 `SECURITY.md`。
+
+---
+
 ## 快速开始
 
 ### 环境要求
