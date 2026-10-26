@@ -580,6 +580,7 @@ export async function runServeWeb(flags: ServeFlags): Promise<number> {
       const out = await runTurn({
         model: modelLease,
         prompt: ctx.prompt,
+        signal: ctx.signal,
         toolMounts: kb ? [...plans, kb.plan] : plans,
         sdkServers: kb?.sdkServers,
         systemPromptAdditions: kb?.pointer,

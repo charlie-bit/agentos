@@ -42,6 +42,8 @@ export interface Ledger {
   /** Insert with a fresh UUID id. Throws if externalKey is already taken. */
   createSession(s: NewSession): SessionRow;
   getByExternalKey(externalKey: string): SessionRow | undefined;
+  /** Lookup by row id (routes that address a session by ledger id). */
+  getById(id: string): SessionRow | undefined;
   /** Status transition; unknown ids and values are rejected. */
   markStatus(id: string, status: SessionStatus): void;
   setSdkSessionId(id: string, sdkSessionId: string): void;
@@ -154,6 +156,10 @@ export function openLedger(dbPath: string = ledgerPathFromEnv()): Ledger {
     },
     getByExternalKey(externalKey: string) {
       const r = db.prepare("SELECT * FROM sessions WHERE external_key = ?").get(externalKey) as DbRow | undefined;
+      return r ? toRow(r) : undefined;
+    },
+    getById(id: string) {
+      const r = db.prepare("SELECT * FROM sessions WHERE id = ?").get(id) as DbRow | undefined;
       return r ? toRow(r) : undefined;
     },
     markStatus(id: string, status: SessionStatus) {

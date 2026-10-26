@@ -50,6 +50,8 @@ export const CAPABILITIES: EntryAdapter["capabilities"] = { confirm: true };
 
 export interface ChatTurnContext {
   prompt: string;
+  /** Cancellation for THIS turn (spec #254): abort => the runner stops; partial output already delivered stays. */
+  signal?: AbortSignal;
   /** Ledger externalKey for this browser session ("web-<id>"). */
   externalKey: string;
   resumeSdkSessionId?: string;
@@ -200,6 +202,8 @@ const JSON_TYPES: Record<string, string> = {
 export class EntryRest implements EntryAdapter {
   readonly capabilities = CAPABILITIES;
 
+  /** externalKey -> abort controllers of in-flight turns (spec #254). */
+  private readonly running = new Map<string, Set<AbortController>>();
   /** externalKey -> live SSE responses (multi-tab). */
   private readonly streams = new Map<string, ServerResponse[]>();
   private readonly pending = new Map<string, Pending>();
@@ -321,6 +325,35 @@ export class EntryRest implements EntryAdapter {
       lastDrift: externalKey === undefined ? null : (this.lastDriftByKey.get(externalKey) ?? null),
       waitingConfirms: this.pending.size,
     };
+  }
+
+  /** Register a turn's cancellation handle; returns the unregister. */
+  registerTurn(externalKey: string, controller: AbortController): () => void {
+    const set = this.running.get(externalKey) ?? new Set<AbortController>();
+    set.add(controller);
+    this.running.set(externalKey, set);
+    return () => {
+      const current = this.running.get(externalKey);
+      current?.delete(controller);
+      if (current && current.size === 0) this.running.delete(externalKey);
+    };
+  }
+
+  /** Abort every in-flight turn for one session; returns how many were signalled. */
+  abort(externalKey: string): number {
+    const set = this.running.get(externalKey);
+    if (!set) return 0;
+    let count = 0;
+    for (const c of [...set]) {
+      try {
+        c.abort();
+        count += 1;
+      } catch {
+        /* already settled */
+      }
+    }
+    this.running.delete(externalKey);
+    return count;
   }
 
   /** Deny every outstanding confirm (shutdown path). */
@@ -600,10 +633,36 @@ export async function startServer(o: StartServerOptions): Promise<RunningServer>
     // between here and the kernel today, so "delete while running" just makes
     // the eventual result/error write fail loudly (route-level catch → the SSE
     // stream, if still open, just ends) rather than silently resurrect the row.
+    const abortMatch = /^\/api\/sessions\/([^/]+)\/abort$/.exec(path);
+    if (req.method === "POST" && abortMatch) {
+      let requested: string;
+      try {
+        requested = decodeURIComponent(abortMatch[1] ?? "");
+      } catch {
+        return sendJson(res, 400, { error: "undecodable session id" });
+      }
+      if (requested.length === 0 || requested.length > 200) return sendJson(res, 400, { error: "invalid session id" });
+      const key = isWebExternalKey(requested) ? requested : webExternalKey(requested);
+      const aborted = entry.abort(key);
+      const row = o.ledger.getByExternalKey(key);
+      if (row) {
+        try {
+          o.ledger.markStatus(row.id, "aborted");
+          o.ledger.touch(row.id);
+        } catch {
+          /* deleted concurrently: nothing to record */
+        }
+      }
+      return sendJson(res, 200, { ok: true, aborted, sessionId: key });
+    }
     const deleteMatch = /^\/api\/sessions\/([^/]+)$/.exec(path);
     if (req.method === "DELETE" && deleteMatch) {
       const id = decodeURIComponent(deleteMatch[1] ?? "");
       try {
+        // Cancel first (spec #217): a deleted session's in-flight turn must not
+        // keep the SSE stream alive or write a late row.
+        const row = o.ledger.getById(id);
+        if (row) entry.abort(row.externalKey);
         o.ledger.deleteSession(id);
         return sendJson(res, 200, { ok: true });
       } catch {
@@ -832,6 +891,8 @@ export async function startServer(o: StartServerOptions): Promise<RunningServer>
       }
       const externalKey = webExternalKey(sessionId);
       const binding = await entry.sessionFor(externalKey);
+      const controller = new AbortController();
+      const unregister = entry.registerTurn(externalKey, controller);
       const row: SessionRow | undefined = o.ledger.getByExternalKey(externalKey);
       res.writeHead(200, {
         "content-type": "text/event-stream",
@@ -868,6 +929,7 @@ export async function startServer(o: StartServerOptions): Promise<RunningServer>
       try {
         const out = await o.runner({
           prompt: message,
+          signal: controller.signal,
           externalKey,
           resumeSdkSessionId: row?.sdkSessionId ?? undefined,
           emit: (ev) => entry.renderFor(externalKey, [ev]),
@@ -881,13 +943,30 @@ export async function startServer(o: StartServerOptions): Promise<RunningServer>
           o.ledger.touch(row.id);
         }
       } catch (err) {
+        const aborted = controller.signal.aborted;
         const frame = JSON.stringify({
           type: "result",
-          payload: { subtype: "error", isError: true, message: err instanceof Error ? err.message : String(err) },
+          payload: {
+            subtype: aborted ? "aborted" : "error",
+            isError: true,
+            message: aborted ? "aborted by user" : err instanceof Error ? err.message : String(err),
+          },
           timestampMs: Date.now(),
         });
-        res.write(`data: ${frame}\n\n`);
-        if (row) o.ledger.markStatus(row.id, "error");
+        try {
+          res.write(`data: ${frame}\n\n`);
+        } catch {
+          /* client already gone */
+        }
+        if (row) {
+          try {
+            o.ledger.markStatus(row.id, aborted ? "aborted" : "error");
+          } catch {
+            /* deleted mid-turn (spec #217): the stream still terminates cleanly */
+          }
+        }
+      } finally {
+        unregister();
       }
       stopHeartbeat();
       res.end(); // stream closes after the result frame (runner's last emit or the error frame)

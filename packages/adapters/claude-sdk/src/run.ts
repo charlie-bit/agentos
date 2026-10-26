@@ -204,6 +204,8 @@ export interface TurnInput {
   prompt: string;
   /** SDK session id to continue; absent = fresh conversation. */
   resumeSdkSessionId?: string;
+  /** Cancellation (spec #254): aborting stops the kernel turn; partial output stays where the consumer put it. */
+  signal?: AbortSignal;
   /** Neutral mount plans from core/loader — the ONLY way tools reach the kernel now. */
   toolMounts: readonly ToolMountPlan[];
   /** Instances for sdk-plan factories, keyed by factoryName. */
@@ -522,6 +524,13 @@ export function buildQueryOptions(
   env: NodeJS.ProcessEnv = process.env,
 ): QueryOptions {
   const channel = resolveChannel(input.model, env);
+  // Bridge the caller's AbortSignal onto the kernel's own controller.
+  let abortController: AbortController | undefined;
+  if (input.signal !== undefined) {
+    abortController = new AbortController();
+    if (input.signal.aborted) abortController.abort();
+    else input.signal.addEventListener("abort", () => abortController?.abort(), { once: true });
+  }
   const derived = input.allowedTools ?? allowedToolsFromPlans(input.toolMounts);
   const fsRoots = fsRootsFromPlans(input.toolMounts, input.workspaceDir);
   return {
@@ -549,6 +558,7 @@ export function buildQueryOptions(
     // the smoke path (no workspaceDir) is untouched, byte-compatible.
     ...(fsRoots.length > 0 ? { additionalDirectories: fsRoots } : {}),
     ...(input.resumeSdkSessionId ? { resume: input.resumeSdkSessionId } : {}),
+    ...(abortController ? { abortController } : {}),
     env: { ...env, ...sdkEnvDelta(channel), ...modelEnv(input.modelId) },
   };
 }

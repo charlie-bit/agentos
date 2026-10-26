@@ -1064,3 +1064,83 @@ describe("local token gate (spec #287)", () => {
     expect((await api(srv, "/api/status", { headers: { "x-agentos-token": "wrong" } })).status).toBe(403);
   });
 });
+
+describe("POST /api/sessions/:id/abort (spec #254)", () => {
+  it("aborts the in-flight turn: partial output stays, status becomes aborted", async () => {
+    const { srv, dbPath } = await boot(async (ctx) => {
+      ctx.emit({ type: "assistant.text", payload: { text: "partial answer" }, timestampMs: 1 });
+      await new Promise<void>((_resolve, reject) => {
+        const fail = () => {
+          const err = new Error("turn aborted");
+          err.name = "AbortError";
+          reject(err);
+        };
+        if (ctx.signal?.aborted) fail();
+        else ctx.signal?.addEventListener("abort", fail, { once: true });
+      });
+      return {};
+    });
+
+    const stream = postJson(srv, "/api/chat", { sessionId: "ab", message: "long task" });
+    // Let the turn start and the partial frame arrive, then abort.
+    const res = await stream;
+    const reading = readFrames(res);
+    await new Promise((r) => setTimeout(r, 30));
+    const abortRes = await postJson(srv, "/api/sessions/ab/abort", {});
+    expect(abortRes.status).toBe(200);
+    expect(((await abortRes.json()) as { aborted: number }).aborted).toBe(1);
+
+    const frames = await reading;
+    const types = frames.map((f) => f.type);
+    expect(types).toContain("assistant.text"); // partial content preserved
+    const result = frames.find((f) => f.type === "result")?.payload as { subtype: string; isError: boolean };
+    expect(result.subtype).toBe("aborted");
+    expect(result.isError).toBe(true);
+
+    const ledger = openLedger(dbPath);
+    expect(ledger.getByExternalKey("web-ab")?.status).toBe("aborted");
+    ledger.close();
+  });
+
+  it("aborting an idle session is a no-op that still answers 200", async () => {
+    const { srv } = await boot(async () => ({}));
+    const res = await postJson(srv, "/api/sessions/quiet/abort", {});
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { aborted: number }).aborted).toBe(0);
+  });
+});
+
+describe("DELETE a running session (spec #217)", () => {
+  it("cancels the turn first, so the stream ends in order and nothing is written late", async () => {
+    const { srv, dbPath } = await boot(async (ctx) => {
+      ctx.emit({ type: "assistant.text", payload: { text: "before delete" }, timestampMs: 1 });
+      await new Promise<void>((_resolve, reject) => {
+        const fail = () => {
+          const err = new Error("deleted");
+          err.name = "AbortError";
+          reject(err);
+        };
+        if (ctx.signal?.aborted) fail();
+        else ctx.signal?.addEventListener("abort", fail, { once: true });
+      });
+      return {};
+    });
+    const res = await postJson(srv, "/api/chat", { sessionId: "gone", message: "work" });
+    const reading = readFrames(res);
+    await new Promise((r) => setTimeout(r, 30));
+
+    const ledger = openLedger(dbPath);
+    const row = ledger.getByExternalKey("web-gone");
+    ledger.close();
+    expect(row).toBeDefined();
+    const del = await api(srv, `/api/sessions/${row!.id}`, { method: "DELETE" });
+    expect(del.status).toBe(200);
+
+    const frames = await reading; // must terminate, not hang
+    expect(frames.some((f) => f.type === "result")).toBe(true);
+    expect(frames.some((f) => f.type === "assistant.text")).toBe(true);
+    const after = openLedger(dbPath);
+    expect(after.getByExternalKey("web-gone")).toBeUndefined();
+    after.close();
+  });
+});
