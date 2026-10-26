@@ -71,13 +71,16 @@ interface KnowledgeProvider {
 一个工具服务器 = 注册表一条声明式 entry，运行时按 transport 挂载。
 
 ```yaml
-# tool-entry.yaml
-name: datadog-monitoring
-transport: stdio          # sdk | stdio | http
-auth: token-env:DATADOG_TOKEN
-allowedTools: ["dd_*"]
-envRouting: non-prod      # non-prod | prod
-idempotent: true          # 必填 - 决定是否可重试
+# config/tools/datadog.yml —— schema: packages/contracts/src/tool.ts
+kind: tool
+version: "1"
+name: datadog
+transport: http                 # sdk | stdio | http
+endpoint: https://${DATADOG_MCP_HOST}/rpc
+auth: { mode: bearer-token-env, env: DATADOG_TOKEN }   # 只写 env 变量名
+allowedTools: ["dd_*"]          # 可选；缺席 = 放行全部发现工具（drift 标记为未验证）
+envRouting: ["non-prod"]        # 可选数组；缺席 = 所有环境挂载
+idempotent: { default: false, overrides: { dd_search_logs: true } }  # 可选；缺席 = 永不重试
 schemaExchange: json-schema
 ```
 
@@ -87,14 +90,18 @@ schemaExchange: json-schema
 
 三层优先级路由（请求覆盖 → 频道/租户配置 → 全局默认），带降级链。
 
-```ts
-interface ModelProvider {
-  provider: 'openai' | 'anthropic' | 'ollama' | 'local'
-  models: Record<string, string>       // sonnet/haiku 等别名 → 真实 model id
-  fallbackChain: string[]              // 健康探活短路
-  usageAttr: { provider, model, tenant } // 用量归因标签
-  // 路由状态 ∈ DB（多 pod 安全）
-}
+```yaml
+# config/models/deepseek.yml —— 是租约，不是代码
+kind: model
+version: "1"
+name: deepseek
+provider: deepseek
+dialect: anthropic-compat        # 可选运行时方言（anthropic-compat | bedrock | openai-compat）
+baseUrlEnv: AGENTOS_DEEPSEEK_ANTHROPIC_BASE_URL   # env 变量名，不是 URL
+credentialsEnv: AGENTOS_DEEPSEEK_API_KEY          # env 变量名，不是 key
+models: { general: deepseek-chat, reasoner: deepseek-reasoner }
+fallbackChain: [general]         # 本 manifest 内的别名
+usageAttr: { costCenter: platform-eng }           # 归因标签 → usage.log
 ```
 
 ---
@@ -110,12 +117,16 @@ Manifest（静态声明） → Contract（版本化接口） → Loader（实例
 preset 是四层的唯一汇合点：一个业务的 preset 只做**引用**，不写任何实现。
 
 ```yaml
-# preset-example.yml —— 一业务一份；换业务 = 换这一个文件
-knowledge: { provider: weknora, workspaceId: w-123, tokenEnv: WEKNORA_TOKEN }
-model:      { provider: anthropic, policy: default }
-tools:      [ datadog-monitoring, github-actions ]
-entry:      { slack: { channel: "#engineering", confirmUI: blockkit } }
-# 凭证永不进 manifest，只留 tokenEnv 引用
+# config/presets/example.yml —— 一业务一份；换业务 = 换这一个文件
+kind: preset
+version: "1"
+name: example
+knowledge: local-markdown       # 引用 config/ 中的 manifest 名字，零内联配置
+model: deepseek
+tools: [mcp-filesystem, datadog ]
+entry: cli                      # 代码注册的 adapter 名（cli | rest）
+# channelModels: { rest: deepseek }   # 可选中间层：频道/租户 → 模型
+# 凭证永不进 manifest，只留 env 变量名引用（baseUrlEnv / credentialsEnv / auth.env）
 ```
 
 ### EntryAdapter — 入口层（最后补，非先行）

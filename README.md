@@ -71,13 +71,16 @@ interface KnowledgeProvider {
 One tool server = one declarative registry entry, mounted at runtime by transport.
 
 ```yaml
-# tool-entry.yaml
-name: datadog-monitoring
-transport: stdio          # sdk | stdio | http
-auth: token-env:DATADOG_TOKEN
-allowedTools: ["dd_*"]
-envRouting: non-prod      # non-prod | prod
-idempotent: true          # required - determines retry safety
+# config/tools/datadog.yml — schema: packages/contracts/src/tool.ts
+kind: tool
+version: "1"
+name: datadog
+transport: http                 # sdk | stdio | http
+endpoint: https://${DATADOG_MCP_HOST}/rpc
+auth: { mode: bearer-token-env, env: DATADOG_TOKEN }   # env-var NAME only
+allowedTools: ["dd_*"]          # optional; absent = every discovered tool (drift-unverified)
+envRouting: ["non-prod"]        # optional array; absent = mounts in every environment
+idempotent: { default: false, overrides: { dd_search_logs: true } }  # optional; absent = never retried
 schemaExchange: json-schema
 ```
 
@@ -87,14 +90,18 @@ schemaExchange: json-schema
 
 Three-tier priority routing (request override → channel/tenant config → global default), with fallback chain.
 
-```ts
-interface ModelProvider {
-  provider: 'openai' | 'anthropic' | 'ollama' | 'local'
-  models: Record<string, string>       // aliases (sonnet/haiku…) → real model id
-  fallbackChain: string[]              // health-probe short-circuit
-  usageAttr: { provider, model, tenant } // usage attribution labels
-  // routing state ∈ DB (multi-pod safe)
-}
+```yaml
+# config/models/deepseek.yml — a lease, not code
+kind: model
+version: "1"
+name: deepseek
+provider: deepseek
+dialect: anthropic-compat        # optional runtime dialect (anthropic-compat | bedrock | openai-compat)
+baseUrlEnv: AGENTOS_DEEPSEEK_ANTHROPIC_BASE_URL   # env-var NAME, never the URL
+credentialsEnv: AGENTOS_DEEPSEEK_API_KEY          # env-var NAME, never the key
+models: { general: deepseek-chat, reasoner: deepseek-reasoner }
+fallbackChain: [general]         # aliases inside THIS manifest
+usageAttr: { costCenter: platform-eng }           # attribution labels → usage.log
 ```
 
 ---
@@ -110,12 +117,16 @@ Manifest (static declaration) → Contract (versioned interface) → Loader (ins
 The preset is the single convergence point for all four layers: it only **references** providers, never implements them.
 
 ```yaml
-# preset-example.yml — one per business; switching business = changing this file
-knowledge: { provider: weknora, workspaceId: w-123, tokenEnv: WEKNORA_TOKEN }
-model:      { provider: anthropic, policy: default }
-tools:      [ datadog-monitoring, github-actions ]
-entry:      { slack: { channel: "#engineering", confirmUI: blockkit } }
-# Credentials never enter manifest, only tokenEnv reference
+# config/presets/example.yml — one per business; switching business = changing this file
+kind: preset
+version: "1"
+name: example
+knowledge: local-markdown       # names of manifests in config/, never inline config
+model: deepseek
+tools: [mcp-filesystem, datadog ]
+entry: cli                      # code-registered adapter name (cli | rest)
+# channelModels: { rest: deepseek }   # optional middle layer: channel/tenant → model
+# Credentials never enter a manifest, only env-var NAME references (baseUrlEnv / credentialsEnv / auth.env)
 ```
 
 ### EntryAdapter — Entry layer (add last, not first)
