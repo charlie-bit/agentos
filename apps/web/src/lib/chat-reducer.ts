@@ -19,7 +19,7 @@ export type Conn = "idle" | "connecting" | "streaming";
 
 export type Entry =
   | { kind: "user"; id: string; text: string }
-  | { kind: "assistant"; id: string; text: string; status: "streaming" | "done" | "error" }
+  | { kind: "assistant"; id: string; text: string; status: "streaming" | "done" | "error" | "aborted" }
   | { kind: "tool"; id: string; name: string; input: string; status: "running" | "ok" | "error" }
   | { kind: "thinking"; id: string; count: number; open: boolean }
   | { kind: "drift"; id: string; missing: string[]; undeclared: string[]; unverified: string[] };
@@ -275,7 +275,12 @@ export function reduce(s: State, a: Action): State {
         }
         case "result": {
           let entries = closeOpen(s);
-          if (p.isError === true) {
+          if (p.subtype === "aborted") {
+            // Stop is a settled outcome, not a failure (spec #255): mark the
+            // partial answer as aborted so the UI can say so plainly.
+            const last = entries[entries.length - 1];
+            if (last?.kind === "assistant") entries = [...entries.slice(0, -1), { ...last, status: "aborted" as const }];
+          } else if (p.isError === true) {
             const last = entries[entries.length - 1];
             entries =
               last?.kind === "assistant"

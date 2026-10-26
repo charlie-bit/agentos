@@ -110,6 +110,10 @@ export const renameSession = (id: string, title: string | null): Promise<{ ok: b
     headers: { "content-type": "application/json" },
   });
 
+/** Stop the in-flight turn for this session (spec #255). */
+export const abortSession = (sessionId: string): Promise<{ ok: boolean; aborted: number }> =>
+  jpost<{ ok: boolean; aborted: number }>(`/api/sessions/${encodeURIComponent(sessionId)}/abort`, {});
+
 /** Immediate, no-undo removal of a ledger row (does not touch kernel transcripts). */
 export const deleteSession = (id: string): Promise<{ ok: boolean }> =>
   jsonFetch<{ ok: boolean }>(`/api/sessions/${encodeURIComponent(id)}`, { method: "DELETE" });

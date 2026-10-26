@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowUp } from "lucide-react";
+import { ArrowUp, Square } from "lucide-react";
 import { Button } from "./ui/button";
 import { cn } from "../lib/utils";
 
@@ -7,10 +7,13 @@ import { cn } from "../lib/utils";
 export function Composer({
   busy,
   onSend,
+  onStop,
   quote,
 }: {
   busy: boolean;
   onSend: (text: string) => void;
+  /** Stop the in-flight turn (spec #255). Absent = no stop affordance. */
+  onStop?: () => void;
   /** Bumping `nonce` appends `text` as a quote block — additive, never overwrites a draft in progress. */
   quote?: { text: string; nonce: number };
 }) {
@@ -51,9 +54,15 @@ export function Composer({
         onChange={(e) => setValue(e.target.value)}
         autoFocus
       />
-      <Button type="submit" disabled={busy || value.trim() === ""} aria-label="send">
-        <ArrowUp className="h-4 w-4" />
-      </Button>
+      {busy && onStop ? (
+        <Button type="button" variant="outline" onClick={onStop} aria-label="stop">
+          <Square className="h-3.5 w-3.5" /> Stop
+        </Button>
+      ) : (
+        <Button type="submit" disabled={busy || value.trim() === ""} aria-label="send">
+          <ArrowUp className="h-4 w-4" />
+        </Button>
+      )}
     </form>
   );
 }

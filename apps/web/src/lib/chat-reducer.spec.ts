@@ -233,3 +233,16 @@ describe("④a tool.denied (execution-gate frame → visible refused block)", ()
     expect(s.entries.filter((e) => e.kind === "tool").map((t) => t.name)).toEqual(["read_file", "Write"]);
   });
 });
+
+describe("abort result (spec #255)", () => {
+  it("subtype aborted marks the open assistant entry as aborted, not error", () => {
+    const out = run(initialState, [
+      { t: "send", text: "go" },
+      frame("assistant.text", { text: "partial" }),
+      frame("result", { subtype: "aborted", isError: true }),
+    ]);
+    const last = out.entries.at(-1);
+    expect(last).toMatchObject({ kind: "assistant", text: "partial", status: "aborted" });
+    expect(out.conn).toBe("idle");
+  });
+});

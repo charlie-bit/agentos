@@ -17,7 +17,7 @@ import { UsageBar } from "./components/UsageBar";
 const SESSIONS_POLL_MS = 4000;
 
 export default function App() {
-  const { state, send, sessionId, pickSession, newSession, resolveConfirm } = useAgentChat();
+  const { state, send, stop, sessionId, pickSession, newSession, resolveConfirm } = useAgentChat();
   const [status, setStatus] = useState<StatusResponse | null>(null);
   const [sessions, setSessions] = useState<SessionRow[]>([]);
   const [escalations, setEscalations] = useState(0);
@@ -88,7 +88,7 @@ export default function App() {
               click) must be visible immediately, not only once a reply comes
               back — remounting drops stale draft text and refires autoFocus,
               which is the click's whole user-visible feedback. */}
-          <Composer key={sessionId} busy={state.conn !== "idle"} onSend={(t) => void send(t)} quote={quote} />
+          <Composer key={sessionId} busy={state.conn !== "idle"} onSend={(t) => void send(t)} onStop={() => void stop()} quote={quote} />
         </div>
       </div>
       <UsageBar usage={state.usage} escalations={escalations} sessionId={sessionId} onEscalated={setEscalations} modelShort={state.modelShort} />

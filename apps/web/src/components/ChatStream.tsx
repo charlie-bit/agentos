@@ -84,6 +84,7 @@ export function ChatStream({ state, onQuote }: { state: State; onQuote: (text: s
                     <Markdown text={e.text} streaming={e.status === "streaming"} />
                     {e.status === "streaming" && <span className="ml-0.5 animate-pulse text-primary">▌</span>}
                     {e.status === "error" && <div className="text-[11px] text-err">turn ended in error</div>}
+                    {e.status === "aborted" && <div className="text-[11px] text-warn">stopped — partial answer kept</div>}
                   </article>
                 );
               case "tool":
