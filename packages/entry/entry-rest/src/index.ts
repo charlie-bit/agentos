@@ -40,6 +40,13 @@ import type { Ledger, SessionRow } from "@agentos/core";
 /** Registration name presets may reference in the entry slot. */
 export const ENTRY_NAME = "rest";
 
+/**
+ * The adapter's declared capabilities, exported as the SAME object the class
+ * uses. The composition root reads confirm here instead of assuming it: an
+ * entry that cannot ask a human must not get kb_write/kb_commit registered.
+ */
+export const CAPABILITIES: EntryAdapter["capabilities"] = { confirm: true };
+
 export interface ChatTurnContext {
   prompt: string;
   /** Ledger externalKey for this browser session ("web-<id>"). */
@@ -124,7 +131,7 @@ const JSON_TYPES: Record<string, string> = {
  * instance is the P6 fix if concurrency ever matters.
  */
 export class EntryRest implements EntryAdapter {
-  readonly capabilities = { confirm: true };
+  readonly capabilities = CAPABILITIES;
 
   /** externalKey -> live SSE responses (multi-tab). */
   private readonly streams = new Map<string, ServerResponse[]>();

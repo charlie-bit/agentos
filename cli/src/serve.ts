@@ -32,7 +32,7 @@ import type { ConfirmRequest, ConfirmResult, KnowledgeManifest, ModelProviderMan
 import { dialect as compatDialect } from "@agentos/model-anthropic-compat";
 import { dialect as bedrockDialect } from "@agentos/model-bedrock";
 import { ENTRY_NAME as CLI_ENTRY, EntryCli, formatUsageSummary } from "@agentos/entry-cli";
-import { startServer, ENTRY_NAME as REST_ENTRY } from "@agentos/entry-rest";
+import { startServer, CAPABILITIES as REST_CAPABILITIES, ENTRY_NAME as REST_ENTRY } from "@agentos/entry-rest";
 import { BASE_SYSTEM_PROMPT, createInProcessServer, readTranscript, runTurn, type ModelLease } from "@agentos/adapter-claude-sdk";
 
 export interface ServeFlags {
@@ -46,7 +46,7 @@ export interface ServeFlags {
   model?: string;
 }
 
-interface Assembly {
+export interface Assembly {
   presetName: string;
   /** The preset's model slot (before any request-level override). */
   presetModel: string;
@@ -59,7 +59,7 @@ interface Assembly {
 }
 
 /** P7 knowledge chain wired into the P3 assembly line. */
-interface KbWiring {
+export interface KbWiring {
   plan: ReturnType<typeof planTools>["plans"][number];
   sdkServers: Record<string, unknown>;
   pointer: string[];
@@ -230,10 +230,12 @@ async function routeModel(flags: ServeFlags, asm: Assembly): Promise<{ ok: true;
  * no kb manifest = plain session. `confirm` is the entry's human gate:
  * chat reuses the REPL queue (piped lines answer in order), web the SSE modal.
  */
-async function wireKnowledge(
+export async function wireKnowledge(
   asm: Assembly,
   confirm: (req: Omit<ConfirmRequest, "requestId">) => Promise<ConfirmResult>,
   workspaceDir: string,
+  /** The mounted entry adapter's own capabilities.confirm — never assumed. */
+  confirmCapable: boolean,
 ): Promise<KbWiring | null> {
   const km = asm.knowledge;
   if (!km) return null;
@@ -250,7 +252,7 @@ async function wireKnowledge(
   const provider = createMarkdownProvider({ name: km.provider, root, draftsDir });
   const tools = buildKbTools({
     provider,
-    confirmCapable: true,
+    confirmCapable,
     bookRoot: root,
     draftsDir,
     receiptsLog,
@@ -379,7 +381,7 @@ export async function runServe(flags: ServeFlags): Promise<number> {
   // Hotfix clean-room: per-session workspace = the agent's legal file territory.
   const workspaceDir = join(asm.value.repoRoot, ".agentos", "workspaces", externalKey);
   mkdirSync(workspaceDir, { recursive: true });
-  const kb = await wireKnowledge(asm.value, chatConfirm, workspaceDir);
+  const kb = await wireKnowledge(asm.value, chatConfirm, workspaceDir, entry.capabilities.confirm);
   const allPlans = kb ? [...plans, kb.plan] : plans;
 
   for (;;) {
@@ -474,7 +476,7 @@ export async function runServeWeb(flags: ServeFlags): Promise<number> {
       // Hotfix clean-room: per-browser-session workspace (externalKey keyed).
       const workspaceDir = join(asm.value.repoRoot, ".agentos", "workspaces", ctx.externalKey);
       mkdirSync(workspaceDir, { recursive: true });
-      const kb = await wireKnowledge(asm.value, ctx.confirm, workspaceDir);
+      const kb = await wireKnowledge(asm.value, ctx.confirm, workspaceDir, REST_CAPABILITIES.confirm);
       const out = await runTurn({
         model: modelLease,
         prompt: ctx.prompt,
