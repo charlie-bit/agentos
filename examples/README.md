@@ -1,17 +1,27 @@
-# examples/
+# Examples — where business logic lives
 
-Two jobs, one directory:
+The kernel never learns a domain model (spec #177). Every business-shaped
+thing in this repository exists here, as files:
 
-1. **Conformance fixtures** — real, valid objects that scripts and contract
-   tests parse (e.g. the P2 smoke script reads `docs/contract-map.md` through
-   the filesystem MCP tool).
-2. **Teaching material** — copy-from samples for newcomers.
+| Example | What it demonstrates | Run it |
+|---------|----------------------|--------|
+| [`triage-demo/`](triage-demo/presets/triage-demo.yml) | an incident-triage agent assembled from yml: two (placeholder) tool servers + a knowledge book | `node cli/main.mjs preset validate examples/triage-demo/presets/triage-demo.yml` |
+| [`docs-assistant/`](docs-assistant/presets/docs-assistant.yml) | a knowledge-only assistant: the read/write loop (`kb_search` → `kb_write` draft → human-confirmed `kb_commit`) | `node cli/main.mjs preset validate examples/docs-assistant/presets/docs-assistant.yml` |
 
-Current contents:
+## What is real and what is a placeholder
 
-- `docs/contract-map.md` — map of the four contracts (Model / Tool / Knowledge / Entry)
-- `docs/getting-started.md` — first-run walkthrough
+- The **knowledge books** (`knowledge/book`, `knowledge/handbook`) are real
+  markdown with frontmatter — `kb lint` passes on them.
+- The **tool manifests** in `triage-demo` are declared `enabled: false`
+  with `*.invalid` endpoints: they show the shape of an integration without
+  pointing at a real vendor. Set `enabled: true` and replace `command` /
+  `endpoint` / the env-var names to run them.
+- The **model leases** name env vars (`AGENTOS_DEMO_BASE_URL` /
+  `AGENTOS_DEMO_API_KEY`). Point them at any Anthropic-compatible endpoint.
+- All content is **fictional** (R6): no real incident, customer or credential
+  appears anywhere in this tree.
 
-Policy: this directory keeps exactly one README (this file) plus the samples
-themselves. No template files — when a sample needs explaining, the explanation
-lives here or in the sample's own front matter.
+## Building your own
+
+Copy one directory, rename the preset, edit the four slots. That is the whole
+onboarding: no scaffolding, no generator, no code.
