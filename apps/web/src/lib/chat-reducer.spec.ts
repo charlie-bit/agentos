@@ -271,3 +271,23 @@ describe("error taxonomy rendering (spec #264)", () => {
     expect(out.entries.some((e) => e.kind === "error")).toBe(false);
   });
 });
+
+describe("live usage + tool duration (spec #273/#279)", () => {
+  it("usage.delta accumulates mid-turn and retires when the authoritative result lands", () => {
+    let s = run(initialState, [frame("usage.delta", { usage: { input_tokens: 10, output_tokens: 2 } })]);
+    s = reduce(s, frame("usage.delta", { usage: { input_tokens: 5, output_tokens: 1 } }) as Action);
+    expect(s.live).toMatchObject({ input: 15, output: 3 });
+    const done = run(s, [frame("result", { subtype: "success", usage: { input_tokens: 40, output_tokens: 8 } })]);
+    expect(done.live).toMatchObject({ input: 0, output: 0 });
+    expect(done.usage).toMatchObject({ input: 40, output: 8 });
+  });
+
+  it("tool.result carries the measured duration onto the running block", () => {
+    const out = run(initialState, [
+      frame("tool.call", { tool: "kb_search", input: { q: "x" } }),
+      frame("tool.result", { isError: false, tool: "kb_search", durationMs: 42 }),
+    ]);
+    const tool = out.entries.find((e) => e.kind === "tool");
+    expect(tool).toMatchObject({ name: "kb_search", status: "ok", durationMs: 42 });
+  });
+});

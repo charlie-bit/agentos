@@ -19,6 +19,9 @@ function ToolCallBlock({ e }: { e: Extract<Entry, { kind: "tool" }> }) {
         <Icon className={cn("h-3.5 w-3.5", e.status === "error" && "text-err", e.status === "ok" && "text-ok", e.status === "running" && "animate-spin text-run")} />
         <span className="font-mono text-foreground">{e.name}</span>
         <span className="truncate font-mono text-muted-foreground">{e.input.slice(0, 90)}</span>
+        {typeof e.durationMs === "number" && (
+          <span className="shrink-0 text-[10px] text-muted-foreground">{e.durationMs}ms</span>
+        )}
       </CollapsibleTrigger>
       <CollapsibleContent className="px-3 pb-2">
         <pre className="overflow-x-auto rounded bg-background p-2 font-mono text-[11px] text-muted-foreground">{e.input}</pre>

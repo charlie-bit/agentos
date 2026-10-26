@@ -139,7 +139,7 @@ export default function App() {
           </div>
         </div>
       </div>
-      <UsageBar usage={state.usage} escalations={escalations} sessionId={sessionId} onEscalated={setEscalations} modelShort={state.modelShort} />
+      <UsageBar usage={state.usage} live={state.live} escalations={escalations} sessionId={sessionId} onEscalated={setEscalations} modelShort={state.modelShort} />
       <ConfirmModal pending={state.pending} onResolved={resolveConfirm} />
       {needsToken && (
         <TokenGate

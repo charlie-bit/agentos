@@ -8,12 +8,15 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/t
 /** cumulative result-frame usage + attribution + escalation telemetry. */
 export function UsageBar({
   usage,
+  live,
   escalations,
   sessionId,
   onEscalated,
   modelShort,
 }: {
   usage: Usage;
+  /** Mid-turn deltas (spec #279); zero when idle. */
+  live?: Usage;
   escalations: number;
   sessionId: string;
   onEscalated: (count: number) => void;
@@ -34,7 +37,7 @@ export function UsageBar({
     <TooltipProvider delayDuration={200}>
       <footer className="flex items-center gap-3 border-t border-border px-4 py-1.5 text-[11px] text-muted-foreground">
         <span className="font-mono">
-          in {num(usage.input)} · out {num(usage.output)}
+          in {num(usage.input + (live?.input ?? 0))} · out {num(usage.output + (live?.output ?? 0))}
           {usage.cacheRead > 0 && <> · cache_rd {num(usage.cacheRead)}</>}
           {usage.cacheWrite > 0 && <> · cache_wr {num(usage.cacheWrite)}</>} · ≈${usage.cost.toFixed(4)}
         </span>

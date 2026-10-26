@@ -287,9 +287,28 @@ export async function consumeStream(
     }
   };
 
+  // Pair tool.call -> tool.result so the card can show name + duration (#273).
+  const openCalls: Array<{ name: string; at: number }> = [];
   for await (const message of stream) {
     sdkSessionId = message.session_id ?? sdkSessionId;
-    emit(normalize(message));
+    const normalized = normalize(message);
+    const enriched = normalized.map((event) => {
+      if (event.type === "tool.call") {
+        openCalls.push({ name: String((event.payload as { tool?: unknown }).tool ?? "?"), at: Date.now() });
+        return event;
+      }
+      if (event.type === "tool.result" && openCalls.length > 0) {
+        const call = openCalls.shift();
+        if (call) {
+          return {
+            ...event,
+            payload: { ...(event.payload as Record<string, unknown>), tool: call.name, durationMs: Date.now() - call.at },
+          } satisfies RenderEvent;
+        }
+      }
+      return event;
+    });
+    emit(enriched);
     if (message.type === "system" && message.subtype === "init") {
       // Drift is a WARNING event, not a hard stop: fewer tools must still run
       // the chain (absent-degrade philosophy); the web console surfaces it.
@@ -624,6 +643,13 @@ export function normalize(message: SDKMessage): RenderEvent[] {
       return [{ type: `kernel.system.${message.subtype}`, payload: {}, timestampMs: ts }];
     case "assistant": {
       const out: RenderEvent[] = [];
+      // Live token accounting (spec #279): the kernel reports usage per
+      // assistant message; emitting deltas lets the console move mid-turn
+      // instead of waiting for the result frame.
+      const usage = (message.message as { usage?: { input_tokens?: number; output_tokens?: number } } | undefined)?.usage;
+      if (usage && (typeof usage.input_tokens === "number" || typeof usage.output_tokens === "number")) {
+        out.push({ type: "usage.delta", payload: { ...usage }, timestampMs: ts });
+      }
       for (const block of message.message.content ?? []) {
         if (block.type === "text") out.push({ type: "assistant.text", payload: { text: block.text }, timestampMs: ts });
         else if (block.type === "tool_use")

@@ -23,7 +23,7 @@ export type TurnErrorCategory = "tool-missing" | "gate-denied" | "model-fallback
 export type Entry =
   | { kind: "user"; id: string; text: string }
   | { kind: "assistant"; id: string; text: string; status: "streaming" | "done" | "error" | "aborted" }
-  | { kind: "tool"; id: string; name: string; input: string; status: "running" | "ok" | "error" }
+  | { kind: "tool"; id: string; name: string; input: string; status: "running" | "ok" | "error"; durationMs?: number }
   | { kind: "thinking"; id: string; count: number; open: boolean }
   | { kind: "drift"; id: string; missing: string[]; undeclared: string[]; unverified: string[] }
   /** A turn failure with an actionable class (spec #264). */
@@ -86,11 +86,15 @@ export interface Frame {
     model?: string;
     /** tool.denied frame (④a execution gate): why the call was refused. */
     reason?: string;
+    /** tool.result pairing (spec #273): measured duration. */
+    durationMs?: number;
   } | null;
 }
 
 export interface State {
   entries: Entry[];
+  /** Mid-turn token deltas from usage.delta frames (spec #279), reset per turn. */
+  live: Usage;
   conn: Conn;
   usage: Usage;
   turns: number;
@@ -115,8 +119,11 @@ export type Action =
   | { t: "session_switched" }
   | { t: "hydrate"; items: HistoryItem[] };
 
+const zeroUsage = (): Usage => ({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 });
+
 export const initialState: State = {
   entries: [],
+  live: zeroUsage(),
   conn: "idle",
   usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 },
   turns: 0,
@@ -153,7 +160,7 @@ export function reduce(s: State, a: Action): State {
       return { ...s, seq: s.seq + 1, entries: [...s.entries, { kind: "user", id, text: a.text }] };
     }
     case "stream_start":
-      return { ...s, conn: "connecting" };
+      return { ...s, conn: "connecting", live: zeroUsage() };
     case "stream_end": {
       // server closed the stream without a result frame (transport error):
       // don't strand open blocks.
@@ -242,11 +249,26 @@ export function reduce(s: State, a: Action): State {
             const e = s.entries[i];
             if (e?.kind === "tool" && e.status === "running") {
               const entries = [...s.entries];
-              entries[i] = { ...e, status: p.isError ? "error" : "ok" };
+              entries[i] = {
+                ...e,
+                status: p.isError ? "error" : "ok",
+                ...(typeof p.durationMs === "number" ? { durationMs: p.durationMs } : {}),
+              };
               return { ...s, entries };
             }
           }
           return s; // result for nothing running: ignore, never corrupt
+        }
+        case "usage.delta": {
+          const u = p.usage as { input_tokens?: number; output_tokens?: number } | undefined;
+          return {
+            ...s,
+            live: {
+              ...s.live,
+              input: s.live.input + (u?.input_tokens ?? 0),
+              output: s.live.output + (u?.output_tokens ?? 0),
+            },
+          };
         }
         /**
          * Execution-side hard gate (④a): the kernel DENIED a call outside the
@@ -305,6 +327,7 @@ export function reduce(s: State, a: Action): State {
           return {
             ...s,
             entries,
+            live: zeroUsage(), // authoritative totals landed: live deltas retire
             conn: "idle",
             turns: s.turns + 1,
             seq: s.seq + 1,
