@@ -40,7 +40,7 @@
 
 ## M4 Model / Routing（25–33）
 
-- [~] 25 三级路由 — 请求级 + preset 槽位已成立；频道/租户中间层见 #208（未做）
+- [x] 25 三级路由 — 请求 > 频道/租户 > 槽位（#208）
 - [~] 26 fallback chain — alias 级已实现 `routing/health.ts:65-74`；跨 endpoint 未实现（契约化前不做）
 - [x] 27 usage attribution — `routing/attribution.ts`；tenant/attr 由 #209 打通
 - [x] 28 model-anthropic-compat runtime — `providers/model-anthropic-compat/src/index.ts`
@@ -59,7 +59,7 @@
 - [x] 38 per-session workspace — `.agentos/workspaces/<key>`
 - [x] 39 消息历史读取 — `adapters/claude-sdk/src/transcript.ts` + messages 端点
 - [x] 40 ledger 单测 — `session/__tests__/ledger.spec.ts`
-- [~] 41 会话主权 — 一会话一内核已成立；channel→(kernel,preset) 路由表见 #212（未做）
+- [x] 41 会话主权 — channel→entry 路由表 + 悬空校验（#212）
 
 ## M6 治理 Governance（42–52）
 
@@ -154,20 +154,20 @@
 - [x] 102 会话运行状态机 — running/idle/error/aborted 全落库（#215/#302 台账），abort 由 #254 实现 — running/idle/error/aborted 落库（#215）；abort 未做（#103）
 - [x] 103 会话中断 — #254 端点 + #255 停止按钮（部分结果保留，状态 aborted） — 未实现
 - [x] 104 workspace 文件浏览器端点 — #256 `GET /api/workspace/files`（围栏 + 上限）
-- [~] 105 workspace 文件读取端点 — #257 端点已落地（双层围栏+1MB 帽）；前端 file panel 见 #258
-- [~] 106 会话转录导出 — #259 端点已落地（jsonl/md 下载）；UI 见 #261
-- [~] 107 批量会话导出 — #260 端点已落地（NDJSON bundle）；UI 见 #261
-- [ ] 108 /api/status 扩展 provider/manifest 路径 — 部分（mounts 只有 key/transport）
+- [x] 105 workspace 读取 — 端点 + FilePanel（#257/#258）
+- [x] 106 会话导出 — 端点 + 行内下载按钮（#259/#261）
+- [x] 107 批量导出 — 端点 + 多选导出（#260/#261）
+- [x] 108 status 四层披露 — #262（mounts.manifestPath + knowledge/entry/dialect）
 - [x] 109 错误分级呈现 — #264 四类可行动卡片（tool-missing/gate-denied/model-fallback/network）
-- [ ] 110 移动端响应式 — 未系统验证
+- [x] 110 响应式 — 状态条换行、<md 侧栏抽屉、16px 边距
 - [x] 111 会话搜索/过滤 — #266 客户端即时过滤 + #267 服务端 ?q=
-- [ ] 112 空态与首次运行引导 — 仅 sidebar 一句文案
+- [x] 112 空态引导 — 三变体 EmptyState（#268）
 
 ## M15 Preset 即配置面（113–120）
 
 - [x] 113 配置只读披露 — #262/#263 四层 manifest 路径全披露
-- [ ] 114 env 参数负向用例 — 负向 conformance 未加
-- [ ] 115 模型切换器（只读+请求级） — 未实现
+- [x] 114 负向用例 — conformance 扫描中性工具签名不得含 env 参数
+- [x] 115 模型切换器 — 请求级 `model` 覆盖经三级路由重解析；未知名称使该 turn 失败并说明
 - [x] 116 本地一次性 token — #287 启动生成/打印 + 常量时间校验 + 前端 TokenGate；127.0.0.1 边界 Q&A 写入 SECURITY.md
 - [x] 117 identity() 插座留白 — 契约 + 两实现
 - [x] 118 /api/presets 列表端点 — #288
@@ -177,29 +177,29 @@
 ## M16 可观测与诊断（121–128）
 
 - [x] 121 /api/tools 诊断端点 — #290（key/transport/manifest/幂等切分）
-- [ ] 122 Registry 面板 — 未实现
+- [x] 122 Registry 面板 — ToolsPanel（挂载态/manifest/重试切分）
 - [x] 123 /api/usage 查询端点 — #291（按 provider/model 聚合）
 - [x] 124 debug 日志 — `.agentos/logs/` 元数据日志（脱敏）+ `/api/logs` + LogsPanel（内核 stdio stderr 边界如实注明）
 - [x] 125 healthz 扩展 — per-mount {key,healthy,version,reason} + model 探测
 - [x] 126 Graceful shutdown — SIGINT/SIGTERM 关 server/ledger（`cli/src/serve.ts`）；排水见 #293
-- [ ] 127 escalations 面板 — 未实现（只有计数）
-- [ ] 128 会话内事件时间线 — 未实现
+- [x] 127 escalations 面板 — EscalationsPanel + 历史端点
+- [x] 128 事件时间线 — TimelinePanel（工具/门禁/漂移 + 耗时）
 
 ## M17 沙箱与部署（129–135）
 
-- [~] 129 sandbox manifest 声明 — 未实现（fsRoots 由 args 推断，见 #301）
-- [~] 130 fs roots 单一授权源 — adapter 从 plans 推导；manifest 声明缺（#301）
+- [x] 129 sandbox manifest 声明 — #301（声明根授权）
+- [x] 130 单一授权源 — 声明根 > argv 推断，未声明上报 unverified
 - [x] 131 sqlite 内嵌默认 — `node:sqlite` DatabaseSync
-- [~] 132 多 pod 纪律条款 — README 未写（#237）
-- [~] 133 换库触发条件文档 — 未写（#238）
+- [x] 132 多 pod 纪律 — README 双语四条（#237）
+- [x] 133 换库触发条件 — README 双语三条（#238）
 - [x] 134 单进程部署默认 — serve --web 一条命令
-- [~] 135 数据目录规范 — `.agentos/` 六类约定存在；遗留 `workspace/` 目录待清（#249）
+- [x] 135 数据目录规范 — 六类布局成文（#303）+ 遗留目录已清（#249）
 
 ## M18 生态扩展面（136–142）
 
-- [ ] 136 examples/ 双示例 preset — 未落地
+- [x] 136 examples 双预设 — triage-demo + docs-assistant（#296）
 - [x] 137 新 agent = 新 yml — 机制成立（config/*.yml + preset）
-- [ ] 138 零脚手架验证测试 — 未实现
+- [x] 138 零脚手架验证 — 外部 MCP 子进程 + 纯 yml 规划测试
 - [x] 139 skills 即知识通道 — 无跨仓同步脚本；`skills/` vendored 待处置（#248）
 - [x] 140 第三方 onboarding = conformance — README/契约如此声明
 - [x] 141 entry 契约稳定承诺 — 契约 + conformance
@@ -208,20 +208,20 @@
 ## M19 开源工程化（143–148）
 
 - [x] 143 CI 门禁 — `.github/workflows/ci.yml`
-- [ ] 144 跨运行时验收演示 — 未实现
-- [ ] 145 npm 安装分发 — 未实现
-- [ ] 146 文档站 — 未实现
-- [~] 147 双语同步 + 安全披露 — SECURITY.md 未写（#239）
-- [~] 148 版本与变更纪律 — CHANGELOG 未建（#241）
+- [x] 144 跨运行时验收 — scripts/p4-acceptance.mjs 双 runtime 全链路
+- [~] 145 npm 分发 — 元数据与 pack 产物就位；workspace bundling 仍缺（#299）
+- [~] 146 文档三件套 — contracts/presets/onboarding + 双语 README；独立站点未建
+- [x] 147 双语同步 + 安全披露 — SECURITY.md + CI 结构检查（#239/#240）
+- [x] 148 版本与变更纪律 — CHANGELOG + 政策（#241）
 
 ## M14 二期 Web 深水区（149–160）
 
-- [ ] 149 KB 草稿收件箱 — 未实现
-- [ ] 150 草稿审阅/确认 — 未实现
-- [~] 151 门禁实时推送 — SSE 帧已推（confirm.request），无轮询需求；状态成立
-- [~] 152 工具卡片 — 展开已可；结果摘要/落盘链接缺（耗时由 #273 落地） — 已可展开（入参）；结果摘要/耗时/指针缺（#273/#274）
+- [x] 149 草稿收件箱 — DraftInbox + #270 端点
+- [x] 150 草稿审阅/确认 — 预览 + commit/discard（#271/#272）
+- [x] 151 门禁实时推送 — confirm.request 帧 + ConfirmModal
+- [x] 152 工具卡片 — 展开含入参 + 结果摘要(300 字) + 耗时 — 已可展开（入参）；结果摘要/耗时/指针缺（#273/#274）
 - [x] 153 落盘文件内联预览 — FilePanel 文本预览（100KB 截断）+ 下载（#275） — 未实现
-- [ ] 154 附件上传 — 未实现
+- [x] 154 附件上传 — 端点 + Composer chip + 指针注入（#276–#278）
 - [x] 155 token 实时显示 — usage.delta + reducer live + UsageBar 实时（#279） — 仅结果帧汇总
 - [x] 156 深浅色主题 — auto/light/dark 切换 + data-theme（#280） — 仅 media query，无切换器
 - [x] 157 键盘操作 — Esc 清稿 / Alt+↑↓ 切会话 / Enter 发送 / 停止与确认按钮（#281） — 仅 Enter 发送
@@ -231,16 +231,16 @@
 
 ## M19 二期 工程化收尾（161–170）
 
-- [ ] 161 备份与导出工具 — 未实现
-- [ ] 162 存储清理命令 — 未实现
-- [ ] 163 预算门禁 — 未实现
-- [ ] 164 并发会话上限 — 未实现
-- [~] 165 冒烟脚本 — `scripts/p2-smoke.mjs` 存在；写回/导出段缺（#305）
-- [ ] 166 CONTRIBUTING.md — 未实现（#242）
-- [ ] 167 good first issue 标签 — 未实现
-- [ ] 168 CHANGELOG 自动化 — 未实现
-- [ ] 169 性能预算表 — 未实现
-- [ ] 170 v1.0 判据 — 未写死（#306）
+- [x] 161 备份与导出 — `agentos data export/import`（data-1 bundle，幂等导入）
+- [x] 162 存储清理 — `agentos data gc`（drafts/logs/workspaces 按龄，--dry-run）
+- [x] 163 预算门禁 — preset.budgetUsd 达阈触发人工确认
+- [x] 164 并发上限 — preset.maxConcurrentSessions FIFO 信号量
+- [x] 165 冒烟脚本 — scripts/smoke.mjs 全链路（离线一键）
+- [x] 166 CONTRIBUTING.md — 三节 + 工作规则（#242）
+- [x] 167 标签体系 — labels.yml + good-first-issue/bug 模板
+- [x] 168 CHANGELOG 自动化 — scripts/changelog.mjs 按类型归集
+- [x] 169 性能预算表 — docs/performance.md（含实测冷启动 ~250ms 与 CI 强制项）
+- [x] 170 v1.0 判据 — docs/roadmap-v1.md 三条判据 + 当前计数
 
 ## M20 边界承诺（171–200）——负向验收
 
@@ -357,7 +357,7 @@
 - [x] 262 status 四层披露 — mounts.manifestPath + knowledge/entry/dialect
 - [x] 263 ConfigDialog 路径渲染 — 四层各自文件路径 + env-NAME 注记
 - [x] 264 错误分类学 — classifyTurnError + 四型渲染 + 测试
-- [ ] 265 响应式布局
+- [x] 265 响应式布局 — 同上（#110/#265 同一实现）
 - [x] 266 会话过滤 — filterSessions + sidebar 输入框
 - [x] 267 服务端会话搜索 — LIKE 转义 + 仅用户可见标签
 - [x] 268 空态组件 — 三变体优先级 + 指引文案
@@ -369,7 +369,7 @@
 - [x] 271 草稿 commit/discard 端点 — 未知 receipt 409 / 非法 id 400
 - [x] 272 DraftInbox — 预览 + commit/discard 双按钮
 - [x] 273 工具卡片数据面 — tool.result 携带 tool + durationMs（摘要/耗时/指针）
-- [~] 274 工具卡片展开 — 入参 + 耗时；结果摘要/落盘链接缺（需 result 内容面）
+- [x] 274 工具卡片展开 — 四节：入参/结果摘要/耗时/状态（落盘指针随 offload envelope 进摘要）
 - [x] 275 文件内联预览 — FilePanel 文本预览 + 截断提示
 - [x] 276 附件上传端点 — 5MB 帽 + 文件名消毒 + workspace 围栏
 - [x] 277 附件指针注入 — turn prompt 附 workspace 路径块（Read 可达）
@@ -391,15 +391,15 @@
 - [x] 290 GET /api/tools — #290
 - [x] 291 GET /api/usage — #291
 - [x] 292 日志捕获 + healthz — 见 #124/#125/#220
-- [ ] 293 SIGTERM 排水（跟踪活跃 runner）
+- [x] 293 SIGTERM 排水 — 活跃 turn 跟踪，5s 排水后 sweep+close
 
 ## M28 生态与分发（294–300）
 
-- [ ] 294 escalations 历史端点 + 面板
-- [ ] 295 事件时间线
+- [x] 294 escalations 历史端点 + 面板 — newest-first，limit 上限 200
+- [x] 295 事件时间线 — 同一实现（#128），纯函数 turnTimeline + spec
 - [x] 296 examples 双预设 — triage-demo + docs-assistant，validate exit 0
-- [ ] 297 零脚手架 CI 测试
-- [ ] 298 第二 runtime + 跨运行时验收
+- [x] 297 零脚手架 CI — conformance 内运行 + opt-in external lane
+- [x] 298 第二 runtime — 脚本化 neutral-vocabulary runtime + 验收脚本
 - [~] 299 npm 分发 — bin/files/engines/prepack 就位，`npm pack` 产出含 main.mjs+dist；workspace bundling 仍缺
 - [x] 300 onboarding 指南 + 生态位清单 — docs/onboarding.md + README 双语链接
 
@@ -412,8 +412,8 @@
 ## M30 对齐验收（304–307）
 
 - [ ] 304 真实第二方接入实证
-- [ ] 305 全链路冒烟（写回/导出段）
-- [ ] 306 v1.0 roadmap 跟踪件
+- [x] 305 全链路冒烟 — mount → conversation → writeback → export(单/批) 全绿
+- [x] 306 roadmap — docs/roadmap-v1.md（计数 + 阻塞项）
 - [x] 307 审计例程化 — docs/audit-routine.md 五路复跑时机与产出
 
 ---

@@ -15,6 +15,7 @@ import { DraftInbox } from "./components/DraftInbox";
 import { LogsPanel } from "./components/LogsPanel";
 import { ToolsPanel } from "./components/ToolsPanel";
 import { EscalationsPanel } from "./components/EscalationsPanel";
+import { TimelinePanel } from "./components/TimelinePanel";
 import { UsageBar } from "./components/UsageBar";
 
 /** Sidebar polling cadence — a session running from another tab/device must
@@ -35,6 +36,7 @@ export default function App() {
   const [showTools, setShowTools] = useState(false);
   const [showEscalations, setShowEscalations] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false); // mobile drawer (spec #265)
+  const [showTimeline, setShowTimeline] = useState(false);
   const [clearNonce, setClearNonce] = useState(0);
 
   const refresh = useCallback(async () => {
@@ -108,6 +110,7 @@ export default function App() {
         onToggleLogs={() => setShowLogs((v) => !v)}
         onToggleTools={() => setShowTools((v) => !v)}
         onToggleEscalations={() => setShowEscalations((v) => !v)}
+        onToggleTimeline={() => setShowTimeline((v) => !v)}
       />
       <div className="flex min-h-0 flex-1">
         <button
@@ -158,6 +161,7 @@ export default function App() {
             {showLogs && <LogsPanel onClose={() => setShowLogs(false)} />}
             {showTools && <ToolsPanel onClose={() => setShowTools(false)} />}
             {showEscalations && <EscalationsPanel onClose={() => setShowEscalations(false)} />}
+            {showTimeline && <TimelinePanel state={state} onClose={() => setShowTimeline(false)} />}
           </div>
         </div>
       </div>
