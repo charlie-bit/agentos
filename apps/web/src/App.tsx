@@ -1,5 +1,6 @@
 /** Console shell: three contract surfaces, one row each, around the chat. */
 import { useCallback, useEffect, useState } from "react";
+import { webExternalKey } from "@agentos/contracts/session-key";
 import { deleteSession, getEscalations, getSessions, getStatus, renameSession, type SessionRow, type StatusResponse } from "./lib/api";
 import { useAgentChat } from "./lib/useAgentChat";
 import { ChatStream } from "./components/ChatStream";
@@ -56,7 +57,7 @@ export default function App() {
         // If the row being deleted is the one currently open, don't leave the
         // console pointed at a session that no longer exists in the ledger.
         const row = sessions.find((s) => s.id === id);
-        const deletingActive = row && row.external_key === `web-${sessionId}`;
+        const deletingActive = row && row.external_key === webExternalKey(sessionId);
         await deleteSession(id).catch(() => undefined);
         if (deletingActive) newSession();
         void refresh();

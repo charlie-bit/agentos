@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Pencil, Plus, Trash2 } from "lucide-react";
+import { browserSessionId } from "@agentos/contracts/session-key";
 import { cn, relTime } from "../lib/utils";
 import type { SessionRow } from "../lib/api";
 import { InlineEditableTitle } from "./InlineEditableTitle";
@@ -25,7 +26,7 @@ function SessionItem({
   onDelete: (id: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
-  const browserId = row.external_key.startsWith("web-") ? row.external_key.slice(4) : row.external_key;
+  const browserId = browserSessionId(row.external_key);
   const label = row.title?.trim() || browserId.slice(0, 8);
   return (
     <div
@@ -121,7 +122,7 @@ export function SessionSidebar({
         <div className="px-1 text-xs text-muted-foreground">send your first message to create one</div>
       )}
       {sessions.map((row) => {
-        const browserId = row.external_key.startsWith("web-") ? row.external_key.slice(4) : row.external_key;
+        const browserId = browserSessionId(row.external_key);
         return (
           <SessionItem
             key={row.id}

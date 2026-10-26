@@ -35,6 +35,7 @@ import type {
   TenantRef,
   TranscriptEntry,
 } from "@agentos/contracts";
+import { isWebExternalKey, webExternalKey } from "@agentos/contracts/session-key";
 import type { Ledger, SessionRow } from "@agentos/core";
 
 /** Registration name presets may reference in the entry slot. */
@@ -338,7 +339,9 @@ export async function startServer(o: StartServerOptions): Promise<RunningServer>
         model: { provider: o.model.provider, baseUrlEnv: o.model.baseUrlEnv ?? null, credentialsEnv: o.model.credentialsEnv ?? null },
         mounts: o.mounts,
         systemPrompt: o.systemPrompt ?? null,
-        ...entry.statusSnapshot(url.searchParams.get("session") ? `web-${url.searchParams.get("session") as string}` : undefined),
+        ...entry.statusSnapshot(
+          url.searchParams.get("session") === null ? undefined : webExternalKey(url.searchParams.get("session") as string),
+        ),
       });
     }
     if (req.method === "GET" && path === "/api/sessions") {
@@ -407,7 +410,7 @@ export async function startServer(o: StartServerOptions): Promise<RunningServer>
         return sendJson(res, 200, { entries: [] }); // undecodable id: nothing to replay
       }
       if (raw.length === 0 || raw.length > 200) return sendJson(res, 200, { entries: [] });
-      const row = o.ledger.getByExternalKey(raw.startsWith("web-") ? raw : `web-${raw}`) ?? o.ledger.getByExternalKey(raw);
+      const row = o.ledger.getByExternalKey(isWebExternalKey(raw) ? raw : webExternalKey(raw)) ?? o.ledger.getByExternalKey(raw);
       const pointer = row?.sdkSessionId ?? null;
       if (!row || pointer === null || !o.readTranscript) return sendJson(res, 200, { entries: [] });
       try {
@@ -446,7 +449,7 @@ export async function startServer(o: StartServerOptions): Promise<RunningServer>
       if (typeof sessionId !== "string" || sessionId.length === 0 || typeof message !== "string" || message.length === 0) {
         return sendJson(res, 400, { error: "sessionId and message are required strings" });
       }
-      const externalKey = `web-${sessionId}`;
+      const externalKey = webExternalKey(sessionId);
       const binding = await entry.sessionFor(externalKey);
       const row: SessionRow | undefined = o.ledger.getByExternalKey(externalKey);
       res.writeHead(200, {

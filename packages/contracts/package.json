@@ -9,6 +9,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./session-key": {
+      "types": "./dist/session-key.d.ts",
+      "default": "./dist/session-key.js"
     }
   },
   "scripts": {
