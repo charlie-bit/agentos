@@ -166,9 +166,10 @@ export function canUseToolFromPlans(plans: readonly ToolMountPlan[]): (toolName:
 export function collectDrift(
   plans: readonly ToolMountPlan[],
   discoveredFullNames: readonly string[],
-): { missing: string[]; undeclared: string[] } {
+): { missing: string[]; undeclared: string[]; unverified: string[] } {
   const missing: string[] = [];
   const undeclared: string[] = [];
+  const unverified: string[] = [];
   const planKeys = new Set(plans.map((p) => p.key));
   for (const plan of plans) {
     const prefix = `mcp__${plan.key}__`;
@@ -176,6 +177,8 @@ export function collectDrift(
     const report = driftReport(plan.allowedTools ?? [], bare);
     missing.push(...report.missing.map((t) => `${plan.key}/${t}`));
     undeclared.push(...report.undeclared.map((t) => `${plan.key}/${t}`));
+    // No allowlist = nothing to verify against; say so rather than "clean".
+    if (report.unverified) unverified.push(plan.key);
   }
   // Hotfix global pass: ANY discovered mcp__<key>__ tool whose key is not a
   // mounted plan is undeclared — the structural alarm for host leakage:
@@ -187,7 +190,7 @@ export function collectDrift(
       undeclared.push(`${m[1]}/${name.slice(`mcp__${m[1]}__`.length)}`);
     }
   }
-  return { missing, undeclared };
+  return { missing, undeclared, unverified };
 }
 
 export interface TurnInput {
@@ -283,7 +286,7 @@ export async function consumeStream(
       // Drift is a WARNING event, not a hard stop: fewer tools must still run
       // the chain (absent-degrade philosophy); the web console surfaces it.
       const drift = collectDrift(opts.toolMounts, message.tools ?? []);
-      if (drift.missing.length + drift.undeclared.length > 0) {
+      if (drift.missing.length + drift.undeclared.length + drift.unverified.length > 0) {
         emit([{ type: "kernel.system.drift", payload: drift, timestampMs: Date.now() }]);
       }
     }

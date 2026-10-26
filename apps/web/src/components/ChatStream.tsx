@@ -42,7 +42,9 @@ function DriftBanner({ e }: { e: Extract<Entry, { kind: "drift" }> }) {
       <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
       <span>
         <strong className="font-semibold">tool drift</strong> — missing: {e.missing.join(", ") || "—"} · undeclared:{" "}
-        {e.undeclared.join(", ") || "—"} <span className="text-muted-foreground">(warning only; the session continues)</span>
+        {e.undeclared.join(", ") || "—"}
+        {e.unverified.length > 0 && <> · unverified (no allowlist): {e.unverified.join(", ")}</>}{" "}
+        <span className="text-muted-foreground">(warning only; the session continues)</span>
       </span>
     </div>
   );

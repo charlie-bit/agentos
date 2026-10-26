@@ -22,7 +22,7 @@ export type Entry =
   | { kind: "assistant"; id: string; text: string; status: "streaming" | "done" | "error" }
   | { kind: "tool"; id: string; name: string; input: string; status: "running" | "ok" | "error" }
   | { kind: "thinking"; id: string; count: number; open: boolean }
-  | { kind: "drift"; id: string; missing: string[]; undeclared: string[] };
+  | { kind: "drift"; id: string; missing: string[]; undeclared: string[]; unverified: string[] };
 
 /**
  * One history item as served by GET /api/sessions/:id/messages — the wire form
@@ -62,6 +62,8 @@ export interface Frame {
     message?: string;
     missing?: string[];
     undeclared?: string[];
+    /** Mounts with no allowlist: nothing to verify against (#226). */
+    unverified?: string[];
     subtype?: string;
     usage?: {
       input_tokens?: number;
@@ -260,7 +262,10 @@ export function reduce(s: State, a: Action): State {
           return {
             ...s,
             seq: s.seq + 1,
-            entries: [...closed, { kind: "drift", id, missing: p.missing ?? [], undeclared: p.undeclared ?? [] }],
+            entries: [
+              ...closed,
+              { kind: "drift", id, missing: p.missing ?? [], undeclared: p.undeclared ?? [], unverified: p.unverified ?? [] },
+            ],
           };
         }
         case "confirm.request": {

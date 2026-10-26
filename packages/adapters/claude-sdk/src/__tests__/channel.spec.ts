@@ -177,13 +177,13 @@ describe("drift wiring (P3)", () => {
     // HOTFIX amendment: a foreign key (mcp__other__x) now ALSO alarms via the
     // global pass; the old expectation encoded the leak-blindness this fixes.
     const drift = collectDrift([plan], ["mcp__fs__read_file", "mcp__fs__surprise", "mcp__other__x"]);
-    expect(drift).toEqual({ missing: ["fs/gone_tool"], undeclared: ["fs/surprise", "other/x"] });
+    expect(drift).toEqual({ missing: ["fs/gone_tool"], undeclared: ["fs/surprise", "other/x"], unverified: [] });
   });
 
   it("a clean init produces no drift event (normalize+collect stay quiet)", () => {
     const discovered = ["mcp__fs__read_file", "mcp__fs__gone_tool"];
     const drift = collectDrift([plan], discovered);
-    expect(drift).toEqual({ missing: [], undeclared: [] });
+    expect(drift).toEqual({ missing: [], undeclared: [], unverified: [] });
   });
 });
 
@@ -272,7 +272,7 @@ describe("collectDrift global pass (structural leak alarm)", () => {
   });
   it("declared keys behave exactly as before (no regression in the per-plan pass)", () => {
     const plan = { key: "fs", transport: "stdio" as const, stdio: { command: "x" }, allowedTools: ["read_file", "gone"] };
-    expect(collectDrift([plan], ["mcp__fs__read_file"])).toEqual({ missing: ["fs/gone"], undeclared: [] });
+    expect(collectDrift([plan], ["mcp__fs__read_file"])).toEqual({ missing: ["fs/gone"], undeclared: [], unverified: [] });
   });
 });
 
@@ -412,5 +412,28 @@ describe("fsRoots (D-0910-7): declared root set → kernel grant", () => {
     expect(fsRootsFromPlans([http], undefined)).toEqual([]);
     const opts = buildQueryOptions(turnBase({ toolMounts: [http] }), FAKE_ENV);
     expect(opts.additionalDirectories).toBeUndefined();
+  });
+});
+
+describe("drift contract: unverified is not clean (spec #226)", () => {
+  it("a mount with no allowlist reports its key as unverified", () => {
+    const plan = { key: "gateway", transport: "http" as const, http: { url: "https://x.example/rpc" } };
+    const drift = collectDrift([plan], ["mcp__gateway__any_tool"]);
+    expect(drift).toEqual({ missing: [], undeclared: [], unverified: ["gateway"] });
+  });
+
+  it("an init event on an unverified mount still surfaces a drift warning", async () => {
+    const opts = { toolMounts: [{ key: "gateway", transport: "http" as const, http: { url: "https://x.example/rpc" } }] };
+    const frames = [
+      { type: "system", subtype: "init", session_id: "s", tools: ["mcp__gateway__any_tool"] },
+      { type: "result", session_id: "s", subtype: "success", is_error: false, num_turns: 1 },
+    ] as unknown as SDKMessage[];
+    const stream = (async function* () {
+      for (const f of frames) yield f;
+    })();
+    const out = await consumeStream(stream, opts);
+    const driftEvent = out.events.find((e) => e.type === "kernel.system.drift");
+    expect(driftEvent).toBeDefined();
+    expect((driftEvent?.payload as { unverified: string[] }).unverified).toEqual(["gateway"]);
   });
 });

@@ -126,21 +126,22 @@ describe("planTools — expansion, filters, degradation", () => {
 });
 
 describe("driftReport (pure)", () => {
-  it("empty declared = pass-through: both sides empty regardless of discovery", () => {
-    expect(driftReport([], ["anything", "grew"])).toEqual({ missing: [], undeclared: [] });
+  it("empty declared = pass-through, flagged unverified (#226)", () => {
+    expect(driftReport([], ["anything", "grew"])).toEqual({ missing: [], undeclared: [], unverified: true });
   });
 
   it("surfaces renamed/disappeared declared tools and unauthorized discoveries", () => {
     expect(driftReport(["read_file", "write_file"], ["read_file", "extra_tool"])).toEqual({
       missing: ["write_file"],
       undeclared: ["extra_tool"],
+      unverified: false,
     });
   });
 
   it("* wildcard authorizes anything, matches specific shapes", () => {
-    expect(driftReport(["read_*"], ["read_file", "read_lines"])).toEqual({ missing: [], undeclared: [] });
-    expect(driftReport(["read_*"], ["write_file"])).toEqual({ missing: [], undeclared: ["write_file"] });
-    expect(driftReport(["*"], ["whatever"])).toEqual({ missing: [], undeclared: [] });
+    expect(driftReport(["read_*"], ["read_file", "read_lines"])).toEqual({ missing: [], undeclared: [], unverified: false });
+    expect(driftReport(["read_*"], ["write_file"])).toEqual({ missing: [], undeclared: ["write_file"], unverified: false });
+    expect(driftReport(["*"], ["whatever"])).toEqual({ missing: [], undeclared: [], unverified: false });
   });
 });
 
