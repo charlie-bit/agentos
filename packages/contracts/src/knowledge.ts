@@ -96,7 +96,15 @@ export interface KnowledgeProvider {
   search(q: string, opts?: SearchOpts): Promise<KbHit[]>;
   /** Unknown id throws (not a null page): absence of a page is exceptional at call sites. */
   getPage(id: PageId): Promise<KbPage>;
-  /** Full index; scope narrows to a subtree. */
+  /**
+   * Full index; scope narrows to a subtree.
+   *
+   * Consumer note (spec #246): production paths read the index through
+   * `bootstrap()` (the rendered guide) and `search()`; `listPages` today has
+   * no production caller — its consumers are the conformance suite and a
+   * future scope picker. It stays on the contract because the six-verb shape
+   * is what a second provider implements (see #201).
+   */
   listPages(scope?: Scope): Promise<KbIndex>;
   /**
    * First beat of the two-phase write: creates a draft and returns a receipt.

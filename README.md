@@ -66,6 +66,11 @@ interface KnowledgeProvider {
 | `provider-weknora` | Post-trigger | RAG + Wiki UI + multi-tenant (activated at hundreds-of-pages scale) |
 | `provider-mcp` | Planned | Any KB server via MCP protocol |
 
+> `listPages` currently has no production caller (the rendered guide uses
+> `bootstrap`, agents use `search`); it stays on the contract as part of the
+> six-verb shape a second provider implements — conformance covers it today
+> (spec #246).
+
 ### ToolProvider — MCP pluggability
 
 One tool server = one declarative registry entry, mounted at runtime by transport.
