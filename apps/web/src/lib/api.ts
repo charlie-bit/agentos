@@ -101,7 +101,18 @@ export interface SessionRow {
 export const getStatus = (browserSessionId?: string) =>
   jget<StatusResponse>(`/api/status${browserSessionId ? `?session=${encodeURIComponent(browserSessionId)}` : ""}`);
 export const getSessions = () => jget<{ sessions: SessionRow[] }>("/api/sessions");
-export const getEscalations = () => jget<{ count: number }>("/api/escalations");
+export interface EscalationEntry { ts: number | null; sessionId: string | null; reason: string | null }
+export const getEscalations = (limit?: number) =>
+  jget<{ count: number; recent?: EscalationEntry[] }>(`/api/escalations${limit ? `?limit=${limit}` : ""}`);
+export interface ToolDescriptor {
+  key: string;
+  transport: string;
+  manifestPath: string | null;
+  allowedTools: string[] | null;
+  idempotent: { default: boolean; overrides?: Record<string, boolean> } | null;
+  mounted: boolean;
+}
+export const getTools = () => jget<{ tools: ToolDescriptor[] }>("/api/tools");
 export const escalate = (sessionId: string, reason?: string) => jpost<{ ok: boolean }>("/api/escalate", { sessionId, reason });
 export const answerConfirm = (requestId: string, approved: boolean) => jpost<{ ok: boolean }>("/api/confirm", { requestId, approved });
 

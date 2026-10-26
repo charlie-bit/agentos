@@ -1395,3 +1395,17 @@ describe("/healthz body + /api/logs (spec #220/#292)", () => {
     expect(((await (await api(unwired.srv, "/api/logs")).json()) as { files: unknown[] }).files).toEqual([]);
   });
 });
+
+describe("escalation history (spec #127/#294)", () => {
+  it("returns newest-first entries with timestamps and reasons, bounded", async () => {
+    const { srv, escPath } = await boot(async () => ({}));
+    writeFileSync(escPath, [1, 2, 3].map((n) => JSON.stringify({ ts: n, sessionId: `s${n}`, reason: `why ${n}` })).join("\n") + "\n");
+    const body = (await (await api(srv, "/api/escalations?limit=2")).json()) as {
+      count: number;
+      recent: Array<{ ts: number; sessionId: string; reason: string }>;
+    };
+    expect(body.count).toBe(3);
+    expect(body.recent.map((e) => e.sessionId)).toEqual(["s3", "s2"]); // newest first
+    expect(body.recent[0]?.reason).toBe("why 3");
+  });
+});

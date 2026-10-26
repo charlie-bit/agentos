@@ -1028,9 +1028,22 @@ export async function startServer(o: StartServerOptions): Promise<RunningServer>
       }
     }
     if (req.method === "GET" && path === "/api/escalations") {
-      let count = 0;
-      if (existsSync(escalatePath)) count = readFileSync(escalatePath, "utf8").split("\n").filter(Boolean).length;
-      return sendJson(res, 200, { count });
+      // History, not just a counter (spec #127/#294): newest N entries with
+      // timestamp + reason. Metadata only (session id, reason string) — the
+      // reason is whatever the caller posted, never conversation content (R2).
+      const rawLines = url.searchParams.get("limit");
+      const limit = rawLines === null ? 20 : Math.min(200, Math.max(1, Number(rawLines) || 20));
+      let lines: string[] = [];
+      if (existsSync(escalatePath)) lines = readFileSync(escalatePath, "utf8").split("\n").filter(Boolean);
+      const recent = lines.slice(-limit).reverse().flatMap((line) => {
+        try {
+          const rec = JSON.parse(line) as { ts?: number; sessionId?: string; reason?: string | null };
+          return [{ ts: rec.ts ?? null, sessionId: rec.sessionId ?? null, reason: rec.reason ?? null }];
+        } catch {
+          return [];
+        }
+      });
+      return sendJson(res, 200, { count: lines.length, recent });
     }
     if (req.method === "POST" && path === "/api/escalate") {
       const body = await readJson(req);

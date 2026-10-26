@@ -600,11 +600,15 @@ export async function runServeWeb(flags: ServeFlags): Promise<number> {
   const webToken = process.env.AGENTOS_WEB_TOKEN ?? randomBytes(24).toString("base64url");
   if (swept > 0) write(`⚠ ledger: ${swept} stale running row(s) marked aborted\n`);
   const dbPath = ledgerPathFromEnv();
+  // Active-turn registry for SIGTERM drainage (spec #293): a shutdown waits
+  // for in-flight turns (bounded), then the sweep settles any row they left.
+  const activeTurns = new Set<Promise<unknown>>();
   const server = await startServer({
     presetName,
     model: { provider: modelLease.provider, baseUrlEnv: modelLease.baseUrlEnv, credentialsEnv: modelLease.credentialsEnv },
     mounts,
     runner: async (ctx) => {
+      const turn = (async () => {
       // Hotfix clean-room: per-browser-session workspace (externalKey keyed).
       const workspaceDir = join(asm.value.repoRoot, ".agentos", "workspaces", ctx.externalKey);
       mkdirSync(workspaceDir, { recursive: true });
@@ -638,6 +642,13 @@ export async function runServeWeb(flags: ServeFlags): Promise<number> {
       // the real runner has no confirm consumer yet (P7 kb_commit gating will
       // be the first); the out-of-band channel itself is conformance-proven.
       return { sdkSessionId: out.sdkSessionId };
+      })();
+      activeTurns.add(turn);
+      try {
+        return await turn;
+      } finally {
+        activeTurns.delete(turn);
+      }
     },
     ledger,
     // History replay (P5.1): the ONLY place that knows both halves — the ledger

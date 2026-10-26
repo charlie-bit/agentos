@@ -13,6 +13,8 @@ import { TokenGate } from "./components/TokenGate";
 import { FilePanel } from "./components/FilePanel";
 import { DraftInbox } from "./components/DraftInbox";
 import { LogsPanel } from "./components/LogsPanel";
+import { ToolsPanel } from "./components/ToolsPanel";
+import { EscalationsPanel } from "./components/EscalationsPanel";
 import { UsageBar } from "./components/UsageBar";
 
 /** Sidebar polling cadence — a session running from another tab/device must
@@ -30,6 +32,9 @@ export default function App() {
   const [showFiles, setShowFiles] = useState(false);
   const [showDrafts, setShowDrafts] = useState(false);
   const [showLogs, setShowLogs] = useState(false);
+  const [showTools, setShowTools] = useState(false);
+  const [showEscalations, setShowEscalations] = useState(false);
+  const [showSidebar, setShowSidebar] = useState(false); // mobile drawer (spec #265)
   const [clearNonce, setClearNonce] = useState(0);
 
   const refresh = useCallback(async () => {
@@ -101,8 +106,18 @@ export default function App() {
         onToggleFiles={() => setShowFiles((v) => !v)}
         onToggleDrafts={() => setShowDrafts((v) => !v)}
         onToggleLogs={() => setShowLogs((v) => !v)}
+        onToggleTools={() => setShowTools((v) => !v)}
+        onToggleEscalations={() => setShowEscalations((v) => !v)}
       />
       <div className="flex min-h-0 flex-1">
+        <button
+          onClick={() => setShowSidebar((v) => !v)}
+          className="absolute left-2 top-12 z-40 rounded border border-border bg-card px-2 py-1 text-xs md:hidden"
+          aria-label="sessions"
+        >
+          sessions
+        </button>
+        <div className={showSidebar ? "fixed inset-y-12 left-0 z-30 flex md:static md:z-auto" : "hidden md:flex"}>
         <SessionSidebar
           sessions={sessions}
           activeKey={sessionId}
@@ -111,6 +126,7 @@ export default function App() {
           onRename={handleRename}
           onDelete={handleDelete}
         />
+        </div>
         <div className="flex min-w-0 flex-1 flex-col">
           <div className="flex min-h-0 flex-1">
             <div className="flex min-w-0 flex-1 flex-col">
@@ -140,6 +156,8 @@ export default function App() {
             {showFiles && <FilePanel sessionId={sessionId} onClose={() => setShowFiles(false)} />}
             {showDrafts && <DraftInbox sessionId={sessionId} onClose={() => setShowDrafts(false)} />}
             {showLogs && <LogsPanel onClose={() => setShowLogs(false)} />}
+            {showTools && <ToolsPanel onClose={() => setShowTools(false)} />}
+            {showEscalations && <EscalationsPanel onClose={() => setShowEscalations(false)} />}
           </div>
         </div>
       </div>

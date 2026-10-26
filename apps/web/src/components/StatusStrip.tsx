@@ -11,16 +11,20 @@ export function StatusStrip({
   onToggleFiles,
   onToggleDrafts,
   onToggleLogs,
+  onToggleTools,
+  onToggleEscalations,
 }: {
   status: StatusResponse | null;
   onToggleFiles?: () => void;
   onToggleDrafts?: () => void;
   onToggleLogs?: () => void;
+  onToggleTools?: () => void;
+  onToggleEscalations?: () => void;
 }) {
   if (!status) return <header className="flex items-center gap-2 border-b border-border px-4 py-2 text-xs text-muted-foreground">loading status…</header>;
   const driftCount = status.lastDrift ? status.lastDrift.missing.length + status.lastDrift.undeclared.length : 0;
   return (
-    <header className="flex items-center gap-2 border-b border-border px-4 py-2">
+    <header className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-2">
       <span className="flex items-center gap-1.5 text-sm font-semibold">
         <Boxes className="h-4 w-4 text-primary" /> AgentOS
       </span>
@@ -51,6 +55,16 @@ export function StatusStrip({
       {onToggleDrafts && (
         <button onClick={onToggleDrafts} title="pending knowledge drafts" className="rounded-md p-1 text-muted-foreground hover:bg-card hover:text-foreground">
           drafts
+        </button>
+      )}
+      {onToggleTools && (
+        <button onClick={onToggleTools} title="tool registry" className="rounded-md p-1 text-muted-foreground hover:bg-card hover:text-foreground">
+          tools
+        </button>
+      )}
+      {onToggleEscalations && (
+        <button onClick={onToggleEscalations} title="escalation history" className="rounded-md p-1 text-muted-foreground hover:bg-card hover:text-foreground">
+          escalations
         </button>
       )}
       {onToggleLogs && (
