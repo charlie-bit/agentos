@@ -7,7 +7,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import type { ConfirmResult, KnowledgeProvider, NeutralTool } from "@agentos/contracts";
-import { commitDraft, appendDraftLedger, type CommitConfirmation } from "./writeback.js";
+import { appendDraftLedger } from "./writeback.js";
 import { renderOverview } from "./render.js";
 
 export interface KbToolContext {
@@ -100,19 +100,12 @@ export function buildKbTools(ctx: KbToolContext): NeutralTool[] {
           // pageId must come from the receipt ledger, not the model: read it back.
           const pageId = pageIdFromLedger(ctx.receiptsLog, receiptId);
           if (pageId === undefined) return { committed: false, reason: `unknown receiptId ${receiptId}` };
-          const confirmation: CommitConfirmation = {
-            confirmedBy: answer.decidedBy ?? "human",
-            confirmedAtMs: answer.timestampMs ?? Date.now(),
-          };
-          const result = commitDraft({
-            bookRoot: ctx.bookRoot,
-            draftsDir: ctx.draftsDir,
-            receiptsLog: ctx.receiptsLog,
-            receiptId,
-            pageId,
-            evidence,
-            confirmation,
-          });
+          // Persistence belongs to the provider (spec #201): governance keeps
+          // the gate, the receipt lookup and the audit line only.
+          const result = await ctx.provider.commit(
+            { receiptId, pageId, createdAtMs: Date.now() },
+            { confirmedBy: answer.decidedBy ?? "human", confirmedAtMs: answer.timestampMs ?? Date.now() },
+          );
           return { committed: true, ...result };
         },
       },

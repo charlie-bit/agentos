@@ -213,6 +213,9 @@ importers:
       '@agentos/contracts':
         specifier: workspace:*
         version: link:../../contracts
+      '@agentos/core':
+        specifier: workspace:*
+        version: link:../../core
 
   packages/providers/model-anthropic-compat:
     dependencies:

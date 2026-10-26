@@ -78,6 +78,19 @@ export interface WriteReceipt {
   readonly createdAtMs: number;
 }
 
+/** Human-confirmation credential — structural, never a boolean flag (spec #201). */
+export interface CommitConfirmation {
+  readonly confirmedBy: string;
+  readonly confirmedAtMs: number;
+}
+
+/** Outcome of beat 2: where the page landed and which commit carries it. */
+export interface CommitResult {
+  readonly path: string;
+  readonly commit: string;
+  readonly appended: boolean;
+}
+
 /** The knowledge socket. Behavior contract; implementations are mounted by manifest. */
 export interface KnowledgeProvider {
   readonly name: string;
@@ -111,6 +124,16 @@ export interface KnowledgeProvider {
    * Writes not yet committed must NOT appear in search/bootstrap results.
    */
   writePage(draft: KbDraft): Promise<WriteReceipt>;
+  /**
+   * Second beat of the two-phase write (spec #201): persist a draft behind a
+   * human-confirmation credential. The provider owns its own persistence —
+   * git+markdown is ONE implementation, not the contract. Core keeps only the
+   * policy shell (receipts, audit, gate) and calls this verb.
+   *
+   * Implementations must be idempotent-by-receipt: a receipt already
+   * committed is refused, never written twice (#214).
+   */
+  commit(receipt: WriteReceipt, confirmation: CommitConfirmation): Promise<CommitResult>;
 }
 
 /** Mount type is a deployment detail swappable per preset; the contract only ever asks for "a readable file source". */

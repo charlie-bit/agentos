@@ -345,7 +345,7 @@ export async function wireKnowledge(
   // the guide lives IN THE SESSION WORKSPACE (hotfix clean-room: the agent's
   // file territory is its workspace, not the source repo)
   const overviewFile = join(workspaceDir, "kb-overview.md");
-  const provider = createMarkdownProvider({ name: km.provider, root, draftsDir });
+  const provider = createMarkdownProvider({ name: km.provider, root, draftsDir, receiptsLog });
   const tools = buildKbTools({
     provider,
     confirmCapable,

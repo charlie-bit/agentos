@@ -16,7 +16,10 @@ import { randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { renderDraftFile } from "@agentos/contracts";
+import { commitDraft } from "@agentos/core";
 import type {
+  CommitConfirmation,
+  CommitResult,
   KbDraft,
   KbHit,
   KbIndex,
@@ -38,6 +41,8 @@ export interface MarkdownProviderOptions {
   root: string;
   /** Where two-phase drafts land (OUTSIDE root — invisibility by location). */
   draftsDir: string;
+  /** Receipt ledger for the commit verb (defaults next to the drafts dir). */
+  receiptsLog?: string;
   /** recentUpdates Top-N for bootstrap (small). */
   recentTopN?: number;
   now?: () => number;
@@ -73,6 +78,7 @@ interface Page {
 export function createMarkdownProvider(opts: MarkdownProviderOptions): KnowledgeProvider {
   const root = resolve(opts.root);
   const draftsDir = resolve(opts.draftsDir);
+  const receiptsLog = resolve(opts.receiptsLog ?? join(opts.draftsDir, "..", "kb-receipts.jsonl"));
   const topN = opts.recentTopN ?? 5;
   const now = opts.now ?? Date.now;
 
@@ -171,6 +177,23 @@ export function createMarkdownProvider(opts: MarkdownProviderOptions): Knowledge
         .filter((p) => scope === undefined || p.id.startsWith(scope))
         .map(toEntry);
       return { entries };
+    },
+
+    /**
+     * Beat 2 (spec #201): the provider owns persistence. The git+markdown
+     * implementation reuses the shared commit helper (already receipt-safe);
+     * a second provider is free to persist anywhere with zero git.
+     */
+    async commit(receipt: WriteReceipt, confirmation: CommitConfirmation): Promise<CommitResult> {
+      return commitDraft({
+        bookRoot: root,
+        draftsDir,
+        receiptsLog,
+        receiptId: receipt.receiptId,
+        pageId: receipt.pageId,
+        evidence: `provider commit (${confirmation.confirmedBy})`,
+        confirmation,
+      });
     },
 
     async writePage(draft: KbDraft): Promise<WriteReceipt> {

@@ -243,3 +243,32 @@ describe("escalationGate config shape", () => {
     }
   });
 });
+
+describe("commit is a provider verb (spec #201)", () => {
+  it("a provider persists a draft through commit(receipt, confirmation) with no governance layer", async () => {
+    const { createMarkdownProvider } = await import("@agentos/knowledge-markdown");
+    const { mkdtempSync, rmSync, readFileSync, existsSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const dir = mkdtempSync(join(tmpdir(), "agentos-provider-commit-"));
+    try {
+      const book = join(dir, "book");
+      const drafts = join(dir, "drafts");
+      const { mkdirSync } = await import("node:fs");
+      mkdirSync(book, { recursive: true });
+      mkdirSync(drafts, { recursive: true });
+      const provider = createMarkdownProvider({ root: book, draftsDir: drafts, receiptsLog: join(dir, "receipts.jsonl") });
+
+      const receipt = await provider.writePage({ title: "Retry policy", body: "# Retry policy\nbody\n", scope: "ops" });
+      const result = await provider.commit(receipt, { confirmedBy: "test:human", confirmedAtMs: Date.now() });
+      expect(result.commit.length).toBeGreaterThan(0);
+      expect(existsSync(result.path)).toBe(true);
+      expect(readFileSync(result.path, "utf8")).toContain("# Retry policy");
+
+      // receipt-safe: the same receipt is refused, never written twice
+      await expect(provider.commit(receipt, { confirmedBy: "test:human", confirmedAtMs: Date.now() })).rejects.toThrow(/already committed/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
