@@ -5,9 +5,40 @@
  */
 import type { Frame, HistoryItem } from "./chat-reducer";
 
-const jget = async <T>(path: string): Promise<T> => (await fetch(path)).json() as Promise<T>;
-const jpost = async <T>(path: string, body: unknown): Promise<T> =>
-  (await fetch(path, { method: "POST", body: JSON.stringify(body), headers: { "content-type": "application/json" } })).json() as Promise<T>;
+/**
+ * Non-2xx is a FAILURE, not a payload (spec #219): a 500 must reach the caller
+ * as a reject so error cards / retry paths can act on it. The body is kept for
+ * the caller's own display; it never contains conversation content (server
+ * error bodies are generic).
+ */
+export class HttpError extends Error {
+  constructor(
+    readonly path: string,
+    readonly status: number,
+    readonly detail: string,
+  ) {
+    super(`${path} answered ${status}`);
+    this.name = "HttpError";
+  }
+}
+
+async function jsonFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(path, init);
+  if (!res.ok) {
+    let detail = "";
+    try {
+      detail = (await res.text()).slice(0, 500);
+    } catch {
+      /* unreadable body: the status is the fact */
+    }
+    throw new HttpError(path, res.status, detail);
+  }
+  return res.json() as Promise<T>;
+}
+
+const jget = <T>(path: string): Promise<T> => jsonFetch<T>(path);
+const jpost = <T>(path: string, body: unknown): Promise<T> =>
+  jsonFetch<T>(path, { method: "POST", body: JSON.stringify(body), headers: { "content-type": "application/json" } });
 
 export interface StatusResponse {
   preset: string;
@@ -36,18 +67,16 @@ export const escalate = (sessionId: string, reason?: string) => jpost<{ ok: bool
 export const answerConfirm = (requestId: string, approved: boolean) => jpost<{ ok: boolean }>("/api/confirm", { requestId, approved });
 
 /** Rename (or, with title=null/"", clear) a session's ledger-side label. */
-export const renameSession = async (id: string, title: string | null): Promise<{ ok: boolean; title: string | null }> =>
-  (
-    await fetch(`/api/sessions/${encodeURIComponent(id)}/title`, {
-      method: "PATCH",
-      body: JSON.stringify({ title }),
-      headers: { "content-type": "application/json" },
-    })
-  ).json() as Promise<{ ok: boolean; title: string | null }>;
+export const renameSession = (id: string, title: string | null): Promise<{ ok: boolean; title: string | null }> =>
+  jsonFetch<{ ok: boolean; title: string | null }>(`/api/sessions/${encodeURIComponent(id)}/title`, {
+    method: "PATCH",
+    body: JSON.stringify({ title }),
+    headers: { "content-type": "application/json" },
+  });
 
 /** Immediate, no-undo removal of a ledger row (does not touch kernel transcripts). */
-export const deleteSession = async (id: string): Promise<{ ok: boolean }> =>
-  (await fetch(`/api/sessions/${encodeURIComponent(id)}`, { method: "DELETE" })).json() as Promise<{ ok: boolean }>;
+export const deleteSession = (id: string): Promise<{ ok: boolean }> =>
+  jsonFetch<{ ok: boolean }>(`/api/sessions/${encodeURIComponent(id)}`, { method: "DELETE" });
 
 /**
  * Past turns for a session (read-only). The server answers 200 + [] for every
@@ -64,6 +93,7 @@ export async function chat(sessionId: string, message: string, onFrame: (frame: 
     body: JSON.stringify({ sessionId, message }),
     headers: { "content-type": "application/json" },
   });
+  if (!res.ok) throw new HttpError("/api/chat", res.status, (await res.text()).slice(0, 500));
   if (!res.body) throw new Error("no response body");
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
