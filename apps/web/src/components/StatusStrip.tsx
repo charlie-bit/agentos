@@ -1,6 +1,7 @@
 import { Boxes, TriangleAlert } from "lucide-react";
 import type { StatusResponse } from "../lib/api";
 import { dialectBadge } from "../lib/dialect";
+import { ThemeToggle } from "./ThemeToggle";
 import { Badge } from "./ui/badge";
 import { ConfigDialog } from "./ConfigDialog";
 
@@ -50,6 +51,7 @@ export function StatusStrip({
           drafts
         </button>
       )}
+      <ThemeToggle />
       <span className="flex-1" />
       {driftCount > 0 ? (
         <Badge className="border-warn text-warn" title={JSON.stringify(status.lastDrift)}>

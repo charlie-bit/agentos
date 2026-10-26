@@ -12,6 +12,7 @@ export function Composer({
   quote,
   onAttach,
   sessionId,
+  clearNonce,
 }: {
   busy: boolean;
   onSend: (text: string) => void;
@@ -22,6 +23,8 @@ export function Composer({
   /** Uploads attachments into the session workspace (spec #276–#278). */
   onAttach?: (file: File) => Promise<{ path: string; size: number }>;
   sessionId?: string;
+  /** Bumping this clears the draft (Esc, spec #281). */
+  clearNonce?: number;
 }) {
   const [value, setValue] = useState("");
   const [attachments, setAttachments] = useState<Array<{ path: string; size: number }>>([]);
@@ -29,6 +32,9 @@ export function Composer({
   const fileRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const attach = onAttach ?? (sessionId ? (file: File) => uploadAttachment(sessionId, file) : undefined);
+  useEffect(() => {
+    if (clearNonce !== undefined && clearNonce > 0) setValue("");
+  }, [clearNonce]);
   useEffect(() => {
     if (!quote) return;
     // Composer is a single-line input by design — a multi-line selection
@@ -99,7 +105,9 @@ export function Composer({
           busy && "opacity-60",
         )}
         value={value}
-        placeholder={busy ? "streaming — finish this turn first" : "message the agent"}
+        placeholder={
+          busy ? "streaming — finish this turn first" : "message the agent  (Esc clears · Alt+↑/↓ switches session)"
+        }
         disabled={busy}
         onChange={(e) => setValue(e.target.value)}
         autoFocus

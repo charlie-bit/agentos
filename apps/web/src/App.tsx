@@ -28,6 +28,7 @@ export default function App() {
   const [needsToken, setNeedsToken] = useState(false);
   const [showFiles, setShowFiles] = useState(false);
   const [showDrafts, setShowDrafts] = useState(false);
+  const [clearNonce, setClearNonce] = useState(0);
 
   const refresh = useCallback(async () => {
     try {
@@ -41,6 +42,22 @@ export default function App() {
       if (err instanceof HttpError && err.status === 403) setNeedsToken(true);
     }
   }, [sessionId]);
+
+  // Keyboard paths (spec #281): Esc clears the draft, Alt+↑/↓ walks sessions.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setClearNonce((n) => n + 1);
+      if (e.altKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
+        const keys = sessions.map((s) => s.external_key.replace(/^web-/, ""));
+        const at = keys.indexOf(sessionId);
+        if (keys.length === 0) return;
+        const next = e.key === "ArrowUp" ? Math.max(0, at - 1) : Math.min(keys.length - 1, at + 1);
+        if (keys[next] !== undefined && next !== at) pickSession(keys[next] as string);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [sessions, sessionId, pickSession]);
 
   useEffect(() => {
     void refresh();
@@ -114,6 +131,7 @@ export default function App() {
             onSend={(t) => void send(t)}
             onStop={() => void stop()}
             quote={quote}
+            clearNonce={clearNonce}
           />
             </div>
             {showFiles && <FilePanel sessionId={sessionId} onClose={() => setShowFiles(false)} />}

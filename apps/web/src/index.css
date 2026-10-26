@@ -129,3 +129,34 @@ body {
   font-size: 14px;
   line-height: 1.5;
 }
+
+/* Explicit theme (spec #280): the switch pins data-theme; auto removes it. */
+:root[data-theme="dark"] {
+    --background: oklch(0.14 0.012 250);
+    --foreground: oklch(0.97 0.005 250);
+    --card: oklch(0.175 0.014 250);
+    --card-foreground: oklch(0.97 0.005 250);
+    --popover: oklch(0.19 0.014 250);
+    --popover-foreground: oklch(0.97 0.005 250);
+    --primary: oklch(0.68 0.17 160);
+    --primary-foreground: oklch(0.21 0.05 160);
+    --secondary: oklch(0.225 0.014 250);
+    --secondary-foreground: oklch(0.97 0.005 250);
+    --muted: oklch(0.225 0.014 250);
+    --muted-foreground: oklch(0.705 0.018 250);
+    --accent: oklch(0.245 0.016 250);
+    --accent-foreground: oklch(0.97 0.005 250);
+    --destructive: oklch(0.704 0.191 22.216);
+    --destructive-foreground: oklch(0.14 0.012 250);
+    --border: oklch(0.272 0.015 250);
+    --input: oklch(0.272 0.015 250);
+    --ring: oklch(0.68 0.17 160);
+    --ok: oklch(0.765 0.177 163.223);
+    --warn: oklch(0.828 0.189 84.429);
+    --err: oklch(0.704 0.191 22.216);
+  --run: oklch(0.707 0.165 254.624);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+}
