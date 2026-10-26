@@ -1229,3 +1229,60 @@ describe("GET /api/sessions?q= (spec #267)", () => {
     expect((await api(srv, `/api/sessions?q=${"x".repeat(201)}`)).status).toBe(400);
   });
 });
+
+describe("POST /api/sessions/:id/attachments (spec #276)", () => {
+  async function wired(): Promise<{ srv: RunningServer; ws: string }> {
+    const dir = mkdtempSync(join(tmpdir(), "agentos-att-"));
+    tempDirs.push(dir);
+    const ws = join(dir, "workspaces", "web-att");
+    mkdirSync(ws, { recursive: true });
+    const dbPath = join(dir, "sessions.db");
+    const srv = await startServer({
+      presetName: "p",
+      model: { provider: "v" },
+      mounts: [],
+      runner: async () => ({}),
+      ledger: openLedger(dbPath),
+      port: 0,
+      dbPath,
+      staticDir: makeStaticDir(dir),
+      workspaceDirFor: (key) => (key === "web-att" ? ws : null),
+    });
+    servers.push(srv);
+    return { srv, ws };
+  }
+
+  it("writes the upload inside the session workspace", async () => {
+    const { srv, ws } = await wired();
+    const res = await api(srv, "/api/sessions/att/attachments", {
+      method: "POST",
+      body: "attachment body",
+      headers: { "x-filename": encodeURIComponent("notes.txt") },
+    });
+    expect(res.status).toBe(200);
+    expect((await res.json()) as unknown).toEqual({ path: "attachments/notes.txt", size: 15 });
+    expect(readFileSync(join(ws, "attachments", "notes.txt"), "utf8")).toBe("attachment body");
+  });
+
+  it("sanitizes traversal in the filename and refuses oversized bodies", async () => {
+    const { srv, ws } = await wired();
+    const res = await api(srv, "/api/sessions/att/attachments", {
+      method: "POST",
+      body: "x",
+      headers: { "x-filename": encodeURIComponent("../../evil.sh") },
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { path: string };
+    expect(body.path.startsWith("attachments/")).toBe(true);
+    // no separator survives in the name, and the target resolves inside ws
+    expect(body.path.slice("attachments/".length)).not.toContain("/");
+    expect(readFileSync(join(ws, body.path), "utf8")).toBe("x");
+
+    const big = await api(srv, "/api/sessions/att/attachments", {
+      method: "POST",
+      body: "y".repeat(5_000_001),
+      headers: { "x-filename": "big.bin" },
+    });
+    expect(big.status).toBe(413);
+  });
+});

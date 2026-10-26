@@ -5,7 +5,7 @@ import { Badge } from "./ui/badge";
 import { ConfigDialog } from "./ConfigDialog";
 
 /** GET /api/status — the plugin sockets as built: mounts + degradation + drift. */
-export function StatusStrip({ status }: { status: StatusResponse | null }) {
+export function StatusStrip({ status, onToggleFiles }: { status: StatusResponse | null; onToggleFiles?: () => void }) {
   if (!status) return <header className="flex items-center gap-2 border-b border-border px-4 py-2 text-xs text-muted-foreground">loading status…</header>;
   const driftCount = status.lastDrift ? status.lastDrift.missing.length + status.lastDrift.undeclared.length : 0;
   return (
@@ -32,6 +32,11 @@ export function StatusStrip({ status }: { status: StatusResponse | null }) {
         </Badge>
       ))}
       <ConfigDialog status={status} />
+      {onToggleFiles && (
+        <button onClick={onToggleFiles} title="session workspace files" className="rounded-md p-1 text-muted-foreground hover:bg-card hover:text-foreground">
+          files
+        </button>
+      )}
       <span className="flex-1" />
       {driftCount > 0 ? (
         <Badge className="border-warn text-warn" title={JSON.stringify(status.lastDrift)}>

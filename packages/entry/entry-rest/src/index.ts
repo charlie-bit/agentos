@@ -21,7 +21,7 @@
  * whitelisted under the built dist with traversal rejection.
  */
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
-import { appendFileSync, closeSync, existsSync, fstatSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, realpathSync, statSync } from "node:fs";
+import { appendFileSync, closeSync, existsSync, fstatSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, realpathSync, statSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, normalize, resolve, sep } from "node:path";
 import { userInfo } from "node:os";
 import { DatabaseSync } from "node:sqlite";
@@ -815,6 +815,49 @@ export async function startServer(o: StartServerOptions): Promise<RunningServer>
       } catch {
         return sendJson(res, 200, { entries: [] }); // reader blew up: degrade, never 500
       }
+    }
+    const attachMatch = /^\/api\/sessions\/([^/]+)\/attachments$/.exec(path);
+    if (req.method === "POST" && attachMatch) {
+      // Attachment upload (spec #276): raw body + encoded filename header.
+      // Bounded (5MB) and written only inside the session workspace.
+      if (!o.workspaceDirFor) return sendJson(res, 501, { error: "workspace access not wired by this deployment" });
+      let requested: string;
+      try {
+        requested = decodeURIComponent(attachMatch[1] ?? "");
+      } catch {
+        return sendJson(res, 400, { error: "undecodable session id" });
+      }
+      if (requested.length === 0 || requested.length > 200) return sendJson(res, 400, { error: "invalid session id" });
+      const key = isWebExternalKey(requested) ? requested : webExternalKey(requested);
+      const dir = o.workspaceDirFor(key);
+      if (dir === null) return sendJson(res, 404, { error: "session has no workspace" });
+      const rawName = req.headers["x-filename"];
+      let filename: string;
+      try {
+        filename = decodeURIComponent((Array.isArray(rawName) ? rawName[0] : rawName) ?? "");
+      } catch {
+        return sendJson(res, 400, { error: "undecodable filename" });
+      }
+      const safe = filename.replace(/[^A-Za-z0-9._ -]+/g, "_").replace(/^\.+/, "").slice(0, 120);
+      if (safe.length === 0) return sendJson(res, 400, { error: "filename required (x-filename header)" });
+      const chunks: Buffer[] = [];
+      let size = 0;
+      let tooLarge = false;
+      for await (const c of req) {
+        size += (c as Buffer).length;
+        if (size > 5_000_000) {
+          tooLarge = true;
+          break;
+        }
+        chunks.push(c as Buffer);
+      }
+      if (tooLarge) return sendJson(res, 413, { error: "attachment exceeds 5MB" });
+      const rel = `attachments/${safe}`;
+      const target = resolve(join(dir, rel));
+      if (!target.startsWith(resolve(dir) + sep)) return sendJson(res, 400, { error: "invalid filename" });
+      mkdirSync(dirname(target), { recursive: true });
+      writeFileSync(target, Buffer.concat(chunks));
+      return sendJson(res, 200, { path: rel, size });
     }
     if (req.method === "GET" && path === "/api/workspace/file") {
       if (!o.workspaceDirFor) return sendJson(res, 501, { error: "workspace access not wired by this deployment" });

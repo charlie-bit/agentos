@@ -161,6 +161,40 @@ export async function chat(sessionId: string, message: string, onFrame: (frame: 
   }
 }
 
+/** Session workspace listing/reading (spec #105/#256/#257/#275). */
+export interface WorkspaceFile { path: string; size: number; mtimeMs: number }
+export const getWorkspaceFiles = (sessionId: string) =>
+  jget<{ files: WorkspaceFile[]; limit: number }>(`/api/workspace/files?session=${encodeURIComponent(sessionId)}`);
+export const readWorkspaceFile = (sessionId: string, path: string) =>
+  jget<{ path: string; size: number; content: string; truncated: boolean }>(
+    `/api/workspace/file?session=${encodeURIComponent(sessionId)}&path=${encodeURIComponent(path)}`,
+  );
+
+/** Download URLs (browser-native navigation, token included) — spec #106/#107/#261. */
+export const exportUrl = (sessionId: string, format: "jsonl" | "md") =>
+  `/api/sessions/${encodeURIComponent(sessionId)}/export?format=${format}${accessToken() ? `&token=${encodeURIComponent(accessToken() as string)}` : ""}`;
+
+export const exportSessions = async (ids: string[]): Promise<Blob> => {
+  const res = await fetch("/api/sessions/export", {
+    method: "POST",
+    body: JSON.stringify({ ids }),
+    headers: authHeaders({ "content-type": "application/json" }),
+  });
+  if (!res.ok) throw new HttpError("/api/sessions/export", res.status, (await res.text()).slice(0, 300));
+  return res.blob();
+};
+
+/** Attachment upload (spec #276): raw body + filename header, size-capped server-side. */
+export const uploadAttachment = async (sessionId: string, file: File): Promise<{ path: string; size: number }> => {
+  const res = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/attachments`, {
+    method: "POST",
+    body: file,
+    headers: authHeaders({ "x-filename": encodeURIComponent(file.name), "content-type": "application/octet-stream" }),
+  });
+  if (!res.ok) throw new HttpError("/api/sessions/attachments", res.status, (await res.text()).slice(0, 300));
+  return (await res.json()) as { path: string; size: number };
+};
+
 /** localStorage key for the browser identity (shared, never re-spelled elsewhere). */
 export const SESSION_KEY = "agentos.web.session";
 

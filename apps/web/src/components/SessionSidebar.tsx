@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { Download, Pencil, Plus, Trash2 } from "lucide-react";
+import { exportSessions, exportUrl } from "../lib/api";
 import { browserSessionId } from "@agentos/contracts/session-key";
 import { cn, relTime } from "../lib/utils";
 import type { SessionRow } from "../lib/api";
@@ -108,18 +109,48 @@ export function SessionSidebar({
   onDelete: (id: string) => void;
 }) {
   const [query, setQuery] = useState("");
+  const [selecting, setSelecting] = useState(false);
+  const [picked, setPicked] = useState<Set<string>>(new Set());
   const visible = useMemo(() => filterSessions(sessions, query), [sessions, query]);
+  const toggle = (id: string) =>
+    setPicked((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const exportPicked = async () => {
+    if (picked.size === 0) return;
+    const blob = await exportSessions([...picked]).catch(() => undefined);
+    if (!blob) return;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "agentos-sessions.jsonl";
+    a.click();
+    URL.revokeObjectURL(url);
+    setSelecting(false);
+    setPicked(new Set());
+  };
   return (
     <aside className="flex w-52 shrink-0 flex-col gap-1 overflow-y-auto border-r border-border p-2">
       <div className="flex items-center justify-between px-1 pb-1">
         <span className="text-[11px] uppercase tracking-wide text-muted-foreground">sessions (ledger)</span>
-        <button
-          onClick={onNew}
-          title="new session"
-          className="rounded-md p-0.5 text-muted-foreground hover:bg-card hover:text-foreground"
-        >
-          <Plus className="h-3.5 w-3.5" />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => {
+              setSelecting((v) => !v);
+              setPicked(new Set());
+            }}
+            title="select sessions to export"
+            className={cn("rounded-md px-1 text-[10px] hover:bg-card", selecting ? "text-primary" : "text-muted-foreground")}
+          >
+            {selecting ? "cancel" : "export"}
+          </button>
+          <button onClick={onNew} title="new session" className="rounded-md p-0.5 text-muted-foreground hover:bg-card hover:text-foreground">
+            <Plus className="h-3.5 w-3.5" />
+          </button>
+        </div>
       </div>
       <input
         value={query}
@@ -134,17 +165,43 @@ export function SessionSidebar({
       {sessions.length > 0 && visible.length === 0 && (
         <div className="px-1 text-xs text-muted-foreground">no session matches "{query}"</div>
       )}
+      {selecting && (
+        <button
+          onClick={() => void exportPicked()}
+          disabled={picked.size === 0}
+          className="mx-1 mb-1 rounded-md border border-border px-2 py-1 text-[11px] disabled:opacity-40"
+        >
+          export {picked.size} selected
+        </button>
+      )}
       {visible.map((row) => {
         const browserId = browserSessionId(row.external_key);
-        return (
-          <SessionItem
+        return selecting ? (
+          <label key={row.id} className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-card">
+            <input type="checkbox" checked={picked.has(browserId)} onChange={() => toggle(browserId)} />
+            <span className="min-w-0 flex-1 truncate font-mono">{row.title?.trim() || browserId.slice(0, 8)}</span>
+          </label>
+        ) : (
+          <div key={row.id} className="group/row flex items-center gap-1">
+            <div className="min-w-0 flex-1">
+              <SessionItem
             key={row.id}
             row={row}
             active={browserId === activeKey}
             onPick={onPick}
             onRename={onRename}
-            onDelete={onDelete}
-          />
+              onDelete={onDelete}
+              />
+            </div>
+            <a
+              href={exportUrl(browserId, "jsonl")}
+              download={`agentos-session-${browserId}.jsonl`}
+              title="download this session (JSONL)"
+              className="shrink-0 pr-1 text-muted-foreground opacity-0 group-hover/row:opacity-100 hover:text-foreground"
+            >
+              <Download className="h-3 w-3" />
+            </a>
+          </div>
         );
       })}
     </aside>

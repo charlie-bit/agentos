@@ -10,6 +10,7 @@ import { ConfirmModal } from "./components/ConfirmModal";
 import { SessionSidebar } from "./components/SessionSidebar";
 import { StatusStrip } from "./components/StatusStrip";
 import { TokenGate } from "./components/TokenGate";
+import { FilePanel } from "./components/FilePanel";
 import { UsageBar } from "./components/UsageBar";
 
 /** Sidebar polling cadence — a session running from another tab/device must
@@ -24,6 +25,7 @@ export default function App() {
   const [escalations, setEscalations] = useState(0);
   const [quote, setQuote] = useState<{ text: string; nonce: number } | undefined>();
   const [needsToken, setNeedsToken] = useState(false);
+  const [showFiles, setShowFiles] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -73,7 +75,7 @@ export default function App() {
 
   return (
     <div className="flex h-full flex-col">
-      <StatusStrip status={status} />
+      <StatusStrip status={status} onToggleFiles={() => setShowFiles((v) => !v)} />
       <div className="flex min-h-0 flex-1">
         <SessionSidebar
           sessions={sessions}
@@ -84,6 +86,8 @@ export default function App() {
           onDelete={handleDelete}
         />
         <div className="flex min-w-0 flex-1 flex-col">
+          <div className="flex min-h-0 flex-1">
+            <div className="flex min-w-0 flex-1 flex-col">
           <ChatStream
             state={state}
             onQuote={(text) => setQuote({ text, nonce: Date.now() })}
@@ -97,7 +101,17 @@ export default function App() {
               click) must be visible immediately, not only once a reply comes
               back — remounting drops stale draft text and refires autoFocus,
               which is the click's whole user-visible feedback. */}
-          <Composer key={sessionId} busy={state.conn !== "idle"} onSend={(t) => void send(t)} onStop={() => void stop()} quote={quote} />
+          <Composer
+            key={sessionId}
+            sessionId={sessionId}
+            busy={state.conn !== "idle"}
+            onSend={(t) => void send(t)}
+            onStop={() => void stop()}
+            quote={quote}
+          />
+            </div>
+            {showFiles && <FilePanel sessionId={sessionId} onClose={() => setShowFiles(false)} />}
+          </div>
         </div>
       </div>
       <UsageBar usage={state.usage} escalations={escalations} sessionId={sessionId} onEscalated={setEscalations} modelShort={state.modelShort} />
