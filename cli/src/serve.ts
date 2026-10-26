@@ -121,7 +121,7 @@ function collectYml(dir: string): string[] {
 const write = (s: string) => process.stdout.write(s);
 
 /** Shared assembly: dogfood manifest loading -> reference validation -> plans. */
-function assemble(flags: ServeFlags): { ok: true; value: Assembly } | { ok: false; exitCode: number; lines: string[] } {
+export function assemble(flags: ServeFlags): { ok: true; value: Assembly } | { ok: false; exitCode: number; lines: string[] } {
   const presetPath = resolve(flags.preset);
   if (!existsSync(presetPath)) return { ok: false, exitCode: 1, lines: [`✗ preset not found: ${flags.preset}`] };
   const configRoot = resolve(dirname(presetPath), "..");
@@ -146,9 +146,9 @@ function assemble(flags: ServeFlags): { ok: true; value: Assembly } | { ok: fals
 
   const repoRoot = findRepoRoot(process.cwd());
   process.env.AGENTOS_FS_ROOT ??= repoRoot;
-  // demo gateway lease placeholder (unreachable by design, fail-loud loader):
-  // see scripts/p2-smoke.mjs for the identical rationale.
-  process.env.AGENTOS_EXAMPLE_MCP_TOKEN ??= "serve-placeholder-not-real";
+  // No credential sugar here (spec #227): a manifest whose lease cannot be
+  // resolved must fail loudly at plan time. The doc placeholder mount is
+  // declared with enabled:false instead of being propped up with a fake token.
   const tools = manifests.filter((m): m is Extract<AnyManifest, { kind: "tool" }> => m.kind === "tool");
   const { plans, errors, warnings } = planTools(tools);
   if (errors.length) return { ok: false, exitCode: 1, lines: errors.map((e) => `✗ ${e.path}: ${e.message}`) };

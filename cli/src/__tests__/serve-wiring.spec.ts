@@ -73,3 +73,27 @@ describe("wireKnowledge — confirm capability is read, never assumed (#203)", (
     expect(names).not.toContain("kb_commit");
   });
 });
+
+describe("serve assembly has no credential sugar (spec #227)", () => {
+  it("does not invent AGENTOS_EXAMPLE_MCP_TOKEN, and the disabled doc mount is skipped", async () => {
+    const { assemble } = await import("../serve.js");
+    const { locateTarget } = await import("../preset-validate.js");
+    const preset = locateTarget("config/presets/example.yml");
+    expect(preset).not.toBeNull();
+
+    const saved = process.env.AGENTOS_EXAMPLE_MCP_TOKEN;
+    delete process.env.AGENTOS_EXAMPLE_MCP_TOKEN;
+    try {
+      const asm = assemble({ preset: preset as string });
+      expect(asm.ok).toBe(true);
+      if (!asm.ok) return;
+      expect(process.env.AGENTOS_EXAMPLE_MCP_TOKEN).toBeUndefined();
+      // the placeholder http mount is declared enabled:false -> not planned
+      expect(asm.value.plans.map((p) => p.key)).not.toContain("mcp-remote-example");
+      expect(asm.value.plans.map((p) => p.key)).toContain("mcp-filesystem");
+    } finally {
+      if (saved === undefined) delete process.env.AGENTOS_EXAMPLE_MCP_TOKEN;
+      else process.env.AGENTOS_EXAMPLE_MCP_TOKEN = saved;
+    }
+  });
+});
