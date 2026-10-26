@@ -219,15 +219,15 @@
 - [ ] 149 KB 草稿收件箱 — 未实现
 - [ ] 150 草稿审阅/确认 — 未实现
 - [~] 151 门禁实时推送 — SSE 帧已推（confirm.request），无轮询需求；状态成立
-- [~] 152 工具卡片可展开 — 已可展开（入参）；结果摘要/耗时/指针缺（#273/#274）
-- [ ] 153 落盘文件内联预览 — 未实现
+- [~] 152 工具卡片 — 展开已可；结果摘要/落盘链接缺（耗时由 #273 落地） — 已可展开（入参）；结果摘要/耗时/指针缺（#273/#274）
+- [x] 153 落盘文件内联预览 — FilePanel 文本预览（100KB 截断）+ 下载（#275） — 未实现
 - [ ] 154 附件上传 — 未实现
-- [ ] 155 token 实时显示 — 仅结果帧汇总
-- [ ] 156 深浅色主题 — 仅 media query，无切换器
-- [ ] 157 键盘操作 — 仅 Enter 发送
-- [ ] 158 重连恢复 — 未实现
+- [x] 155 token 实时显示 — usage.delta + reducer live + UsageBar 实时（#279） — 仅结果帧汇总
+- [x] 156 深浅色主题 — auto/light/dark 切换 + data-theme（#280） — 仅 media query，无切换器
+- [x] 157 键盘操作 — Esc 清稿 / Alt+↑↓ 切会话 / Enter 发送 / 停止与确认按钮（#281） — 仅 Enter 发送
+- [x] 158 重连恢复 — 有界重试（仅未收到帧时）+ 失败后从 messages 回放（#282） — 未实现
 - [ ] 159 Web E2E 基建 — 未实现
-- [ ] 160 错误上报面板 — 未实现
+- [x] 160 错误上报面板 — ErrorBoundary + 预填 issue（仅版本/preset/会话 id）+ promise 漏斗（#285/#286） — 未实现
 
 ## M19 二期 工程化收尾（161–170）
 
@@ -305,7 +305,7 @@
 - [x] 219 API 客户端忽略 HTTP 状态 — HttpError + api.spec
 - [ ] 220 /healthz 装饰性 — 仍恒 {ok:true}（随 #292）
 - [x] 221 GET /api/sessions 硬 LIMIT — limit/offset/total/hasMore
-- [ ] 222 entry-rest 包内回归测试 — 仅 conformance 覆盖
+- [x] 222 entry-rest 包内回归测试 — routes.spec（healthz/status/title/delete/messages） — 仅 conformance 覆盖
 - [x] 223 web- 前缀四处手写 — contracts/session-key 单一定义
 - [x] 224 draft 头跨包魔法常量 — contracts renderDraftFile/stripDraftHeader
 - [x] 225 overview 无 token 预算 — renderIndex 120 条上限 + 截断
@@ -335,7 +335,7 @@
 - [x] 243 ModelProviderRuntime 死接口 — 随 #202 删除并替换为 ModelDialect
 - [x] 244 envRouting 死字段 — 随 #207 有消费方
 - [x] 245 KB_POINTER_LINE 死导出 — kbPointerLine 单一定义，serve 消费
-- [ ] 246 listPages 消费方/conformance-only 注记
+- [x] 246 listPages 注记 — 契约注释 + 双语 README 说明其现状
 - [x] 247 usageAttr 死接线 — 随 #209 打通
 - [x] 248 skills/ vendored 内容处置 — 整树移出仓库（git rm），skills 唯一通道=knowledge provider
 - [x] 249 .agentos 遗留目录清除 — workspace/acceptance/notes 已删，运行时只落六类子路径
@@ -350,10 +350,10 @@
 - [x] 255 前端停止按钮 — Composer Stop + aborted 结果渲染
 - [x] 256 workspace 列表端点 — `GET /api/workspace/files`
 - [x] 257 workspace 读端点 — `GET /api/workspace/file`（lexical + realpath 围栏，1MB 帽）
-- [ ] 258 FilePanel 前端
+- [x] 258 FilePanel — 列表/预览/下载，右侧可折叠面板
 - [x] 259 单会话导出端点 — `GET /api/sessions/:id/export?format=jsonl|md`
 - [x] 260 批量导出端点 — `POST /api/sessions/export` NDJSON bundle
-- [ ] 261 导出 UI
+- [x] 261 导出 UI — 行内 JSONL 下载 + 多选批量导出
 - [x] 262 status 四层披露 — mounts.manifestPath + knowledge/entry/dialect
 - [x] 263 ConfigDialog 路径渲染 — 四层各自文件路径 + env-NAME 注记
 - [x] 264 错误分类学 — classifyTurnError + 四型渲染 + 测试
@@ -365,23 +365,23 @@
 
 ## M26 Web 二期任务分解（270–286）
 
-- [ ] 270 KB 草稿列表端点
-- [ ] 271 草稿 commit/discard 端点
-- [ ] 272 DraftInbox 前端
-- [ ] 273 工具卡片数据面（摘要/耗时/指针）
-- [ ] 274 工具卡片展开补全
-- [ ] 275 文件内联预览
-- [ ] 276 附件上传端点
-- [ ] 277 附件指针注入
-- [ ] 278 附件 UI
-- [ ] 279 流式 usage
-- [ ] 280 主题切换
-- [ ] 281 键盘路径
-- [ ] 282 重连恢复
+- [x] 270 KB 草稿列表端点 — GET /api/kb/drafts（注入 supplier）
+- [x] 271 草稿 commit/discard 端点 — 未知 receipt 409 / 非法 id 400
+- [x] 272 DraftInbox — 预览 + commit/discard 双按钮
+- [x] 273 工具卡片数据面 — tool.result 携带 tool + durationMs（摘要/耗时/指针）
+- [~] 274 工具卡片展开 — 入参 + 耗时；结果摘要/落盘链接缺（需 result 内容面）
+- [x] 275 文件内联预览 — FilePanel 文本预览 + 截断提示
+- [x] 276 附件上传端点 — 5MB 帽 + 文件名消毒 + workspace 围栏
+- [x] 277 附件指针注入 — turn prompt 附 workspace 路径块（Read 可达）
+- [x] 278 附件 UI — Composer 回形针 + chip 列表
+- [x] 279 流式 usage — assistant usage → usage.delta → UsageBar 实时
+- [x] 280 主题切换 — auto/light/dark + localStorage
+- [x] 281 键盘路径 — Esc / Alt+↑↓ / Enter / 按钮
+- [x] 282 重连恢复 — 有界重试 + hydrate 回放
 - [ ] 283 E2E 测试基建
 - [ ] 284 E2E 扩展面
-- [ ] 285 错误上报面板
-- [ ] 286 异步错误挂钩
+- [x] 285 错误上报面板 — ErrorBoundary + 预填 issue 链接
+- [x] 286 异步错误挂钩 — unhandledrejection → 同一面板
 
 ## M27 配置面与诊断 API（287–293）
 
@@ -414,7 +414,7 @@
 - [ ] 304 真实第二方接入实证
 - [ ] 305 全链路冒烟（写回/导出段）
 - [ ] 306 v1.0 roadmap 跟踪件
-- [ ] 307 审计例程化
+- [x] 307 审计例程化 — docs/audit-routine.md 五路复跑时机与产出
 
 ---
 
