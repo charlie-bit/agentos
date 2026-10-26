@@ -339,7 +339,8 @@ describe("escalation + status hygiene", () => {
     expect(body).not.toContain(FAKE_URL); // leak-canary sentinels absent — grep-grade assertion
     expect(body).not.toContain(FAKE_KEY);
     await readFrames(await postJson(srv, "/api/chat", { sessionId: "d", message: "m" }));
-    const after = (await (await api(srv, "/api/status")).json()) as { lastDrift: unknown };
+    // Drift is per-session (spec #218): the caller names the session it asks about.
+    const after = (await (await api(srv, "/api/status?session=d")).json()) as { lastDrift: unknown };
     expect(after.lastDrift).toEqual({ missing: ["fs/x"], undeclared: [] });
   });
 });
@@ -543,5 +544,33 @@ describe("concurrent tabs (spec #216)", () => {
     expect((confirmsB[0]?.payload as { requestId: string }).requestId).toBe(reqB);
     expect(verdicts["web-a"]).toBe(true);
     expect(verdicts["web-b"]).toBe(false);
+  });
+});
+
+describe("per-session drift status (spec #218)", () => {
+  it("session A's drift is not reported as session B's", async () => {
+    const { srv } = await boot(async (ctx) => {
+      if (ctx.externalKey === "web-a") {
+        ctx.emit({ type: "kernel.system.drift", payload: { missing: ["fs/read_text_file"], undeclared: [] }, timestampMs: 1 });
+      }
+      ctx.emit({ type: "result", payload: { subtype: "success", isError: false }, timestampMs: 2 });
+      return {};
+    });
+
+    const run = async (sessionId: string) => {
+      const res = await postJson(srv, "/api/chat", { sessionId, message: "go" });
+      await res.text(); // drain
+    };
+    await run("a");
+    await run("b");
+
+    const statusOf = async (session?: string) =>
+      (await (await api(srv, `/api/status${session === undefined ? "" : `?session=${session}`}`)).json()) as {
+        lastDrift: { missing: string[]; undeclared: string[] } | null;
+      };
+
+    expect((await statusOf("a")).lastDrift).toEqual({ missing: ["fs/read_text_file"], undeclared: [] });
+    expect((await statusOf("b")).lastDrift).toBeNull();
+    expect((await statusOf()).lastDrift).toBeNull();
   });
 });

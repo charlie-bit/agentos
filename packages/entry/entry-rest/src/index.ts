@@ -138,7 +138,8 @@ export class EntryRest implements EntryAdapter {
   /** externalKey -> live SSE responses (multi-tab). */
   private readonly streams = new Map<string, ServerResponse[]>();
   private readonly pending = new Map<string, Pending>();
-  private lastDrift: { missing: string[]; undeclared: string[] } | null = null;
+  /** Drift observed in a session's turn, keyed by externalKey — never one shared slot. */
+  private readonly lastDriftByKey = new Map<string, { missing: string[]; undeclared: string[] }>();
   private boundKey?: string;
 
   constructor(
@@ -182,7 +183,7 @@ export class EntryRest implements EntryAdapter {
           if (!event || typeof event.type !== "string") continue;
           if (event.type === "kernel.system.drift") {
             const p = (event.payload ?? {}) as { missing?: string[]; undeclared?: string[] };
-            this.lastDrift = { missing: p.missing ?? [], undeclared: p.undeclared ?? [] };
+            this.lastDriftByKey.set(key, { missing: p.missing ?? [], undeclared: p.undeclared ?? [] });
           }
           res.write(`data: ${JSON.stringify(event)}\n\n`);
         } catch {
@@ -245,8 +246,16 @@ export class EntryRest implements EntryAdapter {
     });
   }
 
-  statusSnapshot(): { lastDrift: { missing: string[]; undeclared: string[] } | null; waitingConfirms: number } {
-    return { lastDrift: this.lastDrift, waitingConfirms: this.pending.size };
+  /**
+   * Status for ONE session (spec #218): the caller names the externalKey, so
+   * session A's drift can never be reported as session B's. Absent key or no
+   * drift observed = null, never another session's record.
+   */
+  statusSnapshot(externalKey?: string): { lastDrift: { missing: string[]; undeclared: string[] } | null; waitingConfirms: number } {
+    return {
+      lastDrift: externalKey === undefined ? null : (this.lastDriftByKey.get(externalKey) ?? null),
+      waitingConfirms: this.pending.size,
+    };
   }
 
   /** Deny every outstanding confirm (shutdown path). */
@@ -329,7 +338,7 @@ export async function startServer(o: StartServerOptions): Promise<RunningServer>
         model: { provider: o.model.provider, baseUrlEnv: o.model.baseUrlEnv ?? null, credentialsEnv: o.model.credentialsEnv ?? null },
         mounts: o.mounts,
         systemPrompt: o.systemPrompt ?? null,
-        ...entry.statusSnapshot(),
+        ...entry.statusSnapshot(url.searchParams.get("session") ? `web-${url.searchParams.get("session") as string}` : undefined),
       });
     }
     if (req.method === "GET" && path === "/api/sessions") {

@@ -23,14 +23,14 @@ export default function App() {
 
   const refresh = useCallback(async () => {
     try {
-      const [s, l, e] = await Promise.all([getStatus(), getSessions(), getEscalations()]);
+      const [s, l, e] = await Promise.all([getStatus(sessionId), getSessions(), getEscalations()]);
       setStatus(s);
       setSessions(l.sessions);
       setEscalations(e.count);
     } catch {
       /* server (re)starting: next refresh recovers */
     }
-  }, []);
+  }, [sessionId]);
 
   useEffect(() => {
     void refresh();

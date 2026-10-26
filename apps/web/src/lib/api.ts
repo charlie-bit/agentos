@@ -27,7 +27,9 @@ export interface SessionRow {
   title: string | null;
 }
 
-export const getStatus = () => jget<StatusResponse>("/api/status");
+/** Drift is per-session server-side (#218): name the session being viewed. */
+export const getStatus = (browserSessionId?: string) =>
+  jget<StatusResponse>(`/api/status${browserSessionId ? `?session=${encodeURIComponent(browserSessionId)}` : ""}`);
 export const getSessions = () => jget<{ sessions: SessionRow[] }>("/api/sessions");
 export const getEscalations = () => jget<{ count: number }>("/api/escalations");
 export const escalate = (sessionId: string, reason?: string) => jpost<{ ok: boolean }>("/api/escalate", { sessionId, reason });
