@@ -122,6 +122,16 @@ export interface StartServerOptions {
    */
   workspaceDirFor?: (externalKey: string) => string | null;
   /**
+   * Per-mount health (spec #125/#220/#292): answered on /healthz, which stays
+   * 200 even when something is unhealthy — the body carries the verdict.
+   */
+  health?: () => ServerHealth | Promise<ServerHealth>;
+  /**
+   * Operational log tail (spec #124/#292). Redaction is the supplier's duty;
+   * this route only bounds and forwards.
+   */
+  logs?: (q: { lines?: number }) => Array<{ name: string; lines: string[] }> | Promise<Array<{ name: string; lines: string[] }>>;
+  /**
    * KB draft inbox (spec #270–#272): list pending drafts, commit or discard.
    * Absent = 501. The human gate is the local token + the click itself.
    */
@@ -191,6 +201,11 @@ export interface KbDraftSummary {
   title: string;
   preview: string;
   createdAtMs: number | null;
+}
+
+export interface ServerHealth {
+  model?: { key: string; healthy: boolean; reason?: string };
+  mounts: Array<{ key: string; healthy: boolean; version?: string; reason?: string }>;
 }
 
 export interface RunningServer {
@@ -614,7 +629,19 @@ export async function startServer(o: StartServerOptions): Promise<RunningServer>
     if (o.token !== undefined && path.startsWith("/api/") && !tokenOk(req, url)) {
       return sendJson(res, 403, { error: "token required (x-agentos-token header or ?token=)" });
     }
-    if (req.method === "GET" && path === "/healthz") return sendJson(res, 200, { ok: true });
+    if (req.method === "GET" && path === "/healthz") {
+      // Liveness is the process; health is the body. A dead mount/channel is
+      // reported unhealthy while the endpoint itself stays 200 (spec #220).
+      let health: ServerHealth = { mounts: [] };
+      if (o.health) {
+        try {
+          health = await o.health();
+        } catch {
+          health = { mounts: [], model: { key: "unknown", healthy: false, reason: "health probe failed" } };
+        }
+      }
+      return sendJson(res, 200, { ok: true, ...health });
+    }
     if (req.method === "GET" && path === "/api/status") {
       return sendJson(res, 200, {
         preset: o.presetName,
@@ -925,6 +952,18 @@ export async function startServer(o: StartServerOptions): Promise<RunningServer>
         return sendJson(res, 200, aggregate);
       } catch {
         return sendJson(res, 200, { rows: [], totals: null, error: "usage log unreadable" });
+      }
+    }
+    if (req.method === "GET" && path === "/api/logs") {
+      if (!o.logs) return sendJson(res, 200, { files: [] });
+      const rawLines = url.searchParams.get("lines");
+      const lines = rawLines === null ? 100 : Number(rawLines);
+      if (!Number.isFinite(lines)) return sendJson(res, 400, { error: "lines must be a number" });
+      try {
+        const files = await o.logs({ lines: Math.min(500, Math.max(1, Math.trunc(lines))) });
+        return sendJson(res, 200, { files: Array.isArray(files) ? files : [] });
+      } catch {
+        return sendJson(res, 200, { files: [] });
       }
     }
     if (req.method === "GET" && path === "/api/kb/drafts") {

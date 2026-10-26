@@ -38,6 +38,7 @@ import { dialect as compatDialect } from "@agentos/model-anthropic-compat";
 import { dialect as bedrockDialect } from "@agentos/model-bedrock";
 import { dialect as openaiDialect } from "@agentos/model-openai-compat";
 import { runPresetValidate } from "./preset-validate.js";
+import { appendLog, readLogs } from "./logs.js";
 import { commitDraft } from "@agentos/core";
 import { EntryCli, formatUsageSummary } from "@agentos/entry-cli";
 import { startServer, CAPABILITIES as REST_CAPABILITIES, ENTRY_NAME as REST_ENTRY, type ToolDescriptor } from "@agentos/entry-rest";
@@ -140,6 +141,9 @@ function collectYml(dir: string): string[] {
 }
 
 const write = (s: string) => process.stdout.write(s);
+
+/** Dialect registry (spec #210): adding a vendor family is a package + a row. */
+const dialects = { "anthropic-compat": compatDialect, bedrock: bedrockDialect, "openai-compat": openaiDialect } as const;
 
 /**
  * Resolve a web-supplied preset name/path to a validator target (spec #289).
@@ -278,9 +282,6 @@ async function routeModel(flags: ServeFlags, asm: Assembly): Promise<{ ok: true;
   if (!active.ok) return { ok: false, exitCode: 1, lines: active.errors.map((e) => `✗ ${e.path}: ${e.message}${e.hint ? ` (${e.hint})` : ""}`) };
   const { manifest } = active.active;
 
-  // Dialect registry: adding a vendor family is a package + a row here, never
-  // a branch inside routing (spec #210).
-  const dialects = { "anthropic-compat": compatDialect, bedrock: bedrockDialect, "openai-compat": openaiDialect };
   const gate = new HealthGate(async (m) => dialects[selectDialect(m)].healthCheck(m));
   const picked = await gate.pick(manifest, active.active.alias);
   if (!picked.ok) {
@@ -625,6 +626,15 @@ export async function runServeWeb(flags: ServeFlags): Promise<number> {
       const attr = attributionFor(out, routed.value, presetName, ctx.externalKey);
       write(`${formatAttributionLine(attr)}\n`);
       appendAttribution(attr);
+      // Operational log (spec #124/#292): metadata only — session key, model
+      // identity, token counts. Never prompt/reply/tool payload (R2/R9).
+      appendLog(repoRoot, "serve", {
+        event: "turn",
+        session: ctx.externalKey,
+        provider: attr.provider,
+        model: attr.modelId ?? attr.alias ?? attr.manifest,
+        usage: attr.usage ?? null,
+      });
       // the real runner has no confirm consumer yet (P7 kb_commit gating will
       // be the first); the out-of-band channel itself is conformance-proven.
       return { sdkSessionId: out.sdkSessionId };
@@ -641,6 +651,23 @@ export async function runServeWeb(flags: ServeFlags): Promise<number> {
     staticDir,
     systemPrompt: BASE_SYSTEM_PROMPT,
     token: webToken,
+    health: async () => ({
+      model: await (async () => {
+        try {
+          const probe = await dialects[selectDialect(modelLease)].healthCheck(modelLease);
+          return { key: routed.value.manifestName, healthy: probe.ok, ...(probe.reason ? { reason: probe.reason } : {}) };
+        } catch (err) {
+          return { key: routed.value.manifestName, healthy: false, reason: err instanceof Error ? err.message : "probe failed" };
+        }
+      })(),
+      mounts: mounts.map((m) => ({
+        key: m.key,
+        healthy: m.degraded !== true,
+        version: m.transport,
+        ...(m.degraded ? { reason: "degraded or not resolvable" } : {}),
+      })),
+    }),
+    logs: ({ lines }) => readLogs(repoRoot, lines).map((f) => ({ name: f.name, lines: f.lines.map((l) => l) })),
     knowledge: asm.value.knowledgeInfo ?? undefined,
     entry: { name: asm.value.entryName, confirm: REST_CAPABILITIES.confirm },
     dialect: selectDialect(modelLease),

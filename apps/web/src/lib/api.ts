@@ -170,6 +170,10 @@ export const commitKbDraft = (receiptId: string) =>
 export const discardKbDraft = (receiptId: string) =>
   jpost<{ ok: boolean }>(`/api/kb/drafts/${encodeURIComponent(receiptId)}/discard`, {});
 
+/** Operational log tail (spec #124/#292). */
+export interface LogFile { name: string; lines: string[] }
+export const getLogs = (lines = 100) => jget<{ files: LogFile[] }>(`/api/logs?lines=${lines}`);
+
 /** Session workspace listing/reading (spec #105/#256/#257/#275). */
 export interface WorkspaceFile { path: string; size: number; mtimeMs: number }
 export const getWorkspaceFiles = (sessionId: string) =>

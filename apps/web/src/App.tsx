@@ -12,6 +12,7 @@ import { StatusStrip } from "./components/StatusStrip";
 import { TokenGate } from "./components/TokenGate";
 import { FilePanel } from "./components/FilePanel";
 import { DraftInbox } from "./components/DraftInbox";
+import { LogsPanel } from "./components/LogsPanel";
 import { UsageBar } from "./components/UsageBar";
 
 /** Sidebar polling cadence — a session running from another tab/device must
@@ -28,6 +29,7 @@ export default function App() {
   const [needsToken, setNeedsToken] = useState(false);
   const [showFiles, setShowFiles] = useState(false);
   const [showDrafts, setShowDrafts] = useState(false);
+  const [showLogs, setShowLogs] = useState(false);
   const [clearNonce, setClearNonce] = useState(0);
 
   const refresh = useCallback(async () => {
@@ -98,6 +100,7 @@ export default function App() {
         status={status}
         onToggleFiles={() => setShowFiles((v) => !v)}
         onToggleDrafts={() => setShowDrafts((v) => !v)}
+        onToggleLogs={() => setShowLogs((v) => !v)}
       />
       <div className="flex min-h-0 flex-1">
         <SessionSidebar
@@ -136,6 +139,7 @@ export default function App() {
             </div>
             {showFiles && <FilePanel sessionId={sessionId} onClose={() => setShowFiles(false)} />}
             {showDrafts && <DraftInbox sessionId={sessionId} onClose={() => setShowDrafts(false)} />}
+            {showLogs && <LogsPanel onClose={() => setShowLogs(false)} />}
           </div>
         </div>
       </div>

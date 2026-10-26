@@ -1336,3 +1336,62 @@ describe("kb draft inbox routes (spec #270–#272)", () => {
     expect((await postJson(srv, "/api/kb/drafts/r/commit", {})).status).toBe(501);
   });
 });
+
+describe("/healthz body + /api/logs (spec #220/#292)", () => {
+  it("reports unhealthy mounts while healthz stays 200", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "agentos-health-"));
+    tempDirs.push(dir);
+    const dbPath = join(dir, "sessions.db");
+    const srv = await startServer({
+      presetName: "p",
+      model: { provider: "v" },
+      mounts: [],
+      runner: async () => ({}),
+      ledger: openLedger(dbPath),
+      port: 0,
+      dbPath,
+      staticDir: makeStaticDir(dir),
+      health: () => ({
+        model: { key: "deepseek", healthy: false, reason: "ECONNREFUSED" },
+        mounts: [
+          { key: "fs", healthy: true, version: "stdio" },
+          { key: "gw", healthy: false, version: "http", reason: "degraded" },
+        ],
+      }),
+    });
+    servers.push(srv);
+    const res = await api(srv, "/healthz");
+    expect(res.status).toBe(200); // liveness is never hostage to a dead channel
+    const body = (await res.json()) as { ok: boolean; model: { healthy: boolean }; mounts: Array<{ healthy: boolean }> };
+    expect(body.ok).toBe(true);
+    expect(body.model.healthy).toBe(false);
+    expect(body.mounts.map((m) => m.healthy)).toEqual([true, false]);
+  });
+
+  it("serves the operational log tail, bounded by ?lines", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "agentos-logroute-"));
+    tempDirs.push(dir);
+    const dbPath = join(dir, "sessions.db");
+    const seen: number[] = [];
+    const srv = await startServer({
+      presetName: "p",
+      model: { provider: "v" },
+      mounts: [],
+      runner: async () => ({}),
+      ledger: openLedger(dbPath),
+      port: 0,
+      dbPath,
+      staticDir: makeStaticDir(dir),
+      logs: ({ lines }) => {
+        seen.push(lines ?? 0);
+        return [{ name: "serve.log", lines: ['{"event":"boot"}'] }];
+      },
+    });
+    servers.push(srv);
+    const body = (await (await api(srv, "/api/logs?lines=9999")).json()) as { files: Array<{ lines: string[] }> };
+    expect(body.files[0]?.lines).toEqual(['{"event":"boot"}']);
+    expect(seen[0]).toBe(500); // bounded
+    const unwired = await boot(async () => ({}));
+    expect(((await (await api(unwired.srv, "/api/logs")).json()) as { files: unknown[] }).files).toEqual([]);
+  });
+});
