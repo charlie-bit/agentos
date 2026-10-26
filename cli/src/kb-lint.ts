@@ -11,32 +11,15 @@
  * gitignored directory, which must lint green with an honest "0 pages" line —
  * the hook point for the book repo's remote-ization).
  */
-import { readdirSync, readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { readFileSync, statSync } from "node:fs";
 import { validatePageFrontmatter, type FrontmatterIssue } from "@agentos/core";
+import { markdownFiles } from "./kb-scan.js";
 import type { CliResult } from "./preset-validate.js";
 
 export interface KbLintOptions {
   json?: boolean;
   strict?: boolean;
   now?: Date;
-}
-
-function mdFiles(dir: string): string[] {
-  const out: string[] = [];
-  let entries;
-  try {
-    entries = readdirSync(dir, { withFileTypes: true });
-  } catch {
-    return out;
-  }
-  for (const e of entries) {
-    if (e.name === "README.md" || e.name.startsWith(".")) continue;
-    const p = join(dir, e.name);
-    if (e.isDirectory()) out.push(...mdFiles(p));
-    else if (/\.md$/i.test(e.name)) out.push(p);
-  }
-  return out.sort();
 }
 
 export interface KbLintReport {
@@ -61,7 +44,7 @@ export function lintBook(dir: string, opts: KbLintOptions = {}): { reports: KbLi
     reports.push({ page: dir, ...judge(readFileSync(dir, "utf8"), opts, now) });
     return { reports, unreadable: [] };
   }
-  for (const file of mdFiles(dir)) {
+  for (const file of markdownFiles(dir)) {
     let raw: string;
     try {
       raw = readFileSync(file, "utf8");
