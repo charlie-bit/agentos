@@ -1,0 +1,16 @@
+# Label taxonomy (spec #167). Apply with gh: `gh label create --name X ...`.
+- name: good-first-issue
+  color: "7057ff"
+  description: Scoped, provider- or docs-sized; conformance suite is the gate.
+- name: provider
+  color: "0e8a16"
+  description: A new Tool/Model/Knowledge/Entry implementation.
+- name: conformance
+  color: "1d76db"
+  description: Touches the suites in packages/conformance.
+- name: spec
+  color: "fbca04"
+  description: Changes .docs/spec.md or progress.md.
+- name: security
+  color: "b60205"
+  description: See SECURITY.md — do not paste exploit details in public issues.
