@@ -239,7 +239,7 @@ Three approaches, **Route C recommended**:
 | 2 | **Schema exchange via JSON Schema** | Medium | Incompatible schema versions silently drop all tools |
 | 3 | **idempotent required** | Medium | Non-idempotent tools under auto-retry execute irreversible operations |
 | 4 | **Registry configuration-driven** | Discipline | Module-level state forbidden in multi-pod |
-| 5 | **Large result governance in contract** | Discipline | >10KB results offload, return pointer only |
+| 5 | **Large result governance in contract** | Discipline | >10KB results offload to the session workspace and the model gets a pointer — enforced in `packages/core/src/governance/offload.ts` for agentos-owned (sdk-transport) tools; kernel-side stdio/http results are still inline until #301 lands |
 
 ---
 
