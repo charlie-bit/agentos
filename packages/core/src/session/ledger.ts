@@ -51,6 +51,12 @@ export interface Ledger {
   setTitle(id: string, title: string | null): string | null;
   /** Refresh last_active_ms to now. */
   touch(id: string): void;
+  /**
+   * Boot recovery (spec #253): a process that dies mid-turn leaves its row
+   * "running" forever. At startup the previous process is gone by definition,
+   * so every running row is a ghost — mark them aborted and report the count.
+   */
+  sweepRunning(): number;
   /** Hard delete — the ledger row only (the kernel's own transcript, if any,
    * is untouched: deleting a session removes it from the sidebar/resume list,
    * it does not shred history). Unknown id fails loudly, same as every other verb. */
@@ -164,6 +170,9 @@ export function openLedger(dbPath: string = ledgerPathFromEnv()): Ledger {
     },
     touch(id: string) {
       mustExist(id, db.prepare("UPDATE sessions SET last_active_ms = ? WHERE id = ?").run(Date.now(), id).changes);
+    },
+    sweepRunning() {
+      return Number(db.prepare("UPDATE sessions SET status = 'aborted' WHERE status = 'running'").run().changes);
     },
     deleteSession(id: string) {
       mustExist(id, db.prepare("DELETE FROM sessions WHERE id = ?").run(id).changes);

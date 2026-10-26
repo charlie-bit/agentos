@@ -369,6 +369,8 @@ export async function runServe(flags: ServeFlags): Promise<number> {
 
   const externalKey = flags.session ?? (flags.continue ? "cli" : `cli-${Date.now()}`);
   const ledger = openLedger();
+  const swept = ledger.sweepRunning(); // #253: the previous process is gone; its "running" rows are ghosts
+  if (swept > 0) write(`⚠ ledger: ${swept} stale running row(s) marked aborted\n`);
   const entry = new EntryCli({ presetName, externalKey, ledger, verbose: flags.verbose });
   let currentSdk: string | undefined;
   try {
@@ -520,6 +522,8 @@ export async function runServeWeb(flags: ServeFlags): Promise<number> {
     return 1;
   }
   const ledger = openLedger();
+  const swept = ledger.sweepRunning(); // #253: boot recovery, same rule as the REPL
+  if (swept > 0) write(`⚠ ledger: ${swept} stale running row(s) marked aborted\n`);
   const dbPath = ledgerPathFromEnv();
   const server = await startServer({
     presetName,

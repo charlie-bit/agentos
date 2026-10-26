@@ -156,3 +156,19 @@ describe("ledgerPathFromEnv", () => {
     expect(p.startsWith("/")).toBe(true);
   });
 });
+
+describe("boot sweep (spec #253)", () => {
+  it("marks stale running rows aborted and leaves settled rows alone", () => {
+    const ledger = freshLedger();
+    ledger.createSession({ entry: "rest", externalKey: "ghost", preset: "p" });
+    const done = ledger.createSession({ entry: "rest", externalKey: "done", preset: "p" });
+    ledger.markStatus(done.id, "idle");
+
+    expect(ledger.sweepRunning()).toBe(1);
+    expect(ledger.getByExternalKey("ghost")?.status).toBe("aborted");
+    expect(ledger.getByExternalKey("done")?.status).toBe("idle");
+    // idempotent: a second boot finds nothing to sweep
+    expect(ledger.sweepRunning()).toBe(0);
+    ledger.close();
+  });
+});
