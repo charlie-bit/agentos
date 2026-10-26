@@ -161,6 +161,15 @@ export async function chat(sessionId: string, message: string, onFrame: (frame: 
   }
 }
 
+/** KB draft inbox (spec #270–#272). */
+export interface KbDraft { receiptId: string; pageId: string; title: string; preview: string; createdAtMs: number | null }
+export const getKbDrafts = (sessionId: string) =>
+  jget<{ drafts: KbDraft[] }>(`/api/kb/drafts?session=${encodeURIComponent(sessionId)}`);
+export const commitKbDraft = (receiptId: string) =>
+  jpost<{ ok: boolean; reason?: string }>(`/api/kb/drafts/${encodeURIComponent(receiptId)}/commit`, {});
+export const discardKbDraft = (receiptId: string) =>
+  jpost<{ ok: boolean }>(`/api/kb/drafts/${encodeURIComponent(receiptId)}/discard`, {});
+
 /** Session workspace listing/reading (spec #105/#256/#257/#275). */
 export interface WorkspaceFile { path: string; size: number; mtimeMs: number }
 export const getWorkspaceFiles = (sessionId: string) =>

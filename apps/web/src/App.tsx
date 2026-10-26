@@ -11,6 +11,7 @@ import { SessionSidebar } from "./components/SessionSidebar";
 import { StatusStrip } from "./components/StatusStrip";
 import { TokenGate } from "./components/TokenGate";
 import { FilePanel } from "./components/FilePanel";
+import { DraftInbox } from "./components/DraftInbox";
 import { UsageBar } from "./components/UsageBar";
 
 /** Sidebar polling cadence — a session running from another tab/device must
@@ -26,6 +27,7 @@ export default function App() {
   const [quote, setQuote] = useState<{ text: string; nonce: number } | undefined>();
   const [needsToken, setNeedsToken] = useState(false);
   const [showFiles, setShowFiles] = useState(false);
+  const [showDrafts, setShowDrafts] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -75,7 +77,11 @@ export default function App() {
 
   return (
     <div className="flex h-full flex-col">
-      <StatusStrip status={status} onToggleFiles={() => setShowFiles((v) => !v)} />
+      <StatusStrip
+        status={status}
+        onToggleFiles={() => setShowFiles((v) => !v)}
+        onToggleDrafts={() => setShowDrafts((v) => !v)}
+      />
       <div className="flex min-h-0 flex-1">
         <SessionSidebar
           sessions={sessions}
@@ -111,6 +117,7 @@ export default function App() {
           />
             </div>
             {showFiles && <FilePanel sessionId={sessionId} onClose={() => setShowFiles(false)} />}
+            {showDrafts && <DraftInbox sessionId={sessionId} onClose={() => setShowDrafts(false)} />}
           </div>
         </div>
       </div>

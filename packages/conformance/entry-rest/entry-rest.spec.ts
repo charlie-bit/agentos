@@ -1286,3 +1286,53 @@ describe("POST /api/sessions/:id/attachments (spec #276)", () => {
     expect(big.status).toBe(413);
   });
 });
+
+describe("kb draft inbox routes (spec #270–#272)", () => {
+  async function wired(): Promise<RunningServer> {
+    const dir = mkdtempSync(join(tmpdir(), "agentos-drafts-"));
+    tempDirs.push(dir);
+    const dbPath = join(dir, "sessions.db");
+    const calls: string[] = [];
+    const srv = await startServer({
+      presetName: "p",
+      model: { provider: "v" },
+      mounts: [],
+      runner: async () => ({}),
+      ledger: openLedger(dbPath),
+      port: 0,
+      dbPath,
+      staticDir: makeStaticDir(dir),
+      kbDrafts: {
+        list: () => [{ receiptId: "r-1", pageId: "ops/retry.md", title: "Retry", preview: "body", createdAtMs: 1 }],
+        commit: (id) => {
+          calls.push(`commit:${id}`);
+          return id === "r-1" ? { ok: true } : { ok: false, reason: "unknown receipt" };
+        },
+        discard: (id) => {
+          calls.push(`discard:${id}`);
+          return { ok: true };
+        },
+      },
+    });
+    servers.push(srv);
+    (srv as RunningServer & { calls?: string[] }).calls = calls;
+    return srv;
+  }
+
+  it("lists pending drafts and routes commit/discard", async () => {
+    const srv = await wired();
+    const list = (await (await api(srv, "/api/kb/drafts?session=x")).json()) as { drafts: Array<{ receiptId: string }> };
+    expect(list.drafts.map((d) => d.receiptId)).toEqual(["r-1"]);
+
+    expect((await postJson(srv, "/api/kb/drafts/r-1/commit", {})).status).toBe(200);
+    expect((await postJson(srv, "/api/kb/drafts/r-1/discard", {})).status).toBe(200);
+    expect((await postJson(srv, "/api/kb/drafts/ghost/commit", {})).status).toBe(409);
+    expect((await postJson(srv, "/api/kb/drafts/bad%20id/commit", {})).status).toBe(400);
+  });
+
+  it("unwired is 501", async () => {
+    const { srv } = await boot(async () => ({}));
+    expect((await api(srv, "/api/kb/drafts")).status).toBe(501);
+    expect((await postJson(srv, "/api/kb/drafts/r/commit", {})).status).toBe(501);
+  });
+});

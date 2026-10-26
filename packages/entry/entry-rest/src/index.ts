@@ -122,6 +122,15 @@ export interface StartServerOptions {
    */
   workspaceDirFor?: (externalKey: string) => string | null;
   /**
+   * KB draft inbox (spec #270–#272): list pending drafts, commit or discard.
+   * Absent = 501. The human gate is the local token + the click itself.
+   */
+  kbDrafts?: {
+    list: () => KbDraftSummary[] | Promise<KbDraftSummary[]>;
+    commit: (receiptId: string) => { ok: boolean; reason?: string } | Promise<{ ok: boolean; reason?: string }>;
+    discard: (receiptId: string) => { ok: boolean } | Promise<{ ok: boolean }>;
+  };
+  /**
    * Usage aggregate supplier (spec #291). Metadata only — usage.log has no
    * message content. Absent = 501.
    */
@@ -173,6 +182,15 @@ export interface ToolDescriptor {
   idempotent: { default: boolean; overrides?: Record<string, boolean> } | null;
   /** False for declared-but-unmounted / env-degraded providers. */
   mounted: boolean;
+}
+
+/** One pending kb_write draft as the inbox shows it (metadata + preview, no full body). */
+export interface KbDraftSummary {
+  receiptId: string;
+  pageId: string;
+  title: string;
+  preview: string;
+  createdAtMs: number | null;
 }
 
 export interface RunningServer {
@@ -907,6 +925,33 @@ export async function startServer(o: StartServerOptions): Promise<RunningServer>
         return sendJson(res, 200, aggregate);
       } catch {
         return sendJson(res, 200, { rows: [], totals: null, error: "usage log unreadable" });
+      }
+    }
+    if (req.method === "GET" && path === "/api/kb/drafts") {
+      if (!o.kbDrafts) return sendJson(res, 501, { error: "kb drafts not wired by this deployment" });
+      try {
+        const drafts = await o.kbDrafts.list();
+        return sendJson(res, 200, { drafts: Array.isArray(drafts) ? drafts : [] });
+      } catch {
+        return sendJson(res, 200, { drafts: [] });
+      }
+    }
+    const draftAction = /^\/api\/kb\/drafts\/([^/]+)\/(commit|discard)$/.exec(path);
+    if (req.method === "POST" && draftAction) {
+      if (!o.kbDrafts) return sendJson(res, 501, { error: "kb drafts not wired by this deployment" });
+      let receiptId: string;
+      try {
+        receiptId = decodeURIComponent(draftAction[1] ?? "");
+      } catch {
+        return sendJson(res, 400, { error: "undecodable receipt id" });
+      }
+      if (!/^[A-Za-z0-9-]{1,80}$/.test(receiptId)) return sendJson(res, 400, { error: "invalid receipt id" });
+      const action = draftAction[2];
+      try {
+        const result = action === "commit" ? await o.kbDrafts.commit(receiptId) : await o.kbDrafts.discard(receiptId);
+        return sendJson(res, result.ok ? 200 : 409, result);
+      } catch {
+        return sendJson(res, 500, { ok: false, reason: "unavailable" });
       }
     }
     if (req.method === "GET" && path === "/api/tools") {

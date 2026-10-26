@@ -10,7 +10,7 @@
  */
 import { randomBytes } from "node:crypto";
 import { createInterface } from "node:readline";
-import { existsSync, mkdirSync, readdirSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import {
   loadManifestDir,
@@ -38,6 +38,7 @@ import { dialect as compatDialect } from "@agentos/model-anthropic-compat";
 import { dialect as bedrockDialect } from "@agentos/model-bedrock";
 import { dialect as openaiDialect } from "@agentos/model-openai-compat";
 import { runPresetValidate } from "./preset-validate.js";
+import { commitDraft } from "@agentos/core";
 import { EntryCli, formatUsageSummary } from "@agentos/entry-cli";
 import { startServer, CAPABILITIES as REST_CAPABILITIES, type ToolDescriptor } from "@agentos/entry-rest";
 import { BASE_SYSTEM_PROMPT, createInProcessServer, readTranscript, runTurn, type ModelLease } from "@agentos/adapter-claude-sdk";
@@ -632,6 +633,56 @@ export async function runServeWeb(flags: ServeFlags): Promise<number> {
     knowledge: asm.value.knowledgeInfo ?? undefined,
     entry: { name: asm.value.entryName, confirm: REST_CAPABILITIES.confirm },
     dialect: selectDialect(modelLease),
+    kbDrafts: (() => {
+      const km = asm.value.knowledge;
+      if (!km || km.mount.type !== "path") return undefined;
+      const root = resolve(asm.value.repoRoot, km.mount.path);
+      const draftsDir = join(asm.value.repoRoot, ".agentos", "kb-drafts");
+      const receiptsLog = join(asm.value.repoRoot, ".agentos", "kb-receipts.jsonl");
+      const parse = (receiptId: string) => {
+        const file = join(draftsDir, `${receiptId}.md`);
+        if (!existsSync(file)) return null;
+        const raw = readFileSync(file, "utf8");
+        const targetLine = /<!-- target: (?:NEW )?([^\s>]+) -->/.exec(raw)?.[1] ?? "";
+        const body = raw.split("\n").slice(3).join("\n");
+        const title = /^#\s+(.+)$/m.exec(body)?.[1]?.trim() ?? targetLine;
+        return { receiptId, pageId: targetLine, title, preview: body.trim().slice(0, 400), createdAtMs: existsSync(file) ? Math.floor(statSync(file).mtimeMs) : null };
+      };
+      return {
+        list: () =>
+          existsSync(draftsDir)
+            ? readdirSync(draftsDir)
+                .filter((f: string) => f.endsWith(".md"))
+                .map((f: string) => parse(f.slice(0, -3)))
+                .filter((d): d is NonNullable<typeof d> => d !== null)
+                .sort((a, b) => (b.createdAtMs ?? 0) - (a.createdAtMs ?? 0))
+            : [],
+        commit: (receiptId: string) => {
+          const draft = parse(receiptId);
+          if (!draft) return { ok: false, reason: "unknown receipt" };
+          try {
+            commitDraft({
+              bookRoot: root,
+              draftsDir,
+              receiptsLog,
+              receiptId,
+              pageId: draft.pageId,
+              evidence: `web draft inbox: committed ${draft.pageId}`,
+              confirmation: { confirmedBy: "web-user:kb-draft-commit", confirmedAtMs: Date.now() },
+            });
+            return { ok: true };
+          } catch (err) {
+            return { ok: false, reason: err instanceof Error ? err.message : String(err) };
+          }
+        },
+        discard: (receiptId: string) => {
+          const file = join(draftsDir, `${receiptId}.md`);
+          if (!existsSync(file)) return { ok: false };
+          unlinkSync(file);
+          return { ok: true };
+        },
+      };
+    })(),
     listPresets: () => listPresetFiles(asm.value.repoRoot),
     usage: (q) => aggregateUsage(usageLogPath(), q),
     // Session workspaces are keyed by the entry's externalKey; only boring
