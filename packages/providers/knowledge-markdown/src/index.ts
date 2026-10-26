@@ -15,6 +15,7 @@
 import { randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
+import { renderDraftFile } from "@agentos/contracts";
 import type {
   KbDraft,
   KbHit,
@@ -179,12 +180,8 @@ export function createMarkdownProvider(opts: MarkdownProviderOptions): Knowledge
       // targetPageId (caller-supplied) is sanitized later, at commit time.
       const file = join(draftsDir, `${receiptId}.md`);
       mkdirSync(dirname(file), { recursive: true });
-      const header = [
-        `<!-- agentos draft ${receiptId} -->`,
-        `<!-- target: ${draft.targetPageId ?? "NEW " + pageId} -->`,
-        "",
-      ].join("\n");
-      writeFileSync(file, header + draft.body, "utf8");
+      // Format owned by contracts (spec #224) — the committer strips it there.
+      writeFileSync(file, renderDraftFile(receiptId, draft.targetPageId ?? `NEW ${pageId}`, draft.body), "utf8");
       return { receiptId, pageId, createdAtMs: now() };
     },
   };

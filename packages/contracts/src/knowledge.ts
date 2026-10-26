@@ -163,3 +163,36 @@ export const knowledgeManifestSchema = manifestEnvelopeSchema.extend({
 });
 
 export type KnowledgeManifest = z.infer<typeof knowledgeManifestSchema>;
+
+/**
+ * Draft file format — ONE definition for both sides of the two-phase write.
+ * The writer (a KnowledgeProvider's writePage) and the committer
+ * (core/governance's commitDraft) used to agree only by comment, and a header
+ * format change on one side silently committed metadata into the page body.
+ * Now the shape lives here and both sides call these functions.
+ *
+ *     <!-- agentos draft <receiptId> -->
+ *     <!-- target: <pageId | "NEW <pageId>"> -->
+ *     <blank line>
+ *     <body>
+ */
+export const DRAFT_HEADER_TAG = "agentos draft";
+
+/** Compose the on-disk draft: machine-readable provenance, then the body verbatim. */
+export function renderDraftFile(receiptId: string, target: string, body: string): string {
+  return `<!-- ${DRAFT_HEADER_TAG} ${receiptId} -->\n<!-- target: ${target} -->\n\n${body}`;
+}
+
+/**
+ * Return the page body from a draft file. Fence-detected (not line-counted),
+ * so an absent/foreign header degrades to "the whole file is the body" rather
+ * than eating the first two lines of real content.
+ */
+export function stripDraftHeader(raw: string): string {
+  const lines = raw.split("\n");
+  if (!(lines[0] ?? "").includes(`<!-- ${DRAFT_HEADER_TAG} `)) return raw;
+  let i = 1;
+  if ((lines[i] ?? "").startsWith("<!-- target:")) i += 1;
+  if ((lines[i] ?? "").trim() === "") i += 1;
+  return lines.slice(i).join("\n");
+}

@@ -9,6 +9,7 @@
  * Path law: pageId (caller-supplied at draft time) is resolved UNDER bookRoot
  * only — traversal is refused, not normalized.
  */
+import { stripDraftHeader } from "@agentos/contracts";
 import { execFileSync } from "node:child_process";
 import { appendFileSync, existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve, sep } from "node:path";
@@ -42,8 +43,6 @@ export interface CommitDraftResult {
 // followed by the body's first line (the historical value 3 ate the body's
 // first line — invisible until the first frontmatter-carrying page lost its
 // opening fence; fixed with P7b's founding content, human-approved 2026-09-11).
-const DRAFT_HEADER_LINES = 2;
-
 function refuse(reason: string): never {
   throw new Error(`kb_commit refused: ${reason}`);
 }
@@ -93,7 +92,8 @@ export function commitDraft(a: CommitDraftArgs): CommitDraftResult {
   if (!existsSync(draftFile)) refuse(`receipt ${a.receiptId} has no draft on disk (expired or already committed?)`);
 
   const raw = readFileSync(draftFile, "utf8");
-  const body = raw.split("\n").slice(DRAFT_HEADER_LINES).join("\n").trim() === "" ? raw : raw.split("\n").slice(DRAFT_HEADER_LINES).join("\n");
+  // Fence-detected strip (spec #224): one definition, in contracts.
+  const body = stripDraftHeader(raw);
 
   const existed = existsSync(target);
   mkdirSync(dirname(target), { recursive: true });
