@@ -15,3 +15,9 @@ export {
   type Attribution,
   type UsageCounts,
 } from "./attribution.js";
+export {
+  aggregateUsage,
+  type UsageAggregate,
+  type UsageAggregateRow,
+  type UsageQuery,
+} from "./usage.js";

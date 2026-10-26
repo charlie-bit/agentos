@@ -819,3 +819,41 @@ describe("GET /api/tools (spec #290)", () => {
     expect((await api(srv, "/api/tools")).status).toBe(501);
   });
 });
+
+describe("GET /api/usage (spec #291)", () => {
+  it("passes session/since through and echoes the aggregate", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "agentos-usage-"));
+    tempDirs.push(dir);
+    const dbPath = join(dir, "sessions.db");
+    const calls: Array<{ session?: string; sinceMs?: number }> = [];
+    const srv = await startServer({
+      presetName: "p",
+      model: { provider: "v" },
+      mounts: [],
+      runner: async () => ({}),
+      ledger: openLedger(dbPath),
+      port: 0,
+      dbPath,
+      staticDir: makeStaticDir(dir),
+      usage: (q) => {
+        calls.push(q);
+        return { rows: [{ provider: "v", model: "m", turns: 1, input: 10, output: 2, cacheRead: 0, cacheWrite: 0, costUsd: 0.001 }], totals: { turns: 1 } };
+      },
+    });
+    servers.push(srv);
+
+    const res = await api(srv, "/api/usage?session=web-a&since=2026-01-01T00:00:00Z");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { rows: Array<{ turns: number }> };
+    expect(body.rows[0]?.turns).toBe(1);
+    expect(calls[0]?.session).toBe("web-a");
+    expect(calls[0]?.sinceMs).toBe(Date.parse("2026-01-01T00:00:00Z"));
+
+    expect((await api(srv, "/api/usage?since=not-a-date")).status).toBe(400);
+  });
+
+  it("unwired is 501", async () => {
+    const { srv } = await boot(async () => ({}));
+    expect((await api(srv, "/api/usage")).status).toBe(501);
+  });
+});

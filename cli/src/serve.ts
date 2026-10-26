@@ -20,8 +20,10 @@ import {
   resolveActiveModel,
   HealthGate,
   selectDialect,
+  aggregateUsage,
   appendAttribution,
   formatAttributionLine,
+  usageLogPath,
   buildKbTools,
   isIdempotent,
   kbPointerLine,
@@ -603,6 +605,7 @@ export async function runServeWeb(flags: ServeFlags): Promise<number> {
     staticDir,
     systemPrompt: BASE_SYSTEM_PROMPT,
     listPresets: () => listPresetFiles(asm.value.repoRoot),
+    usage: (q) => aggregateUsage(usageLogPath(), q),
     listTools: (): ToolDescriptor[] => {
       const mounted: ToolDescriptor[] = asm.value.plans.map((p) => ({
         key: p.key,

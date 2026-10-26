@@ -100,6 +100,11 @@ export interface StartServerOptions {
    * GET /api/status for the config-inspection dialog. Absent = field omitted. */
   systemPrompt?: string;
   /**
+   * Usage aggregate supplier (spec #291). Metadata only — usage.log has no
+   * message content. Absent = 501.
+   */
+  usage?: (q: { session?: string; sinceMs?: number }) => unknown | Promise<unknown>;
+  /**
    * Tool diagnostics supplier (spec #290). Absent = the endpoint answers 501.
    */
   listTools?: () => ToolDescriptor[] | Promise<ToolDescriptor[]>;
@@ -479,6 +484,27 @@ export async function startServer(o: StartServerOptions): Promise<RunningServer>
         return sendJson(res, 200, { entries: Array.isArray(entries) ? entries : [] });
       } catch {
         return sendJson(res, 200, { entries: [] }); // reader blew up: degrade, never 500
+      }
+    }
+    if (req.method === "GET" && path === "/api/usage") {
+      if (!o.usage) return sendJson(res, 501, { error: "usage querying not wired by this deployment" });
+      const sessionParam = url.searchParams.get("session");
+      const sinceParam = url.searchParams.get("since");
+      let sinceMs: number | undefined;
+      if (sinceParam !== null) {
+        // Accept epoch ms or an ISO timestamp; anything else is a client error.
+        const asNumber = Number(sinceParam);
+        sinceMs = Number.isFinite(asNumber) && sinceParam.trim() !== "" ? asNumber : Date.parse(sinceParam);
+        if (Number.isNaN(sinceMs)) return sendJson(res, 400, { error: "since must be epoch ms or an ISO timestamp" });
+      }
+      try {
+        const aggregate = await o.usage({
+          ...(sessionParam !== null && sessionParam.length <= 200 ? { session: sessionParam } : {}),
+          ...(sinceMs !== undefined ? { sinceMs } : {}),
+        });
+        return sendJson(res, 200, aggregate);
+      } catch {
+        return sendJson(res, 200, { rows: [], totals: null, error: "usage log unreadable" });
       }
     }
     if (req.method === "GET" && path === "/api/tools") {
