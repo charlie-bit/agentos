@@ -29,6 +29,7 @@ function assembly(knowledgeRoot: string): Assembly {
     mounts: [],
     toolManifestPaths: {},
     entryName: "cli",
+    channelRoutes: {},
     repoRoot: knowledgeRoot,
   };
 }

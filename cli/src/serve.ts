@@ -40,7 +40,7 @@ import { dialect as openaiDialect } from "@agentos/model-openai-compat";
 import { runPresetValidate } from "./preset-validate.js";
 import { commitDraft } from "@agentos/core";
 import { EntryCli, formatUsageSummary } from "@agentos/entry-cli";
-import { startServer, CAPABILITIES as REST_CAPABILITIES, type ToolDescriptor } from "@agentos/entry-rest";
+import { startServer, CAPABILITIES as REST_CAPABILITIES, ENTRY_NAME as REST_ENTRY, type ToolDescriptor } from "@agentos/entry-rest";
 import { BASE_SYSTEM_PROMPT, createInProcessServer, readTranscript, runTurn, type ModelLease } from "@agentos/adapter-claude-sdk";
 
 export interface ServeFlags {
@@ -71,6 +71,8 @@ export interface Assembly {
   knowledgeInfo?: { name: string; manifestPath: string | null; mountType: string | null };
   /** Preset's entry slot name (spec #262). */
   entryName: string;
+  /** channel -> entry adapter routes (spec #212), defaulting to entryName. */
+  channelRoutes: Record<string, string>;
   repoRoot: string;
 }
 
@@ -251,6 +253,7 @@ export function assemble(flags: ServeFlags): { ok: true; value: Assembly } | { o
       toolManifestPaths,
       ...(knowledgeInfo ? { knowledgeInfo } : {}),
       entryName: preset.entry,
+      channelRoutes: preset.channels ?? {},
       repoRoot,
     },
   };
@@ -569,6 +572,14 @@ export async function runServeWeb(flags: ServeFlags): Promise<number> {
     return asm.exitCode;
   }
   const { presetName, plans, mounts, repoRoot } = asm.value;
+  // Channel routing table (spec #212): the web channel must be served by the
+  // REST adapter. A dangling route is a config lie and stops the boot here —
+  // it can never silently serve the other kernel's channel.
+  const webEntry = asm.value.channelRoutes.web ?? asm.value.entryName;
+  if (webEntry !== REST_ENTRY) {
+    write(`✗ channels.web routes to "${webEntry}", but serve --web mounts the "${REST_ENTRY}" adapter — fix the preset's channels table\n`);
+    return 1;
+  }
   const routed = await routeModel(flags, asm.value);
   if (!routed.ok) {
     for (const l of routed.lines) write(`${l}\n`);

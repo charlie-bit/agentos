@@ -114,6 +114,18 @@ export function validatePresetRefs(
       }
     });
 
+    for (const [channel, target] of Object.entries(manifest.channels ?? {})) {
+      if (!entryNames.has(target)) {
+        errors.push({
+          source,
+          category: REF,
+          path: `channels.${channel}`,
+          message: `routes channel ${JSON.stringify(channel)} to entry adapter ${JSON.stringify(target)}, which is not registered`,
+          hint: "channel targets are code-registered entry names (see ENTRY_ADAPTER_NAMES)",
+        });
+      }
+    }
+
     if (!entryNames.has(manifest.entry)) {
       errors.push({
         source,

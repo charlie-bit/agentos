@@ -28,6 +28,14 @@ export const presetSchema = manifestEnvelopeSchema.extend({
    * preset to several tenants, tenant labels.
    */
   channelModels: z.record(z.string().min(1), z.string().min(1)).optional(),
+  /**
+   * Channel → entry-adapter routing table (spec #212). A channel is an
+   * inbound surface ("cli", "web"); the value names the code-registered
+   * EntryAdapter that serves it, i.e. one channel belongs to exactly one
+   * kernel (anti-pattern ③). Absent = the preset's `entry` serves every
+   * channel. Adding a second route is a config edit, not a code path.
+   */
+  channels: z.record(z.string().min(1), z.string().min(1)).optional(),
 });
 
 export type Preset = z.infer<typeof presetSchema>;

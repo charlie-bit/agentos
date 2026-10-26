@@ -131,3 +131,38 @@ describe("entry adapter registry is single-sourced (spec #228)", () => {
     expect(r.lines.join("\n")).toContain("ghost");
   });
 });
+
+describe("channel routing table (spec #212)", () => {
+  const base = [
+    "kind: preset",
+    'version: "1"',
+    "name: p",
+    "knowledge: k",
+    "model: m",
+    "tools: []",
+  ];
+  const manifests = {
+    "knowledge/k.yml": ["kind: knowledge", 'version: "1"', "name: k", "provider: markdown", "mount: { type: path, path: ./kb }", ""].join("\n"),
+    "models/m.yml": ["kind: model", 'version: "1"', "name: m", "provider: x", "models: { a: real-a }", ""].join("\n"),
+  };
+
+  it("a preset may route channels to registered adapters", async () => {
+    const dir = makeTempConfig({
+      ...manifests,
+      "presets/p.yml": [...base, "entry: cli", "channels: { web: rest }", ""].join("\n"),
+    });
+    const r = await run(["preset", "validate", join(dir, "presets/p.yml")]);
+    expect(r.exitCode).toBe(0);
+  });
+
+  it("a dangling channel route fails validation, naming the channel", async () => {
+    const dir = makeTempConfig({
+      ...manifests,
+      "presets/p.yml": [...base, "entry: cli", "channels: { web: ghost-kernel }", ""].join("\n"),
+    });
+    const r = await run(["preset", "validate", join(dir, "presets/p.yml")]);
+    expect(r.exitCode).toBe(1);
+    expect(r.lines.join("\n")).toContain("channels.web");
+    expect(r.lines.join("\n")).toContain("ghost-kernel");
+  });
+});
