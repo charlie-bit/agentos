@@ -6,7 +6,7 @@ export {
   type CommitDraftArgs,
   type CommitDraftResult,
 } from "./writeback.js";
-export { renderIndex, renderOverview } from "./render.js";
+export { MAX_INDEX_ENTRIES, renderIndex, renderOverview } from "./render.js";
 export { buildKbTools, KB_POINTER_LINE, kbPointerLine, type KbToolContext } from "./tools.js";
 export {
   splitFrontmatter,

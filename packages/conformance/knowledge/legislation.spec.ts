@@ -11,7 +11,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
-import { validatePageFrontmatter } from "@agentos/core";
+import { renderOverview, validatePageFrontmatter } from "@agentos/core";
 import { runKbGate } from "../../../cli/dist/kb-gate.js";
 import { runKbLint } from "../../../cli/dist/kb-lint.js";
 import { runKbStale } from "../../../cli/dist/kb-stale.js";
@@ -224,5 +224,19 @@ describe("gate file semantics (D-0910-8): canonical alone, backups opt-in", () =
     const r = runKbGate(dir, join(dir, "no-such.log"), now);
     expect(r.exitCode).toBe(0);
     expect(r.lines.join("\n")).toMatch(/in window: 0\/3/);
+  });
+});
+
+describe("bootstrap guide stays inside its token budget (#225)", () => {
+  it("500 pages render <= 2K tokens (chars/4) with a truncation pointer", () => {
+    const entries = Array.from({ length: 500 }, (_, i) => ({
+      id: `topics/dir/page-${String(i).padStart(4, "0")}.md`,
+      title: `Page ${i}`,
+      timestampMs: 1_700_000_000_000 + i,
+    }));
+    const guide = renderOverview({ index: { entries }, recentUpdates: entries.slice(-5) });
+    expect(Math.ceil(guide.length / 4)).toBeLessThanOrEqual(2000);
+    expect(guide).toContain("more pages");
+    expect(guide).not.toContain("page-0250.md"); // index tail is summarized, not dumped
   });
 });
