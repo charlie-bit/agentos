@@ -12,6 +12,7 @@ import { modelProviderManifestSchema, type ModelProviderManifest } from "@agento
 import { selectDialect, resolveModelAlias, resolveActiveModel, HealthGate, appendAttribution, formatAttributionLine, type ProbeResult } from "@agentos/core";
 import { dialect as compat } from "@agentos/model-anthropic-compat";
 import { dialect as bedrock } from "@agentos/model-bedrock";
+import { dialect as openaiCompat } from "@agentos/model-openai-compat";
 
 const manifest = (over: Record<string, unknown> = {}): ModelProviderManifest =>
   modelProviderManifestSchema.parse({
@@ -34,6 +35,55 @@ describe("selectDialect (the one rule)", () => {
     expect(selectDialect({ provider: "aws-bedrock", baseUrlEnv: "X" })).toBe("anthropic-compat");
     expect(selectDialect({ provider: "deepseek", baseUrlEnv: "X" })).toBe("anthropic-compat");
     expect(selectDialect({ provider: "deepseek" })).toBe("anthropic-compat");
+  });
+
+  it("an explicit manifest dialect wins over the provider heuristic (#210)", () => {
+    expect(selectDialect({ provider: "openai", dialect: "openai-compat" })).toBe("openai-compat");
+    expect(selectDialect({ provider: "anything", dialect: "anthropic-compat" })).toBe("anthropic-compat");
+    // unknown labels never reach routing — fall back to the documented rule
+    expect(selectDialect({ provider: "deepseek", dialect: "not-a-dialect" })).toBe("anthropic-compat");
+  });
+});
+
+describe("the third-party dialect package (#210)", () => {
+  const lease = { provider: "openai", dialect: "openai-compat", baseUrlEnv: "OA_URL", credentialsEnv: "OA_KEY" };
+
+  it("leases url+key from env and never from literals", () => {
+    const ch = openaiCompat.resolveChannel(lease, { OA_URL: "https://oa.example/v1", OA_KEY: "sk-fake-oa" });
+    expect(ch).toEqual({ baseUrl: "https://oa.example/v1", authToken: "sk-fake-oa" });
+  });
+
+  it("probes /models; any HTTP answer is liveness, a transport error is not", async () => {
+    const seen: string[] = [];
+    const ok = await openaiCompat.healthCheck(lease, {
+      env: { OA_URL: "https://oa.example/v1", OA_KEY: "k" },
+      fetchFn: async (url) => {
+        seen.push(url);
+        return { status: 401 };
+      },
+    });
+    expect(ok.ok).toBe(true);
+    expect(seen[0]).toBe("https://oa.example/v1/models");
+
+    const dead = await openaiCompat.healthCheck(lease, {
+      env: { OA_URL: "https://oa.example/v1" },
+      fetchFn: async () => {
+        throw new Error("ECONNREFUSED");
+      },
+    });
+    expect(dead).toMatchObject({ ok: false });
+    expect(dead.reason).toContain("ECONNREFUSED");
+  });
+
+  it("no leased base URL is reported, not guessed", async () => {
+    const r = await openaiCompat.healthCheck(lease, { env: {} });
+    expect(r.ok).toBe(false);
+    expect(r.reason).toContain("OA_URL");
+  });
+
+  it("alias resolution matches the contract (unknown alias throws)", () => {
+    expect(openaiCompat.resolveModel({ general: "gpt-4o-mini" }, "general")).toBe("gpt-4o-mini");
+    expect(() => openaiCompat.resolveModel({}, "nope")).toThrow(/unknown model alias/);
   });
 });
 

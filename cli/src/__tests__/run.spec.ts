@@ -34,7 +34,7 @@ describe("agentos preset validate — happy", () => {
     for (const slot of ["local-markdown", "deepseek", "mcp-filesystem", "cli"]) {
       expect(text, `summary must name the ${slot} reference`).toContain(slot);
     }
-    expect(text).toContain("6 manifests validated");
+    expect(text).toContain("7 manifests validated");
   });
 });
 

@@ -26,6 +26,7 @@ import type { ModelProviderManifest, NeutralTool, RenderEvent, ToolMountPlan } f
 import { driftReport, offloadIfLarge, selectDialect } from "@agentos/core";
 import { dialect as anthropicCompat } from "@agentos/model-anthropic-compat";
 import { dialect as bedrock } from "@agentos/model-bedrock";
+import { dialect as openaiCompat } from "@agentos/model-openai-compat";
 import { createSdkMcpServer, query, type SDKMessage } from "@anthropic-ai/claude-agent-sdk";
 import { z } from "zod";
 
@@ -49,8 +50,13 @@ export interface ResolvedChannel {
  * adapter-local shape. Precedence rule unchanged (url lease beats bedrock).
  */
 export function resolveChannel(model: ModelLease, env: NodeJS.ProcessEnv = process.env): ResolvedChannel {
+  const tag = selectDialect(model);
   const channel =
-    selectDialect(model) === "bedrock" ? bedrock.resolveChannel(model, env) : anthropicCompat.resolveChannel(model, env);
+    tag === "bedrock"
+      ? bedrock.resolveChannel(model, env)
+      : tag === "openai-compat"
+        ? openaiCompat.resolveChannel(model, env)
+        : anthropicCompat.resolveChannel(model, env);
   return { baseUrl: channel.baseUrl, authToken: channel.authToken, useBedrock: channel.nativeChain === "bedrock" };
 }
 

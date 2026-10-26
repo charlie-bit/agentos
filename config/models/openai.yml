@@ -1,0 +1,15 @@
+# OpenAI-compatible endpoint family (public /v1/chat/completions contract).
+# The URL and key are leased by NAME only; the dialect field selects the
+# runtime package (@agentos/model-openai-compat) — switching vendor family is
+# switching this file, not the kernel (spec #210).
+kind: model
+version: "1"
+name: openai
+provider: openai
+dialect: openai-compat
+baseUrlEnv: AGENTOS_OPENAI_BASE_URL
+credentialsEnv: AGENTOS_OPENAI_API_KEY
+models:
+  general: gpt-4o-mini
+fallbackChain:
+  - general

@@ -14,6 +14,8 @@ export const modelProviderManifestSchema = manifestEnvelopeSchema.extend({
   name: z.string().min(1),
   /** Vendor tag the adapter routes on (e.g. "aws-bedrock", "deepseek"). Free-form string by design. */
   provider: z.string().min(1),
+  /** Runtime dialect this endpoint speaks (e.g. "anthropic-compat", "openai-compat"); absent = provider heuristic. */
+  dialect: z.string().min(1).optional(),
   /** Env var name carrying a base-URL override; absent = vendor default endpoint. Never the URL itself. */
   baseUrlEnv: z.string().min(1).optional(),
   /** Env var name carrying credentials; never the credential itself. */
@@ -41,6 +43,8 @@ export const modelProviderManifestSchema = manifestEnvelopeSchema.extend({
 export interface ModelLeaseSpec {
   /** Vendor tag from the manifest (free-form; selection rules live in core). */
   readonly provider: string;
+  /** Explicit runtime dialect from the manifest; absent = provider heuristic. */
+  readonly dialect?: string;
   /** Env var NAME carrying the base URL; never the URL itself. */
   readonly baseUrlEnv?: string;
   /** Env var NAME carrying the credential; never the value. */

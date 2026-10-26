@@ -33,6 +33,7 @@ import { ENTRY_ADAPTER_NAMES, toolProviderManifestSchema } from "@agentos/contra
 import type { ConfirmRequest, ConfirmResult, KnowledgeManifest, ModelProviderManifest, NeutralTool, ToolProviderManifest } from "@agentos/contracts";
 import { dialect as compatDialect } from "@agentos/model-anthropic-compat";
 import { dialect as bedrockDialect } from "@agentos/model-bedrock";
+import { dialect as openaiDialect } from "@agentos/model-openai-compat";
 import { EntryCli, formatUsageSummary } from "@agentos/entry-cli";
 import { startServer, CAPABILITIES as REST_CAPABILITIES } from "@agentos/entry-rest";
 import { BASE_SYSTEM_PROMPT, createInProcessServer, readTranscript, runTurn, type ModelLease } from "@agentos/adapter-claude-sdk";
@@ -186,9 +187,10 @@ async function routeModel(flags: ServeFlags, asm: Assembly): Promise<{ ok: true;
   if (!active.ok) return { ok: false, exitCode: 1, lines: active.errors.map((e) => `✗ ${e.path}: ${e.message}${e.hint ? ` (${e.hint})` : ""}`) };
   const { manifest } = active.active;
 
-  const gate = new HealthGate(async (m) =>
-    selectDialect(m) === "bedrock" ? bedrockDialect.healthCheck(m) : compatDialect.healthCheck(m),
-  );
+  // Dialect registry: adding a vendor family is a package + a row here, never
+  // a branch inside routing (spec #210).
+  const dialects = { "anthropic-compat": compatDialect, bedrock: bedrockDialect, "openai-compat": openaiDialect };
+  const gate = new HealthGate(async (m) => dialects[selectDialect(m)].healthCheck(m));
   const picked = await gate.pick(manifest, active.active.alias);
   if (!picked.ok) {
     return {
