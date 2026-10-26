@@ -4,7 +4,7 @@
 
 AgentOS 是**可插拔的 Agent 执行框架**：一个 Harness 内核承载 agent 循环、会话和沙箱；三层 Provider 契约（Model / Tool / Knowledge）让模型、工具、知识库随时更换——**换业务 = 换 preset 文件，不动任何代码**。
 
-[English](README.md) · [设计文档](.docs/) · [安全策略](SECURITY.md) · [变更日志](CHANGELOG.md)
+[English](README.md) · [设计文档](.docs/) · [安全策略](SECURITY.md) · [变更日志](CHANGELOG.md) · [贡献指南](CONTRIBUTING.md)
 
 ---
 
@@ -289,4 +289,4 @@ node cli/main.mjs preset validate config/presets/example.yml
 
 ### 贡献
 
-详见 [CONTRIBUTING.md](./skills/CONTRIBUTING.md)。
+详见 [CONTRIBUTING.md](./CONTRIBUTING.md)——provider 实现、preset 编写与边界承诺（`skills/CONTRIBUTING.md` 属于 vendored 第三方插件树，不是本仓指南）。
