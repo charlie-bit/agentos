@@ -1144,3 +1144,36 @@ describe("DELETE a running session (spec #217)", () => {
     after.close();
   });
 });
+
+describe("status four-layer disclosure (spec #262)", () => {
+  it("reveals each slot's manifest identity and the active dialect — names and paths only", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "agentos-status4-"));
+    tempDirs.push(dir);
+    const dbPath = join(dir, "sessions.db");
+    const srv = await startServer({
+      presetName: "p",
+      model: { provider: "v" },
+      mounts: [{ key: "fs", transport: "stdio", manifestPath: "config/tools/fs.yml" }],
+      knowledge: { name: "kb", manifestPath: "config/knowledge/kb.yml", mountType: "path" },
+      entry: { name: "rest", confirm: true },
+      dialect: "anthropic-compat",
+      runner: async () => ({}),
+      ledger: openLedger(dbPath),
+      port: 0,
+      dbPath,
+      staticDir: makeStaticDir(dir),
+    });
+    servers.push(srv);
+    const body = (await (await api(srv, "/api/status")).json()) as {
+      mounts: Array<{ manifestPath?: string }>;
+      knowledge: { manifestPath: string; mountType: string } | null;
+      entry: { name: string; confirm: boolean } | null;
+      dialect: string | null;
+    };
+    expect(body.mounts[0]?.manifestPath).toBe("config/tools/fs.yml");
+    expect(body.knowledge).toEqual({ name: "kb", manifestPath: "config/knowledge/kb.yml", mountType: "path" });
+    expect(body.entry).toEqual({ name: "rest", confirm: true });
+    expect(body.dialect).toBe("anthropic-compat");
+    expect(JSON.stringify(body)).not.toContain(FAKE_KEY);
+  });
+});

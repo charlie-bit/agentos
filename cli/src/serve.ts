@@ -66,6 +66,10 @@ export interface Assembly {
   mounts: Array<{ key: string; transport: string; degraded?: boolean }>;
   /** Tool manifest name -> repo-relative source path (diagnostics, spec #290). */
   toolManifestPaths: Record<string, string>;
+  /** Knowledge manifest source path + mount type (spec #262). */
+  knowledgeInfo?: { name: string; manifestPath: string | null; mountType: string | null };
+  /** Preset's entry slot name (spec #262). */
+  entryName: string;
   repoRoot: string;
 }
 
@@ -206,6 +210,14 @@ export function assemble(flags: ServeFlags): { ok: true; value: Assembly } | { o
   for (const l of loaded) {
     if (l.manifest.kind === "tool") toolManifestPaths[l.manifest.name] = relative(repoRoot, resolve(l.source));
   }
+  const knowledgeLoaded = loaded.find((l) => l.manifest.kind === "knowledge" && l.manifest.name === preset.knowledge);
+  const knowledgeInfo = knowledgeLoaded
+    ? {
+        name: knowledgeLoaded.manifest.name,
+        manifestPath: relative(repoRoot, resolve(knowledgeLoaded.source)),
+        mountType: knowledgeLoaded.manifest.kind === "knowledge" ? knowledgeLoaded.manifest.mount.type : null,
+      }
+    : undefined;
   for (const e of degradedByEnv) {
     write(`⚠ provider absent (environment): ${e.path}: ${e.message}\n`);
   }
@@ -215,10 +227,15 @@ export function assemble(flags: ServeFlags): { ok: true; value: Assembly } | { o
     return { key, transport: (m ? m.transport : "unknown") as "sdk" | "stdio" | "http" | "unknown", degraded: true };
   });
 
-  const mounts: Array<{ key: string; transport: string; degraded?: boolean }> = [
-    ...plans.map((p) => ({ key: p.key, transport: p.transport as string, degraded: false })),
+  const mounts: Array<{ key: string; transport: string; degraded?: boolean; manifestPath?: string }> = [
+    ...plans.map((p) => ({
+      key: p.key,
+      transport: p.transport as string,
+      degraded: false,
+      ...(toolManifestPaths[p.key] ? { manifestPath: toolManifestPaths[p.key] as string } : {}),
+    })),
     ...warnings.map((w) => ({ key: w.key, transport: "sdk", degraded: true })),
-    ...envDegraded,
+    ...envDegraded.map((m) => ({ ...m, ...(toolManifestPaths[m.key] ? { manifestPath: toolManifestPaths[m.key] as string } : {}) })),
   ];
   return {
     ok: true,
@@ -231,6 +248,8 @@ export function assemble(flags: ServeFlags): { ok: true; value: Assembly } | { o
       plans,
       mounts,
       toolManifestPaths,
+      ...(knowledgeInfo ? { knowledgeInfo } : {}),
+      entryName: preset.entry,
       repoRoot,
     },
   };
@@ -610,6 +629,9 @@ export async function runServeWeb(flags: ServeFlags): Promise<number> {
     staticDir,
     systemPrompt: BASE_SYSTEM_PROMPT,
     token: webToken,
+    knowledge: asm.value.knowledgeInfo ?? undefined,
+    entry: { name: asm.value.entryName, confirm: REST_CAPABILITIES.confirm },
+    dialect: selectDialect(modelLease),
     listPresets: () => listPresetFiles(asm.value.repoRoot),
     usage: (q) => aggregateUsage(usageLogPath(), q),
     // Session workspaces are keyed by the entry's externalKey; only boring

@@ -28,6 +28,7 @@ function assembly(knowledgeRoot: string): Assembly {
     plans: [],
     mounts: [],
     toolManifestPaths: {},
+    entryName: "cli",
     repoRoot: knowledgeRoot,
   };
 }

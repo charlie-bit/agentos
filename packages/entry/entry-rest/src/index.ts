@@ -85,7 +85,15 @@ export interface StartServerOptions {
   presetName: string;
   /** Names only — values must never be reachable from this data. */
   model: { provider: string; baseUrlEnv?: string; credentialsEnv?: string };
-  mounts: Array<{ key: string; transport: string; degraded?: boolean }>;
+  mounts: Array<{ key: string; transport: string; degraded?: boolean; manifestPath?: string }>;
+  /**
+   * Read-only four-layer disclosure (spec #262): which manifest each slot
+   * resolved to. Names and paths only — never contents, never env values.
+   */
+  knowledge?: { name: string; manifestPath?: string | null; mountType?: string | null };
+  entry?: { name: string; confirm: boolean };
+  /** Runtime dialect of the active model channel (spec #213). */
+  dialect?: string;
   runner: TurnRunner;
   ledger: Ledger;
   /** 0 = ephemeral port (tests). */
@@ -576,6 +584,9 @@ export async function startServer(o: StartServerOptions): Promise<RunningServer>
         preset: o.presetName,
         model: { provider: o.model.provider, baseUrlEnv: o.model.baseUrlEnv ?? null, credentialsEnv: o.model.credentialsEnv ?? null },
         mounts: o.mounts,
+        knowledge: o.knowledge ?? null,
+        entry: o.entry ?? null,
+        dialect: o.dialect ?? null,
         systemPrompt: o.systemPrompt ?? null,
         ...entry.statusSnapshot(
           url.searchParams.get("session") === null ? undefined : webExternalKey(url.searchParams.get("session") as string),
