@@ -10,7 +10,7 @@
  * only — traversal is refused, not normalized.
  */
 import { execFileSync } from "node:child_process";
-import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve, sep } from "node:path";
 
 export interface CommitConfirmation {
@@ -48,6 +48,29 @@ function refuse(reason: string): never {
   throw new Error(`kb_commit refused: ${reason}`);
 }
 
+/**
+ * Receipt ids already committed, read from the append-only ledger. The draft
+ * file is the primary guard, but unlinking can fail (read-only mount, race);
+ * the ledger line is the durable one — a second confirmation for the same
+ * receipt must never write the body twice or mint a second git commit.
+ */
+function alreadyCommitted(receiptsLog: string, receiptId: string): boolean {
+  try {
+    for (const line of readFileSync(receiptsLog, "utf8").split("\n")) {
+      if (line.trim().length === 0) continue;
+      try {
+        const rec = JSON.parse(line) as { phase?: string; receiptId?: string };
+        if (rec.phase === "committed" && rec.receiptId === receiptId) return true;
+      } catch {
+        /* torn line: skip, the draft file still guards */
+      }
+    }
+  } catch {
+    /* no ledger yet: nothing was ever committed through this door */
+  }
+  return false;
+}
+
 export function commitDraft(a: CommitDraftArgs): CommitDraftResult {
   if (
     a.confirmation === null ||
@@ -64,6 +87,8 @@ export function commitDraft(a: CommitDraftArgs): CommitDraftResult {
   const target = resolve(join(bookRoot, a.pageId));
   if (target !== bookRoot && !target.startsWith(bookRoot + sep)) refuse(`pageId escapes the book root: ${JSON.stringify(a.pageId)}`);
 
+  if (alreadyCommitted(a.receiptsLog, a.receiptId)) refuse(`receipt ${a.receiptId} is already committed (one confirmation = one commit)`);
+
   const draftFile = resolve(join(a.draftsDir, `${a.receiptId}.md`));
   if (!existsSync(draftFile)) refuse(`receipt ${a.receiptId} has no draft on disk (expired or already committed?)`);
 
@@ -79,7 +104,9 @@ export function commitDraft(a: CommitDraftArgs): CommitDraftResult {
     ((args, cwd) => execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim());
   if (!existsSync(join(bookRoot, ".git"))) git(["init"], bookRoot);
   git(["add", "--", a.pageId], bookRoot);
-  const identity = ["-c", "user.name=agentos-kb", "-c", "user.email=kb@agentos.local"];
+  // gpgsign=false keeps the commit hermetic: a developer's global signing setup
+  // must never turn a book commit (or its test) into an interactive prompt.
+  const identity = ["-c", "user.name=agentos-kb", "-c", "user.email=kb@agentos.local", "-c", "commit.gpgsign=false"];
   const message = [
     `kb: ${existed ? "append" : "add"} ${a.pageId}`,
     "",
@@ -92,11 +119,25 @@ export function commitDraft(a: CommitDraftArgs): CommitDraftResult {
   git([...identity, "commit", "-m", message, "--", a.pageId], bookRoot);
   const sha = git(["rev-parse", "HEAD"], bookRoot);
 
+  // Ledger line first, then consume the draft: if the unlink fails, the
+  // committed line still refuses a second confirmation (see alreadyCommitted).
   appendFileSync(
     a.receiptsLog,
-    JSON.stringify({ receiptId: a.receiptId, pageId: a.pageId, committedAtMs: Date.now(), commit: sha, evidence: a.evidence.trim() }) + "\n",
+    JSON.stringify({
+      phase: "committed",
+      receiptId: a.receiptId,
+      pageId: a.pageId,
+      committedAtMs: Date.now(),
+      commit: sha,
+      evidence: a.evidence.trim(),
+    }) + "\n",
     "utf8",
   );
+  try {
+    unlinkSync(draftFile); // one confirmation consumes its draft: no double submit
+  } catch {
+    /* the ledger line above already blocks the second submit */
+  }
   return { path: target, commit: sha, appended: existed };
 }
 
