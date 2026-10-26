@@ -146,14 +146,14 @@ Each contract ships with a set of black-box tests that every implementation must
 
 ### Implementation Order
 
-| Step | What | Acceptance | Why here |
-|------|------|------------|----------|
-| 0 | Manifest meta schema + four contracts (text only) | Each contract describes a real existing system | Paper convergence, zero risk |
-| 1 | Convert existing project's MCP registry to manifest-driven | Zero difference in tool set before/after | Reference exists, mechanism easiest to see |
-| 2 | Introduce a second project as the first external manifestonboard | Idempotent declarations work, non-idempotent tools protected | Immediately pressure-tested by a second real consumer |
-| 3 | Extract two ModelProvider implementations (e.g., OpenAI / Ollama) | Swap providers within a single request, routing works | Pure extraction, mechanism widely proven |
-| 4 | Two EntryAdapter implementations: Slack + REST | Same preset runs the same conversation from both ends | Two-implementation principle → contract finalization |
-| 5 | knowledge-core + multiple providers + cross-runtime conformance | Same preset passes full flow in two different runtimes | Depends on steps 1–4 format stability |
+| Step | What | Status | Acceptance | Why here |
+|------|------|--------|------------|----------|
+| 0 | Manifest meta schema + four contracts | **shipped** | Each contract describes a real existing system | Paper convergence, zero risk |
+| 1 | MCP registry driven by manifests | **shipped** | Zero difference in tool set before/after | Reference exists, mechanism easiest to see |
+| 2 | A second, external project joins via manifest only | **planned** (#304) | Idempotent declarations work, non-idempotent tools protected | Still needs a real second consumer to be pressure-tested |
+| 3 | Third-party ModelProvider dialects | **shipped** | Swap providers within a single request, routing works | `model-anthropic-compat`, `model-bedrock`, `model-openai-compat` |
+| 4 | Two EntryAdapter implementations: CLI + REST | **shipped** | Same preset runs the same conversation from both ends | Slack is a rejected boundary (#171) — CLI/REST are the reference pair |
+| 5 | Cross-runtime conformance | **planned** (#144/#298) | Same preset passes full flow in two different runtimes | Depends on steps 1–4 format stability |
 
 ### Three Anti-patterns (Rejected)
 

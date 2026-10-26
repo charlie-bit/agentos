@@ -146,14 +146,14 @@ entry: cli                      # 代码注册的 adapter 名（cli | rest）
 
 ### 落地顺序
 
-| Step | 做什么 | 验收 | 为什么在这 |
-|------|--------|------|-----------|
-| 0 | Manifest 元 schema + 四契约文本 | 每份契约能描述一个已有系统 | 纸面收敛，零风险 |
-| 1 | 已有项目的 MCP 注册表改 manifest 驱动 | 改造前后工具集零差异 | 有参照物，机制最容易显形 |
-| 2 | 引入第二个项目作为外来第一条 manifest 接入 | 幂等声明生效、非幂等工具被保护 | 立刻被第二个真实方压测 |
-| 3 | 抽取两个 ModelProvider 实现（如 OpenAI / Ollama） | 一次请求内换 provider，路由/降级正常 | 纯抽取，机制已广泛运行 |
-| 4 | EntryAdapter 两个实现：Slack + REST | 同一 preset 两端跑同一次对话 | 两实现原则契约定稿 |
-| 5 | knowledge-core + 多 provider + 跨运行时 conformance | 同一 preset 在两个运行时各跑通全流程 | 依赖前四步格式稳定 |
+| Step | 做什么 | 状态 | 验收 | 为什么在这 |
+|------|--------|------|------|-----------|
+| 0 | Manifest 元 schema + 四契约 | **已交付** | 每份契约能描述一个已有系统 | 纸面收敛，零风险 |
+| 1 | MCP 注册表改 manifest 驱动 | **已交付** | 改造前后工具集零差异 | 有参照物，机制最容易显形 |
+| 2 | 第二个外部项目经 manifest 接入 | **计划中**（#304） | 幂等声明生效、非幂等工具被保护 | 仍需一个真实第二方压测 |
+| 3 | 第三方 ModelProvider 方言 | **已交付** | 一次请求内换 provider，路由/降级正常 | `model-anthropic-compat` / `model-bedrock` / `model-openai-compat` |
+| 4 | EntryAdapter 两个实现：CLI + REST | **已交付** | 同一 preset 两端跑同一次对话 | Slack 是已拒绝边界（#171），CLI/REST 是参考实现对 |
+| 5 | 跨运行时 conformance | **计划中**（#144/#298） | 同一 preset 在两个运行时各跑通全流程 | 依赖前四步格式稳定 |
 
 ### 三个反模式（已否决）
 
