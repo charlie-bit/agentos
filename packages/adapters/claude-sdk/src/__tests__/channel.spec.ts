@@ -14,12 +14,14 @@ import {
   allowedToolsFromPlans,
   fsRootsFromPlans,
   collectDrift,
+  withToolRetry,
   consumeStream,
   buildQueryOptions,
   shortModelName,
   type TurnInput,
 } from "../index.js";
 import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk";
+import type { NeutralTool } from "@agentos/contracts";
 
 const FAKE_ENV = {
   AGENTOS_SMOKE_BASE_URL: "https://channel.example/anthropic",
@@ -435,5 +437,55 @@ describe("drift contract: unverified is not clean (spec #226)", () => {
     const driftEvent = out.events.find((e) => e.type === "kernel.system.drift");
     expect(driftEvent).toBeDefined();
     expect((driftEvent?.payload as { unverified: string[] }).unverified).toEqual(["gateway"]);
+  });
+});
+
+describe("withToolRetry — injected failing server (spec #205)", () => {
+  const tool = (name: string, impl: () => Promise<unknown>): NeutralTool => ({
+    name,
+    description: name,
+    inputSchema: { type: "object", properties: {} },
+    handler: impl,
+  });
+
+  it("idempotent tool: retried once; non-idempotent tool: zero retries", async () => {
+    let readCalls = 0;
+    let writeCalls = 0;
+    const tools = [
+      tool("read_page", async () => {
+        readCalls += 1;
+        if (readCalls === 1) throw new Error("transport down");
+        return { ok: true };
+      }),
+      tool("write_page", async () => {
+        writeCalls += 1;
+        throw new Error("transport down");
+      }),
+    ];
+    const retries: string[] = [];
+    const wrapped = withToolRetry(tools, {
+      idempotentFor: (name) => name === "read_page",
+      onRetry: (name) => retries.push(name),
+    });
+
+    await expect(wrapped[0]!.handler({})).resolves.toEqual({ ok: true });
+    expect(readCalls).toBe(2);
+    expect(retries).toEqual(["read_page"]);
+
+    await expect(wrapped[1]!.handler({})).rejects.toThrow("transport down");
+    expect(writeCalls).toBe(1); // never retried
+  });
+
+  it("no policy = no wrapping behavior (tools pass through unchanged)", async () => {
+    let calls = 0;
+    const tools = [
+      tool("t", async () => {
+        calls += 1;
+        throw new Error("x");
+      }),
+    ];
+    const wrapped = withToolRetry(tools, { idempotentFor: () => false });
+    await expect(wrapped[0]!.handler({})).rejects.toThrow("x");
+    expect(calls).toBe(1);
   });
 });

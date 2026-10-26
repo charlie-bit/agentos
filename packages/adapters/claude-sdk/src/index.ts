@@ -9,6 +9,8 @@ export {
   canUseToolFromPlans,
   collectDrift,
   createInProcessServer,
+  withToolRetry,
+  type RetryPolicy,
   buildQueryOptions,
   consumeStream,
   runTurn,

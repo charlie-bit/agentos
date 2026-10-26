@@ -23,6 +23,7 @@ import {
   appendAttribution,
   formatAttributionLine,
   buildKbTools,
+  isIdempotent,
   kbPointerLine,
   type Attribution,
   type AnyManifest,
@@ -266,7 +267,6 @@ export async function wireKnowledge(
     tenant: { tenantId: asm.presetName },
   });
   // factory name == manifest name == mount key: one identity, "kb".
-  const serverConfig = createInProcessServer(tools, "kb");
   const kbManifest = toolProviderManifestSchema.parse({
     kind: "tool",
     version: "1",
@@ -274,9 +274,26 @@ export async function wireKnowledge(
     transport: "sdk",
     auth: { mode: "none" },
     allowedTools: tools.map((t: NeutralTool) => t.name),
+    // Retry policy data (spec #205): reads are retry-safe, the two write
+    // beats are not — kb_write mints a new receipt per call, kb_commit
+    // consumes one. The executor branches on exactly this declaration.
+    idempotent: { default: true, overrides: { kb_write: false, kb_commit: false } },
     schemaExchange: "json-schema",
   }) as ToolProviderManifest;
-  const { plans: kbPlans, errors } = planTools([kbManifest], { sdkFactories: { kb: serverConfig.instance } });
+  // Plan first (a placeholder factory satisfies the registry lookup) so the
+  // server's retry policy can branch on the surfaced plan, not a guess.
+  const { plans: kbPlans, errors } = planTools([kbManifest], { sdkFactories: { kb: {} } });
+  const kbPlan = kbPlans[0];
+  const serverConfig = createInProcessServer(
+    tools,
+    "kb",
+    kbPlan
+      ? {
+          idempotentFor: (toolName) => isIdempotent(kbPlan, toolName),
+          onRetry: (toolName) => write(`⚠ transport failure on ${toolName}: retrying once (declared idempotent)\n`),
+        }
+      : undefined,
+  );
   if (errors.length > 0 || kbPlans[0] === undefined) {
     write(
       `⚠ kb plan failed — session runs without kb: ${errors.length ? errors.map((e) => `${e.path}: ${e.message}`).join("; ") : "sdk factory 'kb' produced no plan"}\n`,

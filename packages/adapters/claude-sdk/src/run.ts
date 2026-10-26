@@ -342,14 +342,50 @@ function toZodShape(schema: NeutralTool["inputSchema"]): Record<string, z.ZodTyp
  * Handler results are JSON-stringified into a text block; tool output
  * semantics stay in the neutral handlers, never here.
  */
+export interface RetryPolicy {
+  /** Branch source: the mount plan's idempotent declaration (spec #205). */
+  idempotentFor: (toolName: string) => boolean;
+  /** Observability hook; a throwing hook never affects the call. */
+  onRetry?: (toolName: string, error: unknown) => void;
+}
+
+/**
+ * Transport-layer retry executor (spec #205): wrap each neutral tool so a
+ * THROWN call is retried exactly once when the plan says the tool is
+ * idempotent, and never otherwise. Successful and domain-error answers pass
+ * through untouched.
+ */
+export function withToolRetry(tools: readonly NeutralTool[], policy: RetryPolicy): NeutralTool[] {
+  return tools.map((t) => ({
+    ...t,
+    handler: async (input: Record<string, unknown>) => {
+      const attempt = () => t.handler(input);
+      const idempotent = policy.idempotentFor(t.name);
+      try {
+        return await attempt();
+      } catch (error) {
+        if (!idempotent) throw error;
+        try {
+          policy.onRetry?.(t.name, error);
+        } catch {
+          /* observability must not affect the call */
+        }
+        return await attempt(); // exactly one extra attempt
+      }
+    },
+  }));
+}
+
 export function createInProcessServer(
   tools: readonly NeutralTool[],
   serverName = "agentos-kb",
+  retry?: RetryPolicy,
 ): { type: "sdk"; name: string; instance: unknown } {
+  const effective = retry ? withToolRetry(tools, retry) : tools;
   return createSdkMcpServer({
     name: serverName,
     version: "0.1.0",
-    tools: tools.map((t) => ({
+    tools: effective.map((t) => ({
       name: t.name,
       description: t.description,
       inputSchema: toZodShape(t.inputSchema),
