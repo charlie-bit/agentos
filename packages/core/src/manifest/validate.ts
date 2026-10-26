@@ -12,12 +12,15 @@
  * adapter names (cli/P1b-2 will feed it from its registry), not against manifests.
  */
 import type { LoadedManifest } from "./load.js";
-import type { ManifestError } from "./errors.js";
+import type { ErrorCategory, ManifestError } from "./errors.js";
 
 /** A manifest-layer finding: ManifestError plus the file it came from. */
 export interface ValidationError extends ManifestError {
   source: string;
 }
+
+/** Validate-phase findings are reference defects by definition (spec #204). */
+const REF: ErrorCategory = "reference";
 
 export interface ValidateOptions {
   /** Registered entry-adapter names from code. Absent = none registered. */
@@ -37,6 +40,7 @@ export function validatePresetRefs(
     if (first) {
       errors.push({
         source,
+        category: REF,
         path: "name",
         message: `duplicate manifest name ${JSON.stringify(manifest.name)} — already declared in ${first.source}`,
         hint: "every manifest name must be unique; slots resolve by name",
@@ -113,6 +117,7 @@ export function validatePresetRefs(
     if (!entryNames.has(manifest.entry)) {
       errors.push({
         source,
+        category: REF,
         path: "entry",
         message: `references ${JSON.stringify(manifest.entry)}, which is not a registered entry adapter`,
         hint: "entry adapters come from code registration (validate entryNames option), not from config manifests",

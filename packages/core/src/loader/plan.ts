@@ -45,7 +45,12 @@ function expandEnv(value: string, env: NodeJS.ProcessEnv, at: string, errors: Ma
   return value.replace(VAR, (whole, name: string) => {
     const v = env[name];
     if (v === undefined || v === "") {
-      errors.push({ path: at, message: `\${${name}} is not set in the environment`, hint: "export the var or fix the manifest" });
+      errors.push({
+        path: at,
+        category: "environment",
+        message: `\${${name}} is not set in the environment`,
+        hint: "export the var or fix the manifest",
+      });
       return whole;
     }
     return v;
@@ -95,6 +100,7 @@ export function planTools(manifests: readonly ToolProviderManifest[], opts: Plan
         if (value === undefined || value === "") {
           errors.push({
             path: `${m.name}.auth.env`,
+            category: "environment",
             message: varName ? `\${${varName}} not resolvable — cannot mount` : "auth.env missing",
             hint: "credentials are leased by env-var name; export it or set enabled:false",
           });
@@ -125,7 +131,7 @@ export function planTools(manifests: readonly ToolProviderManifest[], opts: Plan
 
     const checked = toolMountPlanSchema.safeParse(candidate);
     if (checked.success) plans.push(checked.data);
-    else for (const e of formatIssues(checked.error.issues)) errors.push({ ...e, path: `${m.name}.${e.path}` });
+    else for (const e of formatIssues(checked.error.issues)) errors.push({ ...e, path: `${m.name}.${e.path}`, category: "schema" });
   }
 
   return { plans, errors, warnings };

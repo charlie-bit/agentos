@@ -97,3 +97,48 @@ describe("serve assembly has no credential sugar (spec #227)", () => {
     }
   });
 });
+
+describe("single-tool failure isolation (spec #204)", () => {
+  it("a tool with an unresolvable env var degrades to a warning; the rest still mount", async () => {
+    const { assemble } = await import("../serve.js");
+    const dir = mkdtempSync(join(tmpdir(), "agentos-iso-"));
+    roots.push(dir);
+    mkdirSync(join(dir, "presets"), { recursive: true });
+    mkdirSync(join(dir, "knowledge"), { recursive: true });
+    mkdirSync(join(dir, "models"), { recursive: true });
+    mkdirSync(join(dir, "tools"), { recursive: true });
+    writeFileSync(
+      join(dir, "presets", "p.yml"),
+      ["kind: preset", 'version: "1"', "name: p", "knowledge: k", "model: m", "tools: [good, broken]", "entry: cli", ""].join("\n"),
+    );
+    writeFileSync(
+      join(dir, "knowledge", "k.yml"),
+      ["kind: knowledge", 'version: "1"', "name: k", "provider: markdown", "mount: { type: path, path: ./kb }", ""].join("\n"),
+    );
+    writeFileSync(
+      join(dir, "models", "m.yml"),
+      ["kind: model", 'version: "1"', "name: m", "provider: vendor-x", "models: { a: real-a }", ""].join("\n"),
+    );
+    writeFileSync(
+      join(dir, "tools", "good.yml"),
+      ["kind: tool", 'version: "1"', "name: good", "transport: stdio", "command: npx -y good-server", "auth: { mode: none }", "schemaExchange: json-schema", ""].join("\n"),
+    );
+    writeFileSync(
+      join(dir, "tools", "broken.yml"),
+      ["kind: tool", 'version: "1"', "name: broken", "transport: stdio", "command: npx -y broken-server ${AGENTOS_TEST_MISSING_VAR}", "auth: { mode: none }", "schemaExchange: json-schema", ""].join("\n"),
+    );
+
+    const saved = process.env.AGENTOS_TEST_MISSING_VAR;
+    delete process.env.AGENTOS_TEST_MISSING_VAR;
+    try {
+      const asm = assemble({ preset: join(dir, "presets", "p.yml") });
+      expect(asm.ok).toBe(true);
+      if (!asm.ok) return;
+      expect(asm.value.plans.map((p) => p.key)).toEqual(["good"]);
+      const broken = asm.value.mounts.find((m) => m.key === "broken");
+      expect(broken).toMatchObject({ degraded: true });
+    } finally {
+      if (saved !== undefined) process.env.AGENTOS_TEST_MISSING_VAR = saved;
+    }
+  });
+});

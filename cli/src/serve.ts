@@ -157,9 +157,28 @@ export function assemble(flags: ServeFlags): { ok: true; value: Assembly } | { o
   // declared with enabled:false instead of being propped up with a fake token.
   const tools = manifests.filter((m): m is Extract<AnyManifest, { kind: "tool" }> => m.kind === "tool");
   const { plans, errors, warnings } = planTools(tools);
-  if (errors.length) return { ok: false, exitCode: 1, lines: errors.map((e) => `✗ ${e.path}: ${e.message}`) };
+  // Failure isolation (spec #204): an ENVIRONMENT defect (missing var / lease)
+  // removes ONE provider with a ⚠, it does not abort the boot. Config lies
+  // (schema/reference) stay fail-loud — a lying yml is not a deployment state.
+  const fatal = errors.filter((e) => e.category !== "environment");
+  const degradedByEnv = errors.filter((e) => e.category === "environment");
+  if (fatal.length) return { ok: false, exitCode: 1, lines: fatal.map((e) => `✗ ${e.path}: ${e.message}`) };
   for (const w of warnings) write(`⚠ ${w.key}: ${w.message}\n`);
+  const byName = new Map(tools.map((m) => [m.name, m]));
+  for (const e of degradedByEnv) {
+    write(`⚠ provider absent (environment): ${e.path}: ${e.message}\n`);
+  }
+  const envDegraded = degradedByEnv.map((e) => {
+    const key = e.path.split(".")[0] ?? e.path;
+    const m = byName.get(key);
+    return { key, transport: (m ? m.transport : "unknown") as "sdk" | "stdio" | "http" | "unknown", degraded: true };
+  });
 
+  const mounts: Array<{ key: string; transport: string; degraded?: boolean }> = [
+    ...plans.map((p) => ({ key: p.key, transport: p.transport as string, degraded: false })),
+    ...warnings.map((w) => ({ key: w.key, transport: "sdk", degraded: true })),
+    ...envDegraded,
+  ];
   return {
     ok: true,
     value: {
@@ -168,9 +187,7 @@ export function assemble(flags: ServeFlags): { ok: true; value: Assembly } | { o
       allModels: manifests.filter((m): m is ModelProviderManifest => m.kind === "model"),
       knowledge: manifests.find((m) => m.kind === "knowledge" && m.name === preset.knowledge) as KnowledgeManifest | undefined,
       plans,
-      mounts: plans.map((p) => ({ key: p.key, transport: p.transport, degraded: false })).concat(
-        warnings.map((w) => ({ key: w.key, transport: "sdk", degraded: true })),
-      ),
+      mounts,
       repoRoot,
     },
   };
