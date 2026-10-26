@@ -23,8 +23,17 @@ function ToolCallBlock({ e }: { e: Extract<Entry, { kind: "tool" }> }) {
           <span className="shrink-0 text-[10px] text-muted-foreground">{e.durationMs}ms</span>
         )}
       </CollapsibleTrigger>
-      <CollapsibleContent className="px-3 pb-2">
+      <CollapsibleContent className="space-y-1 px-3 pb-2">
+        <div className="text-[10px] uppercase tracking-wide text-muted-foreground">input</div>
         <pre className="overflow-x-auto rounded bg-background p-2 font-mono text-[11px] text-muted-foreground">{e.input}</pre>
+        {e.summary && (
+          <>
+            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">result</div>
+            <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words rounded bg-background p-2 font-mono text-[11px] text-muted-foreground">
+              {e.summary}
+            </pre>
+          </>
+        )}
       </CollapsibleContent>
     </Collapsible>
   );

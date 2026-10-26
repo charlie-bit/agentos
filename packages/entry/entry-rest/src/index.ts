@@ -55,6 +55,8 @@ export interface ChatTurnContext {
   /** Ledger externalKey for this browser session ("web-<id>"). */
   externalKey: string;
   resumeSdkSessionId?: string;
+  /** Request-level model override (#115): manifest name or alias, beats presets. */
+  modelOverride?: string;
   /** Incremental event delivery onto the live SSE stream. */
   emit: (event: RenderEvent) => void;
   /** Out-of-band human gate routed through the browser. */
@@ -1070,6 +1072,7 @@ export async function startServer(o: StartServerOptions): Promise<RunningServer>
         return sendJson(res, 400, { error: "sessionId and message are required strings" });
       }
       const externalKey = webExternalKey(sessionId);
+      const modelOverride = typeof body?.model === "string" && body.model.length > 0 && body.model.length <= 120 ? body.model : undefined;
       const binding = await entry.sessionFor(externalKey);
       const controller = new AbortController();
       const unregister = entry.registerTurn(externalKey, controller);
@@ -1110,6 +1113,7 @@ export async function startServer(o: StartServerOptions): Promise<RunningServer>
         const out = await o.runner({
           prompt: message,
           signal: controller.signal,
+          ...(modelOverride ? { modelOverride } : {}),
           externalKey,
           resumeSdkSessionId: row?.sdkSessionId ?? undefined,
           emit: (ev) => entry.renderFor(externalKey, [ev]),

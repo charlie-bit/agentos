@@ -23,7 +23,7 @@ export type TurnErrorCategory = "tool-missing" | "gate-denied" | "model-fallback
 export type Entry =
   | { kind: "user"; id: string; text: string }
   | { kind: "assistant"; id: string; text: string; status: "streaming" | "done" | "error" | "aborted" }
-  | { kind: "tool"; id: string; name: string; input: string; status: "running" | "ok" | "error"; durationMs?: number }
+  | { kind: "tool"; id: string; name: string; input: string; status: "running" | "ok" | "error"; durationMs?: number; summary?: string }
   | { kind: "thinking"; id: string; count: number; open: boolean }
   | { kind: "drift"; id: string; missing: string[]; undeclared: string[]; unverified: string[] }
   /** A turn failure with an actionable class (spec #264). */
@@ -88,6 +88,8 @@ export interface Frame {
     reason?: string;
     /** tool.result pairing (spec #273): measured duration. */
     durationMs?: number;
+    /** Bounded result text for the expanded card (#152/#274). */
+    summary?: string;
   } | null;
 }
 
@@ -253,6 +255,7 @@ export function reduce(s: State, a: Action): State {
                 ...e,
                 status: p.isError ? "error" : "ok",
                 ...(typeof p.durationMs === "number" ? { durationMs: p.durationMs } : {}),
+                ...(typeof p.summary === "string" && p.summary.length > 0 ? { summary: p.summary } : {}),
               };
               return { ...s, entries };
             }

@@ -1409,3 +1409,17 @@ describe("escalation history (spec #127/#294)", () => {
     expect(body.recent[0]?.reason).toBe("why 3");
   });
 });
+
+describe("request-level model override (spec #115)", () => {
+  it("passes a well-formed override to the runner and ignores junk", async () => {
+    const seen: Array<string | undefined> = [];
+    const { srv } = await boot(async (ctx) => {
+      seen.push(ctx.modelOverride);
+      return {};
+    });
+    await (await postJson(srv, "/api/chat", { sessionId: "m1", message: "go", model: "deepseek" })).text();
+    await (await postJson(srv, "/api/chat", { sessionId: "m2", message: "go", model: 123 })).text();
+    await (await postJson(srv, "/api/chat", { sessionId: "m3", message: "go", model: "x".repeat(121) })).text();
+    expect(seen).toEqual(["deepseek", undefined, undefined]);
+  });
+});

@@ -675,9 +675,24 @@ export function normalize(message: SDKMessage): RenderEvent[] {
       const content = message.message?.content;
       if (!Array.isArray(content)) return [];
       const out: RenderEvent[] = [];
-      for (const block of content as { type?: string; is_error?: boolean }[]) {
-        if (block?.type === "tool_result")
-          out.push({ type: "tool.result", payload: { isError: block.is_error === true }, timestampMs: ts });
+      for (const block of content as Array<{ type?: string; is_error?: boolean; content?: unknown }>) {
+        if (block?.type === "tool_result") {
+          // Summary for the card (#152/#274): bounded text, never the full
+          // payload — large results already offloaded to a pointer.
+          const raw = Array.isArray(block.content)
+            ? block.content
+                .map((c) => (typeof c === "object" && c !== null && "text" in c ? String((c as { text?: unknown }).text ?? "") : ""))
+                .join(" ")
+            : typeof block.content === "string"
+              ? block.content
+              : "";
+          const summary = raw.replace(/\s+/g, " ").trim().slice(0, 300);
+          out.push({
+            type: "tool.result",
+            payload: { isError: block.is_error === true, ...(summary.length > 0 ? { summary } : {}) },
+            timestampMs: ts,
+          });
+        }
       }
       return out;
     }
