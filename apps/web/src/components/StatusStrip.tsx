@@ -1,5 +1,6 @@
 import { Boxes, TriangleAlert } from "lucide-react";
 import type { StatusResponse } from "../lib/api";
+import { dialectBadge } from "../lib/dialect";
 import { Badge } from "./ui/badge";
 import { ConfigDialog } from "./ConfigDialog";
 
@@ -14,6 +15,14 @@ export function StatusStrip({ status }: { status: StatusResponse | null }) {
       </span>
       <Badge>preset {status.preset}</Badge>
       <Badge>model {status.model.provider}</Badge>
+      {(() => {
+        const badge = dialectBadge(status.dialect);
+        return badge ? (
+          <Badge className="border-warn text-warn" title="this channel is a compatibility endpoint; the served model is not the vendor it resembles">
+            {badge}
+          </Badge>
+        ) : null;
+      })()}
       <span className="mx-1 h-4 w-px bg-border" />
       {status.mounts.length === 0 && <Badge>no tools</Badge>}
       {status.mounts.map((m) => (
