@@ -6,6 +6,8 @@ import { Markdown } from "./Markdown";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./ui/collapsible";
 import { ScrollArea } from "./ui/scroll-area";
 import { SelectionMenu } from "./SelectionMenu";
+import { EmptyState } from "./EmptyState";
+import { emptyVariant, type EmptyVariant } from "../lib/empty-state";
 
 /** tool.call/tool.result lifecycle block: collapsed by default, open on error. */
 function ToolCallBlock({ e }: { e: Extract<Entry, { kind: "tool" }> }) {
@@ -86,7 +88,16 @@ function DriftBanner({ e }: { e: Extract<Entry, { kind: "drift" }> }) {
 }
 
 /** ChatStream = the RenderEvent vocabulary, rendered once each. */
-export function ChatStream({ state, onQuote }: { state: State; onQuote: (text: string) => void }) {
+export function ChatStream({
+  state,
+  onQuote,
+  empty,
+}: {
+  state: State;
+  onQuote: (text: string) => void;
+  /** Which first-run guidance to show when the transcript is empty (#268). */
+  empty?: EmptyVariant | null;
+}) {
   const anchor = useRef<HTMLDivElement>(null);
   const count = state.entries.length + (state.entries.at(-1)?.kind === "thinking" ? (state.entries.at(-1) as { count: number }).count : 0);
   useEffect(() => {
@@ -96,15 +107,18 @@ export function ChatStream({ state, onQuote }: { state: State; onQuote: (text: s
     <ScrollArea className="min-h-0 flex-1">
       <SelectionMenu onQuote={onQuote}>
         <div className="flex flex-col gap-2.5 px-4 py-3">
-          {state.entries.length === 0 && (
-            <div className="mt-[30vh] flex flex-col items-center gap-2 text-center text-sm text-muted-foreground">
-              <Braces className="h-6 w-6 opacity-40" />
-              <span>
-                Ask the assistant anything it can answer with the mounted tools.
-                {state.resumed && <span className="ml-1 text-ok">· session resumed (server-side history)</span>}
-              </span>
-            </div>
-          )}
+          {state.entries.length === 0 &&
+            (empty ? (
+              <EmptyState variant={empty} />
+            ) : (
+              <div className="mt-[30vh] flex flex-col items-center gap-2 text-center text-sm text-muted-foreground">
+                <Braces className="h-6 w-6 opacity-40" />
+                <span>
+                  Ask the assistant anything it can answer with the mounted tools.
+                  {state.resumed && <span className="ml-1 text-ok">· session resumed (server-side history)</span>}
+                </span>
+              </div>
+            ))}
           {state.entries.map((e) => {
             switch (e.kind) {
               case "user":

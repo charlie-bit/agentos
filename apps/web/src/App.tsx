@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { webExternalKey } from "@agentos/contracts/session-key";
 import { deleteSession, getEscalations, getSessions, getStatus, HttpError, renameSession, setAccessToken, type SessionRow, type StatusResponse } from "./lib/api";
 import { useAgentChat } from "./lib/useAgentChat";
+import { emptyVariant } from "./lib/empty-state";
 import { ChatStream } from "./components/ChatStream";
 import { Composer } from "./components/Composer";
 import { ConfirmModal } from "./components/ConfirmModal";
@@ -83,7 +84,15 @@ export default function App() {
           onDelete={handleDelete}
         />
         <div className="flex min-w-0 flex-1 flex-col">
-          <ChatStream state={state} onQuote={(text) => setQuote({ text, nonce: Date.now() })} />
+          <ChatStream
+            state={state}
+            onQuote={(text) => setQuote({ text, nonce: Date.now() })}
+            empty={emptyVariant({
+              sessionCount: sessions.length,
+              mountCount: status?.mounts.filter((m) => m.degraded !== true).length ?? 0,
+              hasKnowledge: Boolean(status?.knowledge),
+            })}
+          />
           {/* key=sessionId: creating/switching sessions (sidebar "+", a row
               click) must be visible immediately, not only once a reply comes
               back — remounting drops stale draft text and refires autoFocus,
