@@ -21,7 +21,7 @@
  * whitelisted under the built dist with traversal rejection.
  */
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
-import { appendFileSync, existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, normalize, resolve, sep } from "node:path";
 import { userInfo } from "node:os";
 import { DatabaseSync } from "node:sqlite";
@@ -99,6 +99,11 @@ export interface StartServerOptions {
   /** The base system prompt actually sent to the model — surfaced read-only on
    * GET /api/status for the config-inspection dialog. Absent = field omitted. */
   systemPrompt?: string;
+  /**
+   * Resolve a session's workspace directory (spec #256/#257). Absent = the
+   * workspace endpoints answer 501; null = this session has no workspace.
+   */
+  workspaceDirFor?: (externalKey: string) => string | null;
   /**
    * Usage aggregate supplier (spec #291). Metadata only — usage.log has no
    * message content. Absent = 501.
@@ -365,6 +370,53 @@ function exportFileName(browserKey: string, ext: string): string {
   return `agentos-session-${safe || "session"}.${ext}`;
 }
 
+
+/** One file in a session workspace, as /api/workspace/files reveals it (spec #256). */
+export interface WorkspaceFileEntry {
+  /** Workspace-relative path with "/" separators. */
+  path: string;
+  size: number;
+  mtimeMs: number;
+}
+
+/** Hard cap: a workspace is a working directory, not an archive. */
+export const WORKSPACE_LIST_LIMIT = 500;
+
+/**
+ * Recursive listing under ONE session workspace, bounded and deterministic.
+ * Symlinked FILES are listed (they are workspace content); symlinked
+ * DIRECTORIES are not followed, so the walk can never leave the tree.
+ */
+export function listWorkspaceFiles(root: string, limit = WORKSPACE_LIST_LIMIT): WorkspaceFileEntry[] {
+  const out: WorkspaceFileEntry[] = [];
+  const walk = (dir: string, prefix: string): void => {
+    let entries;
+    try {
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return; // unreadable subtree: report what is readable
+    }
+    for (const e of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+      if (out.length >= limit) return;
+      const rel = prefix.length === 0 ? e.name : `${prefix}/${e.name}`;
+      const abs = join(dir, e.name);
+      if (e.isDirectory()) {
+        if (e.isSymbolicLink()) continue; // never follow links out of the tree
+        walk(abs, rel);
+        continue;
+      }
+      try {
+        const st = statSync(abs);
+        out.push({ path: rel, size: st.size, mtimeMs: st.mtimeMs });
+      } catch {
+        /* vanished between readdir and stat: skip */
+      }
+    }
+  };
+  if (existsSync(root)) walk(root, "");
+  return out;
+}
+
 export async function startServer(o: StartServerOptions): Promise<RunningServer> {
   const entry = new EntryRest({ presetName: o.presetName, ledger: o.ledger });
   const escalatePath = o.escalatePath ?? join(".agentos", "escalations.log");
@@ -585,6 +637,17 @@ export async function startServer(o: StartServerOptions): Promise<RunningServer>
       } catch {
         return sendJson(res, 200, { entries: [] }); // reader blew up: degrade, never 500
       }
+    }
+    if (req.method === "GET" && path === "/api/workspace/files") {
+      if (!o.workspaceDirFor) return sendJson(res, 501, { error: "workspace access not wired by this deployment" });
+      const requested = url.searchParams.get("session");
+      if (requested === null || requested.length === 0 || requested.length > 200) {
+        return sendJson(res, 400, { error: "session is required (<= 200 chars)" });
+      }
+      const key = isWebExternalKey(requested) ? requested : webExternalKey(requested);
+      const dir = o.workspaceDirFor(key);
+      if (dir === null) return sendJson(res, 200, { files: [], limit: WORKSPACE_LIST_LIMIT });
+      return sendJson(res, 200, { files: listWorkspaceFiles(dir), limit: WORKSPACE_LIST_LIMIT });
     }
     if (req.method === "GET" && path === "/api/usage") {
       if (!o.usage) return sendJson(res, 501, { error: "usage querying not wired by this deployment" });

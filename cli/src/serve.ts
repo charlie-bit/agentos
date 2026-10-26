@@ -606,6 +606,10 @@ export async function runServeWeb(flags: ServeFlags): Promise<number> {
     systemPrompt: BASE_SYSTEM_PROMPT,
     listPresets: () => listPresetFiles(asm.value.repoRoot),
     usage: (q) => aggregateUsage(usageLogPath(), q),
+    // Session workspaces are keyed by the entry's externalKey; only boring
+    // keys resolve, so a client-supplied session id can never pick a path.
+    workspaceDirFor: (externalKey) =>
+      /^[A-Za-z0-9_-]{1,200}$/.test(externalKey) ? join(asm.value.repoRoot, ".agentos", "workspaces", externalKey) : null,
     listTools: (): ToolDescriptor[] => {
       const mounted: ToolDescriptor[] = asm.value.plans.map((p) => ({
         key: p.key,

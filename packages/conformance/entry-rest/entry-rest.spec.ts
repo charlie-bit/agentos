@@ -938,3 +938,42 @@ describe("POST /api/sessions/export (spec #260)", () => {
     expect((await postJson(srv, "/api/sessions/export", { ids: [1] })).status).toBe(400);
   });
 });
+
+describe("GET /api/workspace/files (spec #256)", () => {
+  it("lists the session workspace recursively with sizes, and refuses nothing it cannot read", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "agentos-ws-"));
+    tempDirs.push(dir);
+    const ws = join(dir, "workspaces", "web-ws");
+    mkdirSync(join(ws, "tool-results"), { recursive: true });
+    writeFileSync(join(ws, "kb-overview.md"), "# guide");
+    writeFileSync(join(ws, "tool-results", "big.json"), '{"a":1}');
+    const dbPath = join(dir, "sessions.db");
+    const srv = await startServer({
+      presetName: "p",
+      model: { provider: "v" },
+      mounts: [],
+      runner: async () => ({}),
+      ledger: openLedger(dbPath),
+      port: 0,
+      dbPath,
+      staticDir: makeStaticDir(dir),
+      workspaceDirFor: (key) => (key === "web-ws" ? ws : null),
+    });
+    servers.push(srv);
+
+    const body = (await (await api(srv, "/api/workspace/files?session=ws")).json()) as {
+      files: Array<{ path: string; size: number; mtimeMs: number }>;
+    };
+    expect(body.files.map((f) => f.path).sort()).toEqual(["kb-overview.md", "tool-results/big.json"]);
+    expect(body.files.find((f) => f.path === "kb-overview.md")?.size).toBeGreaterThan(0);
+
+    // unknown session -> empty list, not an error
+    expect(((await (await api(srv, "/api/workspace/files?session=nobody")).json()) as { files: unknown[] }).files).toEqual([]);
+    expect((await api(srv, "/api/workspace/files")).status).toBe(400);
+  });
+
+  it("unwired is 501", async () => {
+    const { srv } = await boot(async () => ({}));
+    expect((await api(srv, "/api/workspace/files?session=x")).status).toBe(501);
+  });
+});
