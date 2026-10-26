@@ -99,6 +99,12 @@ export interface StartServerOptions {
   /** The base system prompt actually sent to the model — surfaced read-only on
    * GET /api/status for the config-inspection dialog. Absent = field omitted. */
   systemPrompt?: string;
+  /**
+   * SSE keepalive cadence (spec #252). Long turns can sit silent for minutes
+   * (model thinking, slow tool); an idle proxy/browser kills the connection.
+   * Absent = 15000 ms, per the product promise.
+   */
+  heartbeatMs?: number;
 }
 
 export interface RunningServer {
@@ -480,6 +486,18 @@ export async function startServer(o: StartServerOptions): Promise<RunningServer>
         o.ledger.touch(row.id);
       }
       entry.addStream(externalKey, res);
+      // Keepalive (spec #252): an SSE comment line keeps the socket warm
+      // without inventing an event the reducer must understand.
+      const heartbeat = setInterval(() => {
+        try {
+          res.write(`: keepalive ${Date.now()}\n\n`);
+        } catch {
+          /* dead socket: cleanup happens on close */
+        }
+      }, o.heartbeatMs ?? 15_000);
+      heartbeat.unref?.();
+      const stopHeartbeat = () => clearInterval(heartbeat);
+      res.on("close", stopHeartbeat);
       const meta = JSON.stringify({
         type: "session.meta",
         payload: { agentSessionId: binding.agentSessionId, resumed: Boolean(row?.sdkSessionId) },
@@ -510,6 +528,7 @@ export async function startServer(o: StartServerOptions): Promise<RunningServer>
         res.write(`data: ${frame}\n\n`);
         if (row) o.ledger.markStatus(row.id, "error");
       }
+      stopHeartbeat();
       res.end(); // stream closes after the result frame (runner's last emit or the error frame)
       return;
     }

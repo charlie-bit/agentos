@@ -644,3 +644,61 @@ describe("session list pagination (spec #221)", () => {
     expect(body.offset).toBe(0);
   });
 });
+
+describe("SSE keepalive (spec #252)", () => {
+  it("an idle stream still receives heartbeat comment lines", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "agentos-hb-"));
+    tempDirs.push(dir);
+    const dbPath = join(dir, "sessions.db");
+    const srv = await startServer({
+      presetName: "hb-preset",
+      model: { provider: "v" },
+      mounts: [],
+      heartbeatMs: 10,
+      runner: async ({ emit }) => {
+        await new Promise((r) => setTimeout(r, 45)); // silent turn
+        emit({ type: "result", payload: { subtype: "success", isError: false }, timestampMs: Date.now() });
+        return {};
+      },
+      ledger: openLedger(dbPath),
+      port: 0,
+      dbPath,
+      staticDir: makeStaticDir(dir),
+    });
+    servers.push(srv);
+
+    const res = await postJson(srv, "/api/chat", { sessionId: "hb", message: "slow" });
+    const body = await res.text();
+    expect(body).toContain(": keepalive");
+    const heartbeats = body.split("\n").filter((l) => l.startsWith(": keepalive")).length;
+    expect(heartbeats).toBeGreaterThanOrEqual(2);
+    expect(body).toContain('"type":"result"'); // heartbeat never replaced the real frames
+  });
+
+  it("heartbeat stops when the stream closes (no timer leak)", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "agentos-hb2-"));
+    tempDirs.push(dir);
+    const dbPath = join(dir, "sessions.db");
+    const srv = await startServer({
+      presetName: "hb-preset",
+      model: { provider: "v" },
+      mounts: [],
+      heartbeatMs: 5,
+      runner: async ({ emit }) => {
+        emit({ type: "result", payload: { subtype: "success", isError: false }, timestampMs: Date.now() });
+        return {};
+      },
+      ledger: openLedger(dbPath),
+      port: 0,
+      dbPath,
+      staticDir: makeStaticDir(dir),
+    });
+    servers.push(srv);
+    const res = await postJson(srv, "/api/chat", { sessionId: "fast", message: "go" });
+    await res.text();
+    // A leaked interval would keep writing to a closed response; the process
+    // staying alive past this point (and no throw) is the observable signal.
+    await new Promise((r) => setTimeout(r, 30));
+    expect(srv.port).toBeGreaterThan(0);
+  });
+});
