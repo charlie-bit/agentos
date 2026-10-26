@@ -857,3 +857,47 @@ describe("GET /api/usage (spec #291)", () => {
     expect((await api(srv, "/api/usage")).status).toBe(501);
   });
 });
+
+describe("GET /api/sessions/:id/export (spec #259)", () => {
+  const entries = [
+    { role: "user" as const, text: "why is checkout slow?", timestampMs: 1 },
+    { role: "tool" as const, text: '{"q":"checkout"}', toolName: "search", isError: false, timestampMs: 2 },
+    { role: "assistant" as const, text: "because retries storm", timestampMs: 3 },
+  ];
+
+  async function seeded(): Promise<{ srv: RunningServer; dbPath: string }> {
+    const { srv, dbPath } = await boot(async () => ({ sdkSessionId: "sdk-export" }), (args) =>
+      args.sdkSessionId === "sdk-export" ? entries : [],
+    );
+    const ledger = openLedger(dbPath);
+    const row = ledger.createSession({ entry: "rest", externalKey: "web-exp", preset: "p" });
+    ledger.setTitle(row.id, "checkout investigation");
+    ledger.setSdkSessionId(row.id, "sdk-export");
+    ledger.close();
+    return { srv, dbPath };
+  }
+
+  it("downloads JSONL with a Content-Disposition attachment", async () => {
+    const { srv } = await seeded();
+    const res = await api(srv, "/api/sessions/exp/export?format=jsonl");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-disposition")).toContain('attachment; filename="agentos-session-exp.jsonl"');
+    const lines = (await res.text()).trim().split("\n").map((l) => JSON.parse(l) as { role: string });
+    expect(lines.map((l) => l.role)).toEqual(["user", "tool", "assistant"]);
+  });
+
+  it("downloads Markdown, titled from the ledger", async () => {
+    const { srv } = await seeded();
+    const res = await api(srv, "/api/sessions/exp/export?format=md");
+    expect(res.headers.get("content-type")).toContain("text/markdown");
+    const body = await res.text();
+    expect(body).toContain("# checkout investigation");
+    expect(body).toContain("**tool** `search`");
+  });
+
+  it("bad format is 400, unknown session 404, and an unreadable store is an empty file", async () => {
+    const { srv } = await seeded();
+    expect((await api(srv, "/api/sessions/exp/export?format=pdf")).status).toBe(400);
+    expect((await api(srv, "/api/sessions/ghost/export")).status).toBe(404);
+  });
+});

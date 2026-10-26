@@ -35,7 +35,7 @@ import type {
   TenantRef,
   TranscriptEntry,
 } from "@agentos/contracts";
-import { isWebExternalKey, webExternalKey } from "@agentos/contracts/session-key";
+import { browserSessionId, isWebExternalKey, webExternalKey } from "@agentos/contracts/session-key";
 import type { Ledger, SessionRow } from "@agentos/core";
 
 /** Registration name presets may reference in the entry slot. */
@@ -343,6 +343,28 @@ async function readJson(req: IncomingMessage): Promise<Record<string, unknown> |
   }
 }
 
+
+/** Neutral transcript entries -> the two download formats (spec #259). */
+function serializeTranscript(entries: readonly TranscriptEntry[], format: "jsonl" | "md", title?: string | null): string {
+  if (format === "jsonl") return entries.map((e) => JSON.stringify(e)).join("\n") + (entries.length > 0 ? "\n" : "");
+  const lines: string[] = [`# ${title ?? "Session transcript"}`, ""];
+  for (const e of entries) {
+    const when = e.timestampMs === undefined ? "" : ` · ${new Date(e.timestampMs).toISOString()}`;
+    if (e.role === "tool") {
+      lines.push(`**tool${e.isError ? " (error)" : ""}** \`${e.toolName ?? "?"}\`${when}`, "", "```", e.text, "```", "");
+    } else {
+      lines.push(`**${e.role}**${when}`, "", e.text, "");
+    }
+  }
+  return lines.join("\n");
+}
+
+/** Download file name: browser-side identity only, never a user title (R9). */
+function exportFileName(browserKey: string, ext: string): string {
+  const safe = browserKey.replace(/[^A-Za-z0-9._-]+/g, "-").slice(0, 80);
+  return `agentos-session-${safe || "session"}.${ext}`;
+}
+
 export async function startServer(o: StartServerOptions): Promise<RunningServer> {
   const entry = new EntryRest({ presetName: o.presetName, ledger: o.ledger });
   const escalatePath = o.escalatePath ?? join(".agentos", "escalations.log");
@@ -467,6 +489,39 @@ export async function startServer(o: StartServerOptions): Promise<RunningServer>
     // `:id` is the browser session id (the same value POST /api/chat takes), or
     // a raw ledger externalKey — the sidebar has the latter, a reloading tab
     // only the former.
+    const exportMatch = /^\/api\/sessions\/([^/]+)\/export$/.exec(path);
+    if (req.method === "GET" && exportMatch) {
+      const rawId = exportMatch[1] ?? "";
+      let requested: string;
+      try {
+        requested = decodeURIComponent(rawId);
+      } catch {
+        return sendJson(res, 400, { error: "undecodable session id" });
+      }
+      if (requested.length === 0 || requested.length > 200) return sendJson(res, 400, { error: "invalid session id" });
+      const format = url.searchParams.get("format") ?? "jsonl";
+      if (format !== "jsonl" && format !== "md") return sendJson(res, 400, { error: "format must be jsonl or md" });
+
+      const row = o.ledger.getByExternalKey(isWebExternalKey(requested) ? requested : webExternalKey(requested)) ?? o.ledger.getByExternalKey(requested);
+      if (!row) return sendJson(res, 404, { error: "session not found" });
+      let entries: TranscriptEntry[] = [];
+      if (row.sdkSessionId !== null && o.readTranscript) {
+        try {
+          entries = await o.readTranscript({ sdkSessionId: row.sdkSessionId, externalKey: row.externalKey });
+        } catch {
+          entries = []; // export of an unreadable store: the empty transcript, never a failed download
+        }
+      }
+      const body = serializeTranscript(entries, format, row.title);
+      const filename = exportFileName(browserSessionId(row.externalKey), format);
+      res.writeHead(200, {
+        "content-type": format === "md" ? "text/markdown; charset=utf-8" : "application/x-ndjson; charset=utf-8",
+        "content-disposition": `attachment; filename="${filename}"`,
+        "content-length": Buffer.byteLength(body),
+      });
+      res.end(body);
+      return;
+    }
     const messages = /^\/api\/sessions\/([^/]+)\/messages$/.exec(path);
     if (req.method === "GET" && messages) {
       let raw: string;
