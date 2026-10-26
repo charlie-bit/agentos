@@ -100,6 +100,11 @@ export interface StartServerOptions {
    * GET /api/status for the config-inspection dialog. Absent = field omitted. */
   systemPrompt?: string;
   /**
+   * Preset validator (spec #289): the data-only runner, injected. Same
+   * contract as the CLI: { exitCode, lines }; absent = 501.
+   */
+  validatePreset?: (target: string) => { exitCode: number; lines: string[] } | Promise<{ exitCode: number; lines: string[] }>;
+  /**
    * Preset listing supplier (spec #288). Injected for the same reason the
    * runner is: config lives on disk, this package must not learn the layout.
    * Absent = the endpoint answers 501.
@@ -452,6 +457,22 @@ export async function startServer(o: StartServerOptions): Promise<RunningServer>
         return sendJson(res, 200, { entries: Array.isArray(entries) ? entries : [] });
       } catch {
         return sendJson(res, 200, { entries: [] }); // reader blew up: degrade, never 500
+      }
+    }
+    if (req.method === "POST" && path === "/api/presets/validate") {
+      // Input is judged before capability: a malformed request is a 400 on
+      // any deployment; only a well-formed one can discover the 501.
+      const body = await readJson(req);
+      const target = body?.name;
+      if (typeof target !== "string" || target.trim().length === 0 || target.length > 300) {
+        return sendJson(res, 400, { error: "name must be a non-empty preset name or path (<= 300 chars)" });
+      }
+      if (!o.validatePreset) return sendJson(res, 501, { error: "preset validation not wired by this deployment" });
+      try {
+        const result = await o.validatePreset(target.trim());
+        return sendJson(res, 200, { exitCode: result.exitCode, lines: result.lines });
+      } catch {
+        return sendJson(res, 200, { exitCode: 1, lines: ["✗ validator failed to run (see server output)"] });
       }
     }
     if (req.method === "GET" && path === "/api/presets") {

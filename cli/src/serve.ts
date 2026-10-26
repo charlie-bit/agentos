@@ -10,7 +10,7 @@
  */
 import { createInterface } from "node:readline";
 import { existsSync, mkdirSync, readdirSync } from "node:fs";
-import { dirname, join, relative, resolve } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
 import {
   loadManifestDir,
   validatePresetRefs,
@@ -34,6 +34,7 @@ import type { ConfirmRequest, ConfirmResult, KnowledgeManifest, ModelProviderMan
 import { dialect as compatDialect } from "@agentos/model-anthropic-compat";
 import { dialect as bedrockDialect } from "@agentos/model-bedrock";
 import { dialect as openaiDialect } from "@agentos/model-openai-compat";
+import { runPresetValidate } from "./preset-validate.js";
 import { EntryCli, formatUsageSummary } from "@agentos/entry-cli";
 import { startServer, CAPABILITIES as REST_CAPABILITIES } from "@agentos/entry-rest";
 import { BASE_SYSTEM_PROMPT, createInProcessServer, readTranscript, runTurn, type ModelLease } from "@agentos/adapter-claude-sdk";
@@ -127,6 +128,25 @@ function collectYml(dir: string): string[] {
 }
 
 const write = (s: string) => process.stdout.write(s);
+
+/**
+ * Resolve a web-supplied preset name/path to a validator target (spec #289).
+ * Path fence: a bare name resolves inside config/presets; anything else must
+ * be a relative path that stays under config/presets or examples. Anything
+ * outside returns null (the route answers 400), so validation can never read
+ * arbitrary files (R7).
+ */
+export function resolvePresetTarget(repoRoot: string, requested: string): string | null {
+  if (requested.includes("\0")) return null;
+  const allowedRoots = [join(repoRoot, "config", "presets"), join(repoRoot, "examples")];
+  const byName = join(repoRoot, "config", "presets", `${requested.replace(/\.ya?ml$/i, "")}.yml`);
+  const candidates = requested.includes("/") || requested.includes("\\") ? [resolve(repoRoot, requested), byName] : [byName];
+  for (const candidate of candidates) {
+    if (!allowedRoots.some((root) => candidate === root || candidate.startsWith(root + sep))) continue;
+    if (existsSync(candidate)) return candidate;
+  }
+  return null;
+}
 
 /** Preset catalogue for GET /api/presets (spec #288): names + repo-relative paths, no contents. */
 export function listPresetFiles(repoRoot: string): Array<{ name: string; path: string }> {
@@ -576,6 +596,11 @@ export async function runServeWeb(flags: ServeFlags): Promise<number> {
     staticDir,
     systemPrompt: BASE_SYSTEM_PROMPT,
     listPresets: () => listPresetFiles(asm.value.repoRoot),
+    validatePreset: (requested) => {
+      const target = resolvePresetTarget(asm.value.repoRoot, requested);
+      if (target === null) return { exitCode: 1, lines: [`✗ preset not found (searched ${requested})`] };
+      return runPresetValidate(target);
+    },
   });
   write(`● agentos serve --web | preset=${presetName} mounts=${plans.length}\n  console: ${server.url}\n  Ctrl+C exits cleanly (ledger stays zombie-free)\n`);
 

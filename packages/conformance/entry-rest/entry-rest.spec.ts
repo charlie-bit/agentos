@@ -733,3 +733,40 @@ describe("GET /api/presets (spec #288)", () => {
     expect((await api(srv, "/api/presets")).status).toBe(501);
   });
 });
+
+describe("POST /api/presets/validate (spec #289)", () => {
+  it("echoes the CLI runner's verdict verbatim", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "agentos-pv-"));
+    tempDirs.push(dir);
+    const dbPath = join(dir, "sessions.db");
+    const seen: string[] = [];
+    const srv = await startServer({
+      presetName: "p",
+      model: { provider: "v" },
+      mounts: [],
+      runner: async () => ({}),
+      ledger: openLedger(dbPath),
+      port: 0,
+      dbPath,
+      staticDir: makeStaticDir(dir),
+      validatePreset: (target) => {
+        seen.push(target);
+        return { exitCode: 1, lines: ["✗ tools.0: references \"ghost\", which no manifest declares"] };
+      },
+    });
+    servers.push(srv);
+    const res = await postJson(srv, "/api/presets/validate", { name: "broken" });
+    expect(res.status).toBe(200);
+    expect((await res.json()) as unknown).toEqual({
+      exitCode: 1,
+      lines: ['✗ tools.0: references "ghost", which no manifest declares'],
+    });
+    expect(seen).toEqual(["broken"]);
+  });
+
+  it("bad input is 400 and an unwired deployment is 501", async () => {
+    const { srv } = await boot(async () => ({}));
+    expect((await postJson(srv, "/api/presets/validate", { name: "" })).status).toBe(400);
+    expect((await postJson(srv, "/api/presets/validate", { name: "x" })).status).toBe(501);
+  });
+});

@@ -161,3 +161,28 @@ describe("preset catalogue (spec #288)", () => {
     expect(listPresetFiles(dir)).toEqual([]);
   });
 });
+
+describe("preset validation path fence (spec #289)", () => {
+  it("bare names resolve inside config/presets; escapes are refused", async () => {
+    const { resolvePresetTarget } = await import("../serve.js");
+    const { locateTarget } = await import("../preset-validate.js");
+    const preset = locateTarget("config/presets/example.yml");
+    const repoRoot = preset!.replace(/\/config\/presets\/example\.yml$/, "");
+
+    expect(resolvePresetTarget(repoRoot, "example")).toBe(join(repoRoot, "config", "presets", "example.yml"));
+    expect(resolvePresetTarget(repoRoot, "../../etc/passwd")).toBeNull();
+    expect(resolvePresetTarget(repoRoot, "/etc/passwd")).toBeNull();
+    expect(resolvePresetTarget(repoRoot, "nope")).toBeNull();
+  });
+
+  it("validating the example through the same runner the CLI uses is exit 0", async () => {
+    const { runPresetValidate } = await import("../preset-validate.js");
+    const { resolvePresetTarget } = await import("../serve.js");
+    const { locateTarget } = await import("../preset-validate.js");
+    const preset = locateTarget("config/presets/example.yml");
+    const repoRoot = preset!.replace(/\/config\/presets\/example\.yml$/, "");
+    const target = resolvePresetTarget(repoRoot, "example");
+    expect(target).not.toBeNull();
+    expect(runPresetValidate(target as string).exitCode).toBe(0);
+  });
+});
