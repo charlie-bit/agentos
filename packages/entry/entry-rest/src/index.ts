@@ -502,7 +502,6 @@ export async function startServer(o: StartServerOptions): Promise<RunningServer>
         return sendJson(res, 400, { error: "every id must be a string of 1..200 chars" });
       }
       const lines: string[] = [JSON.stringify({ "agentos.bundle": "1", exportedAtMs: Date.now(), sessions: ids.length })];
-      let exported = 0;
       for (const requestedId of ids) {
         const row =
           o.ledger.getByExternalKey(isWebExternalKey(requestedId) ? requestedId : webExternalKey(requestedId)) ??
@@ -525,7 +524,6 @@ export async function startServer(o: StartServerOptions): Promise<RunningServer>
           }),
         );
         for (const e of entries) lines.push(JSON.stringify({ entry: e }));
-        exported += 1;
       }
       const bodyText = lines.join("\n") + "\n";
       res.writeHead(200, {
