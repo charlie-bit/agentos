@@ -39,6 +39,7 @@ import { dialect as bedrockDialect } from "@agentos/model-bedrock";
 import { dialect as openaiDialect } from "@agentos/model-openai-compat";
 import { runPresetValidate } from "./preset-validate.js";
 import { appendLog, readLogs } from "./logs.js";
+import { budgetExceeded, Semaphore } from "./concurrency.js";
 import { commitDraft } from "@agentos/core";
 import { EntryCli, formatUsageSummary } from "@agentos/entry-cli";
 import { startServer, CAPABILITIES as REST_CAPABILITIES, ENTRY_NAME as REST_ENTRY, type ToolDescriptor } from "@agentos/entry-rest";
@@ -74,6 +75,9 @@ export interface Assembly {
   entryName: string;
   /** channel -> entry adapter routes (spec #212), defaulting to entryName. */
   channelRoutes: Record<string, string>;
+  /** Preset-declared gates (spec #163/#164); absent = unlimited. */
+  budgetUsd?: number;
+  maxConcurrentSessions?: number;
   repoRoot: string;
 }
 
@@ -258,6 +262,8 @@ export function assemble(flags: ServeFlags): { ok: true; value: Assembly } | { o
       ...(knowledgeInfo ? { knowledgeInfo } : {}),
       entryName: preset.entry,
       channelRoutes: preset.channels ?? {},
+      ...(preset.budgetUsd !== undefined ? { budgetUsd: preset.budgetUsd } : {}),
+      ...(preset.maxConcurrentSessions !== undefined ? { maxConcurrentSessions: preset.maxConcurrentSessions } : {}),
       repoRoot,
     },
   };
@@ -603,12 +609,26 @@ export async function runServeWeb(flags: ServeFlags): Promise<number> {
   // Active-turn registry for SIGTERM drainage (spec #293): a shutdown waits
   // for in-flight turns (bounded), then the sweep settles any row they left.
   const activeTurns = new Set<Promise<unknown>>();
+  // Resource governance (spec #163/#164): the preset declares both; absent =
+  // unlimited / no budget gate. Queueing is FIFO and never drops a turn.
+  const turnSlots = new Semaphore(asm.value.maxConcurrentSessions ?? 64);
+  const budgetUsd = asm.value.budgetUsd;
   const server = await startServer({
     presetName,
     model: { provider: modelLease.provider, baseUrlEnv: modelLease.baseUrlEnv, credentialsEnv: modelLease.credentialsEnv },
     mounts,
     runner: async (ctx) => {
+      const releaseSlot = await turnSlots.acquire();
       const turn = (async () => {
+      if (budgetExceeded(aggregateUsage(usageLogPath()).totals.costUsd, budgetUsd)) {
+        const answer = await ctx.confirm({
+          prompt: `Declared budget (${budgetUsd} USD) reached — run this turn anyway?`,
+          subject: { budgetUsd, event: "budget-gate" },
+        });
+        if (!answer.approved) {
+          throw new Error("budget gate denied: cumulative spend is at the declared ceiling");
+        }
+      }
       // Hotfix clean-room: per-browser-session workspace (externalKey keyed).
       const workspaceDir = join(asm.value.repoRoot, ".agentos", "workspaces", ctx.externalKey);
       mkdirSync(workspaceDir, { recursive: true });
@@ -648,6 +668,7 @@ export async function runServeWeb(flags: ServeFlags): Promise<number> {
         return await turn;
       } finally {
         activeTurns.delete(turn);
+        releaseSlot();
       }
     },
     ledger,

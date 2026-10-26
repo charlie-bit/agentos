@@ -36,6 +36,17 @@ export const presetSchema = manifestEnvelopeSchema.extend({
    * channel. Adding a second route is a config edit, not a code path.
    */
   channels: z.record(z.string().min(1), z.string().min(1)).optional(),
+  /**
+   * Hard spend threshold (spec #163): once cumulative usage.log cost for this
+   * deployment reaches this many USD, a new turn asks a human before running.
+   * Absent = no budget gate. Data, not a service — git is the audit trail.
+   */
+  budgetUsd: z.number().positive().optional(),
+  /**
+   * Single-machine resource governance (spec #164): maximum concurrently
+   * running turns; further turns queue (FIFO) instead of failing.
+   */
+  maxConcurrentSessions: z.number().int().min(1).max(64).optional(),
 });
 
 export type Preset = z.infer<typeof presetSchema>;
