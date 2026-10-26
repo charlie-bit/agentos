@@ -606,3 +606,41 @@ describe("turn lifecycle in the ledger (spec #215)", () => {
     }
   });
 });
+
+describe("session list pagination (spec #221)", () => {
+  it("more than 100 sessions are pageable to the full set, recency-ordered", async () => {
+    const { srv, dbPath } = await boot(async () => ({}));
+    const ledger = openLedger(dbPath);
+    for (let i = 0; i < 120; i += 1) {
+      const row = ledger.createSession({ entry: "rest", externalKey: `bulk-${i}`, preset: "conf-preset" });
+      ledger.touch(row.id);
+      ledger.markStatus(row.id, "idle");
+    }
+    ledger.close();
+
+    const page1 = (await (await api(srv, "/api/sessions?limit=100&offset=0")).json()) as {
+      sessions: Array<{ external_key: string }>;
+      total: number;
+      hasMore: boolean;
+    };
+    const page2 = (await (await api(srv, "/api/sessions?limit=100&offset=100")).json()) as {
+      sessions: Array<{ external_key: string }>;
+      total: number;
+      hasMore: boolean;
+    };
+
+    expect(page1.total).toBe(120);
+    expect(page1.sessions).toHaveLength(100);
+    expect(page1.hasMore).toBe(true);
+    expect(page2.sessions).toHaveLength(20);
+    expect(page2.hasMore).toBe(false);
+    expect(new Set([...page1.sessions, ...page2.sessions].map((s) => s.external_key)).size).toBe(120);
+  });
+
+  it("pagination parameters are bounded (no whole-table dump, no negative offset)", async () => {
+    const { srv } = await boot(async () => ({}));
+    const body = (await (await api(srv, "/api/sessions?limit=99999&offset=-5")).json()) as { limit: number; offset: number };
+    expect(body.limit).toBe(500);
+    expect(body.offset).toBe(0);
+  });
+});

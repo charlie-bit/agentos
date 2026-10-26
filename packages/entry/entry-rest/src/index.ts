@@ -345,13 +345,27 @@ export async function startServer(o: StartServerOptions): Promise<RunningServer>
       });
     }
     if (req.method === "GET" && path === "/api/sessions") {
-      if (!existsSync(o.dbPath)) return sendJson(res, 200, { sessions: [] });
+      // Pagination, not a silent truncation (spec #221): the list is ordered
+      // by recency and the caller pages through it. Bounds are hard caps, so
+      // a hostile query cannot ask for the whole table.
+      const intParam = (name: string, fallback: number, min: number, max: number): number => {
+        const raw = url.searchParams.get(name);
+        const n = raw === null ? fallback : Number(raw);
+        return Number.isFinite(n) ? Math.min(max, Math.max(min, Math.trunc(n))) : fallback;
+      };
+      const limit = intParam("limit", 100, 1, 500);
+      const offset = intParam("offset", 0, 0, Number.MAX_SAFE_INTEGER);
+      if (!existsSync(o.dbPath)) return sendJson(res, 200, { sessions: [], limit, offset, total: 0, hasMore: false });
       const db = new DatabaseSync(o.dbPath, { readOnly: true });
       try {
         const rows = db
-          .prepare("SELECT id, external_key, status, preset, last_active_ms, title FROM sessions ORDER BY last_active_ms DESC LIMIT 100")
-          .all() as Array<Record<string, unknown>>;
-        return sendJson(res, 200, { sessions: rows });
+          .prepare(
+            "SELECT id, external_key, status, preset, last_active_ms, title FROM sessions ORDER BY last_active_ms DESC, id DESC LIMIT ? OFFSET ?",
+          )
+          .all(limit, offset) as Array<Record<string, unknown>>;
+        const totalRow = db.prepare("SELECT COUNT(*) AS n FROM sessions").get() as { n: number | bigint } | undefined;
+        const total = Number(totalRow?.n ?? 0);
+        return sendJson(res, 200, { sessions: rows, limit, offset, total, hasMore: offset + rows.length < total });
       } finally {
         db.close();
       }
