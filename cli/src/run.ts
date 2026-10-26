@@ -10,6 +10,7 @@ import { runServe } from "./serve.js";
 import { runKbGate } from "./kb-gate.js";
 import { runKbLint } from "./kb-lint.js";
 import { runKbStale } from "./kb-stale.js";
+import { runDataExport, runDataGc, runDataImport } from "./data.js";
 
 const USAGE = [
   "agentos — pluggable agent platform (P5)",
@@ -24,6 +25,9 @@ const USAGE = [
   "  agentos kb gate                             P7b trigger: escalations vs window",
   "  agentos kb lint <dir> [--json] [--strict]  frontmatter conformance (exit 1 = errors)",
   "  agentos kb stale [<dir>]                    re-verification queue (most overdue first)",
+  "  agentos data export <file.json>             bundle sessions + logs + drafts (no transcripts)",
+  "  agentos data import <file.json>             restore a bundle (idempotent by external key)",
+  "  agentos data gc [--keep-days N] [--dry-run] age out drafts/logs/workspaces",
 ];
 
 export async function run(argv: readonly string[]): Promise<CliResult> {
@@ -57,6 +61,13 @@ export async function run(argv: readonly string[]): Promise<CliResult> {
       if (sub === "lint") return runKbLint(args);
       if (sub === "stale") return runKbStale(args);
       return { exitCode: 2, lines: ["✗ unknown kb subcommand (try: kb gate | kb lint | kb stale)", ...USAGE.slice(2)] };
+    }
+    case "data": {
+      const [sub, ...args] = rest;
+      if (sub === "export") return runDataExport(args);
+      if (sub === "import") return runDataImport(args);
+      if (sub === "gc") return runDataGc(args);
+      return { exitCode: 2, lines: ["✗ unknown data subcommand (try: data export | import | gc)", ...USAGE.slice(2)] };
     }
     case "serve": {
       const { values } = parseArgs({
