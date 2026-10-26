@@ -1,13 +1,14 @@
 /** Console shell: three contract surfaces, one row each, around the chat. */
 import { useCallback, useEffect, useState } from "react";
 import { webExternalKey } from "@agentos/contracts/session-key";
-import { deleteSession, getEscalations, getSessions, getStatus, renameSession, type SessionRow, type StatusResponse } from "./lib/api";
+import { deleteSession, getEscalations, getSessions, getStatus, HttpError, renameSession, setAccessToken, type SessionRow, type StatusResponse } from "./lib/api";
 import { useAgentChat } from "./lib/useAgentChat";
 import { ChatStream } from "./components/ChatStream";
 import { Composer } from "./components/Composer";
 import { ConfirmModal } from "./components/ConfirmModal";
 import { SessionSidebar } from "./components/SessionSidebar";
 import { StatusStrip } from "./components/StatusStrip";
+import { TokenGate } from "./components/TokenGate";
 import { UsageBar } from "./components/UsageBar";
 
 /** Sidebar polling cadence — a session running from another tab/device must
@@ -21,6 +22,7 @@ export default function App() {
   const [sessions, setSessions] = useState<SessionRow[]>([]);
   const [escalations, setEscalations] = useState(0);
   const [quote, setQuote] = useState<{ text: string; nonce: number } | undefined>();
+  const [needsToken, setNeedsToken] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -28,8 +30,10 @@ export default function App() {
       setStatus(s);
       setSessions(l.sessions);
       setEscalations(e.count);
-    } catch {
-      /* server (re)starting: next refresh recovers */
+    } catch (err) {
+      // 403 = the local token gate (spec #287); everything else is a server
+      // that is (re)starting and the next poll recovers.
+      if (err instanceof HttpError && err.status === 403) setNeedsToken(true);
     }
   }, [sessionId]);
 
@@ -89,6 +93,15 @@ export default function App() {
       </div>
       <UsageBar usage={state.usage} escalations={escalations} sessionId={sessionId} onEscalated={setEscalations} modelShort={state.modelShort} />
       <ConfirmModal pending={state.pending} onResolved={resolveConfirm} />
+      {needsToken && (
+        <TokenGate
+          onSubmit={(token) => {
+            setAccessToken(token);
+            setNeedsToken(false);
+            void refresh();
+          }}
+        />
+      )}
     </div>
   );
 }

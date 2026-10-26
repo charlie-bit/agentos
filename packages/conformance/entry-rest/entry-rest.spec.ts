@@ -1035,3 +1035,32 @@ describe("GET /api/workspace/file (spec #257)", () => {
     expect((await api(srv, "/api/workspace/file?session=ws")).status).toBe(400);
   });
 });
+
+describe("local token gate (spec #287)", () => {
+  it("API routes require the token; static shell and healthz stay open", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "agentos-tok-"));
+    tempDirs.push(dir);
+    const dbPath = join(dir, "sessions.db");
+    const srv = await startServer({
+      presetName: "p",
+      model: { provider: "v" },
+      mounts: [],
+      runner: async () => ({}),
+      ledger: openLedger(dbPath),
+      port: 0,
+      dbPath,
+      staticDir: makeStaticDir(dir),
+      token: "local-once-token",
+    });
+    servers.push(srv);
+
+    expect((await api(srv, "/api/status")).status).toBe(403);
+    expect((await api(srv, "/healthz")).status).toBe(200);
+    expect((await api(srv, "/")).status).toBe(200); // static shell loads so the gate can render
+
+    const viaHeader = await api(srv, "/api/status", { headers: { "x-agentos-token": "local-once-token" } });
+    expect(viaHeader.status).toBe(200);
+    expect((await api(srv, "/api/status?token=local-once-token")).status).toBe(200);
+    expect((await api(srv, "/api/status", { headers: { "x-agentos-token": "wrong" } })).status).toBe(403);
+  });
+});

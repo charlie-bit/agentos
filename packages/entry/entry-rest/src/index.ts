@@ -25,7 +25,7 @@ import { appendFileSync, closeSync, existsSync, fstatSync, mkdirSync, openSync, 
 import { dirname, isAbsolute, join, normalize, resolve, sep } from "node:path";
 import { userInfo } from "node:os";
 import { DatabaseSync } from "node:sqlite";
-import { randomUUID } from "node:crypto";
+import { randomUUID, timingSafeEqual } from "node:crypto";
 import type {
   ConfirmRequest,
   ConfirmResult,
@@ -99,6 +99,13 @@ export interface StartServerOptions {
   /** The base system prompt actually sent to the model — surfaced read-only on
    * GET /api/status for the config-inspection dialog. Absent = field omitted. */
   systemPrompt?: string;
+  /**
+   * Local access token (spec #287). When set, every /api route requires it as
+   * `x-agentos-token` or `?token=`; static assets and /healthz stay open so
+   * the console can load and show "token required". Absent = no gate (tests,
+   * embedders). The token is local-only and printed by the composition root.
+   */
+  token?: string;
   /**
    * Resolve a session's workspace directory (spec #256/#257). Absent = the
    * workspace endpoints answer 501; null = this session has no workspace.
@@ -512,9 +519,24 @@ export async function startServer(o: StartServerOptions): Promise<RunningServer>
     });
   });
 
+  const tokenOk = (req: IncomingMessage, url: URL): boolean => {
+    if (o.token === undefined) return true;
+    const header = req.headers["x-agentos-token"];
+    const supplied = (Array.isArray(header) ? header[0] : header) ?? url.searchParams.get("token") ?? "";
+    const a = Buffer.from(supplied);
+    const b = Buffer.from(o.token);
+    return a.length === b.length && timingSafeEqual(a, b);
+  };
+
   async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const url = new URL(req.url ?? "/", "http://127.0.0.1");
     const path = url.pathname;
+    // Token gate (spec #287): the console's static shell and healthz stay
+    // reachable so a browser can be told it needs a token; everything else
+    // that answers about sessions/config/content requires it.
+    if (o.token !== undefined && path.startsWith("/api/") && !tokenOk(req, url)) {
+      return sendJson(res, 403, { error: "token required (x-agentos-token header or ?token=)" });
+    }
     if (req.method === "GET" && path === "/healthz") return sendJson(res, 200, { ok: true });
     if (req.method === "GET" && path === "/api/status") {
       return sendJson(res, 200, {

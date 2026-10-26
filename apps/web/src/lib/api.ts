@@ -5,6 +5,42 @@
  */
 import type { Frame, HistoryItem } from "./chat-reducer";
 
+/** localStorage key for the local access token (spec #287). */
+export const TOKEN_KEY = "agentos.web.token";
+
+/**
+ * The local access token, if the browser has one. `?token=` on the console
+ * URL is captured once and stored; afterwards the header is attached to every
+ * request. All storage access is guarded — a private window without site data
+ * must still render (the server will simply answer 403).
+ */
+export function accessToken(): string | null {
+  try {
+    const fromUrl = new URLSearchParams(window.location.search).get("token");
+    if (fromUrl) {
+      localStorage.setItem(TOKEN_KEY, fromUrl);
+      return fromUrl;
+    }
+    return localStorage.getItem(TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+/** Persist a token the user typed into the gate. */
+export function setAccessToken(token: string): void {
+  try {
+    localStorage.setItem(TOKEN_KEY, token.trim());
+  } catch {
+    /* storage blocked: the next request simply asks again */
+  }
+}
+
+function authHeaders(base: Record<string, string>): Record<string, string> {
+  const token = accessToken();
+  return token ? { ...base, "x-agentos-token": token } : base;
+}
+
 /**
  * Non-2xx is a FAILURE, not a payload (spec #219): a 500 must reach the caller
  * as a reject so error cards / retry paths can act on it. The body is kept for
@@ -23,7 +59,7 @@ export class HttpError extends Error {
 }
 
 async function jsonFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(path, init);
+  const res = await fetch(path, { ...init, headers: authHeaders((init?.headers as Record<string, string>) ?? {}) });
   if (!res.ok) {
     let detail = "";
     try {
@@ -91,7 +127,7 @@ export async function chat(sessionId: string, message: string, onFrame: (frame: 
   const res = await fetch("/api/chat", {
     method: "POST",
     body: JSON.stringify({ sessionId, message }),
-    headers: { "content-type": "application/json" },
+    headers: authHeaders({ "content-type": "application/json" }),
   });
   if (!res.ok) throw new HttpError("/api/chat", res.status, (await res.text()).slice(0, 500));
   if (!res.body) throw new Error("no response body");

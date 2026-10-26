@@ -8,6 +8,7 @@
  * Everything printed is streamed by the entry implementation; this module
  * only assembles, pumps, and does ledger bookkeeping.
  */
+import { randomBytes } from "node:crypto";
 import { createInterface } from "node:readline";
 import { existsSync, mkdirSync, readdirSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
@@ -562,6 +563,9 @@ export async function runServeWeb(flags: ServeFlags): Promise<number> {
   }
   const ledger = openLedger();
   const swept = ledger.sweepRunning(); // #253: boot recovery, same rule as the REPL
+  // Local one-time token (spec #287): generated per boot unless the operator
+  // pins one. It is printed to this terminal only and never logged anywhere.
+  const webToken = process.env.AGENTOS_WEB_TOKEN ?? randomBytes(24).toString("base64url");
   if (swept > 0) write(`⚠ ledger: ${swept} stale running row(s) marked aborted\n`);
   const dbPath = ledgerPathFromEnv();
   const server = await startServer({
@@ -604,6 +608,7 @@ export async function runServeWeb(flags: ServeFlags): Promise<number> {
     dbPath,
     staticDir,
     systemPrompt: BASE_SYSTEM_PROMPT,
+    token: webToken,
     listPresets: () => listPresetFiles(asm.value.repoRoot),
     usage: (q) => aggregateUsage(usageLogPath(), q),
     // Session workspaces are keyed by the entry's externalKey; only boring
@@ -637,7 +642,9 @@ export async function runServeWeb(flags: ServeFlags): Promise<number> {
       return runPresetValidate(target);
     },
   });
-  write(`● agentos serve --web | preset=${presetName} mounts=${plans.length}\n  console: ${server.url}\n  Ctrl+C exits cleanly (ledger stays zombie-free)\n`);
+  write(
+    `● agentos serve --web | preset=${presetName} mounts=${plans.length}\n  console: ${server.url}\n  token:   ${webToken}\n  (paste the token into the console once; it is stored in this browser only)\n  Ctrl+C exits cleanly (ledger stays zombie-free)\n`,
+  );
 
   const onTermSignal = () => {
     let done = false;
