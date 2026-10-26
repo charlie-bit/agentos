@@ -22,10 +22,18 @@ export interface Attribution {
   tsMs: number;
   preset?: string;
   session?: string;
+  /**
+   * Tenant label the turn ran for (spec #209). Tenancy is an ATTRIBUTION
+   * dimension in this framework (#187: no multi-tenant kernel) — the label
+   * makes cost/quota roll-ups possible per deployment tenant.
+   */
+  tenant?: string;
   manifest: string;
   provider: string;
   alias?: string;
   modelId?: string;
+  /** The manifest's usageAttr map (costCenter, team…), carried verbatim. */
+  attr?: Record<string, string>;
   usage?: UsageCounts;
   costUsd?: number;
 }

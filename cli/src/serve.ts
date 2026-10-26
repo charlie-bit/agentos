@@ -99,10 +99,14 @@ function attributionFor(
     tsMs: Date.now(),
     preset: presetName,
     session,
+    // Attribution is the only place tenancy exists (#209/#187): no kernel
+    // multi-tenancy, just labels that make usage roll-ups possible.
+    tenant: presetName,
     manifest: routed.manifestName,
     provider: routed.provider,
     alias: routed.alias,
     modelId: routed.modelId,
+    ...(routed.usageAttr ? { attr: routed.usageAttr } : {}),
     usage: u ? { input: u.inputTokens, output: u.outputTokens, cacheRead: u.cacheReadTokens, cacheWrite: u.cacheCreationTokens } : undefined,
     costUsd: typeof out.result?.totalCostUsd === "number" ? out.result.totalCostUsd : undefined,
   };
