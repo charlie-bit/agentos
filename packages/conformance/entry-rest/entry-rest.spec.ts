@@ -1177,3 +1177,26 @@ describe("status four-layer disclosure (spec #262)", () => {
     expect(JSON.stringify(body)).not.toContain(FAKE_KEY);
   });
 });
+
+describe("turn error taxonomy (spec #264)", () => {
+  it("classifies failures into the four actionable kinds", async () => {
+    const { classifyTurnError } = await import("@agentos/entry-rest");
+    expect(classifyTurnError(new Error("fetch failed"))).toBe("network");
+    expect(classifyTurnError(new Error("connect ECONNREFUSED 127.0.0.1:1"))).toBe("network");
+    expect(classifyTurnError(new Error("bash is not part of this deployment's tool surface (denied by policy)"))).toBe("gate-denied");
+    expect(classifyTurnError(new Error("unknown tool: mcp__fs__read"))).toBe("tool-missing");
+    expect(classifyTurnError(new Error("no healthy alias for model manifest x"))).toBe("model-fallback");
+    expect(classifyTurnError(new Error("something else"))).toBe("error");
+    expect(classifyTurnError(new Error("x"), true)).toBe("aborted");
+  });
+
+  it("an errored turn's result frame carries the classified subtype", async () => {
+    const { srv } = await boot(async () => {
+      throw new Error("fetch failed");
+    });
+    const frames = await readFrames(await postJson(srv, "/api/chat", { sessionId: "err", message: "go" }));
+    const result = frames.find((f) => f.type === "result")?.payload as { subtype: string; isError: boolean };
+    expect(result.subtype).toBe("network");
+    expect(result.isError).toBe(true);
+  });
+});

@@ -36,6 +36,41 @@ function ThinkingLine({ e }: { e: Extract<Entry, { kind: "thinking" }> }) {
   );
 }
 
+const ERROR_CARD: Record<Extract<Entry, { kind: "error" }>["category"], { title: string; hint: string; tone: string }> = {
+  "tool-missing": {
+    title: "tool unavailable",
+    hint: "A tool the turn expected is not mounted. Check /api/tools and the manifest's allowedTools.",
+    tone: "border-warn/60 text-warn",
+  },
+  "gate-denied": {
+    title: "blocked by the gate",
+    hint: "The kernel refused a call outside this deployment's tool surface. Confirm the tool is declared for this preset.",
+    tone: "border-warn/60 text-warn",
+  },
+  "model-fallback": {
+    title: "model degraded",
+    hint: "The preferred alias was unhealthy and routing fell back. Check the channel or the fallbackChain.",
+    tone: "border-warn/60 text-warn",
+  },
+  network: {
+    title: "network interrupted",
+    hint: "The model endpoint could not be reached. Retry when the connection is back; your partial answer is kept.",
+    tone: "border-err/60 text-err",
+  },
+  error: { title: "turn failed", hint: "No further classification available.", tone: "border-err/60 text-err" },
+};
+
+function ErrorCard({ e }: { e: Extract<Entry, { kind: "error" }> }) {
+  const card = ERROR_CARD[e.category];
+  return (
+    <div className={cn("flex max-w-3xl flex-col gap-0.5 rounded-lg border px-3 py-2 text-xs", card.tone)} role="alert">
+      <span className="font-semibold">{card.title}</span>
+      <span>{card.hint}</span>
+      {e.detail && <span className="font-mono text-[11px] opacity-70">{e.detail.slice(0, 300)}</span>}
+    </div>
+  );
+}
+
 function DriftBanner({ e }: { e: Extract<Entry, { kind: "drift" }> }) {
   return (
     <div className="flex max-w-3xl items-start gap-2 rounded-lg border border-warn/60 px-3 py-2 text-xs text-warn" role="alert">
@@ -93,6 +128,8 @@ export function ChatStream({ state, onQuote }: { state: State; onQuote: (text: s
                 return <ThinkingLine key={e.id} e={e} />;
               case "drift":
                 return <DriftBanner key={e.id} e={e} />;
+              case "error":
+                return <ErrorCard key={e.id} e={e} />;
             }
           })}
           <div ref={anchor} />

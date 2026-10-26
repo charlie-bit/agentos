@@ -17,12 +17,17 @@
 
 export type Conn = "idle" | "connecting" | "streaming";
 
+/** The actionable failure classes carried by result.subtype (additive; unknown ⇒ "error"). */
+export type TurnErrorCategory = "tool-missing" | "gate-denied" | "model-fallback" | "network" | "error";
+
 export type Entry =
   | { kind: "user"; id: string; text: string }
   | { kind: "assistant"; id: string; text: string; status: "streaming" | "done" | "error" | "aborted" }
   | { kind: "tool"; id: string; name: string; input: string; status: "running" | "ok" | "error" }
   | { kind: "thinking"; id: string; count: number; open: boolean }
-  | { kind: "drift"; id: string; missing: string[]; undeclared: string[]; unverified: string[] };
+  | { kind: "drift"; id: string; missing: string[]; undeclared: string[]; unverified: string[] }
+  /** A turn failure with an actionable class (spec #264). */
+  | { kind: "error"; id: string; category: TurnErrorCategory; detail: string };
 
 /**
  * One history item as served by GET /api/sessions/:id/messages — the wire form
@@ -122,6 +127,10 @@ export const initialState: State = {
 };
 
 /* helpers ------------------------------------------------------------------ */
+
+const ERROR_CATEGORIES: readonly TurnErrorCategory[] = ["tool-missing", "gate-denied", "model-fallback", "network", "error"];
+const asCategory = (subtype: unknown): TurnErrorCategory =>
+  ERROR_CATEGORIES.includes(subtype as TurnErrorCategory) ? (subtype as TurnErrorCategory) : "error";
 
 const isNoise = (type: string): boolean => type.startsWith("kernel.system.") && type !== "kernel.system.drift";
 
@@ -286,6 +295,11 @@ export function reduce(s: State, a: Action): State {
               last?.kind === "assistant"
                 ? [...entries.slice(0, -1), { ...last, status: "error" as const }]
                 : entries;
+            // One actionable card per failure class (spec #264) — not one red bar.
+            entries = [
+              ...entries,
+              { kind: "error", id: `e${s.seq}_err`, category: asCategory(p.subtype), detail: String(p.message ?? "") },
+            ];
           }
           const u = p.usage;
           return {
@@ -293,6 +307,7 @@ export function reduce(s: State, a: Action): State {
             entries,
             conn: "idle",
             turns: s.turns + 1,
+            seq: s.seq + 1,
             pending: null, // turn over: nothing left to confirm
             usage: {
               input: s.usage.input + (u?.input_tokens ?? 0),

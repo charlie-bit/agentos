@@ -397,6 +397,24 @@ async function readJson(req: IncomingMessage): Promise<Record<string, unknown> |
 }
 
 
+/** Failure classes the console can act on (spec #264, additive vocabulary). */
+export type TurnErrorKind = "aborted" | "tool-missing" | "gate-denied" | "model-fallback" | "network" | "error";
+
+/**
+ * Classify a turn failure into an actionable kind. Deliberately conservative:
+ * a message that matches nothing stays "error" rather than guessing. The
+ * vocabulary is additive — consumers must tolerate unknown subtypes.
+ */
+export function classifyTurnError(err: unknown, aborted = false): TurnErrorKind {
+  if (aborted) return "aborted";
+  const message = (err instanceof Error ? err.message : String(err ?? "")).toLowerCase();
+  if (/econnrefused|enotfound|etimedout|fetch failed|network|socket hang up|econnreset/.test(message)) return "network";
+  if (/not part of this deployment|denied by policy|gate|not allowed/.test(message)) return "gate-denied";
+  if (/unknown tool|tool not found|no such tool|tool .* missing/.test(message)) return "tool-missing";
+  if (/fallback|no healthy alias|degrad/.test(message)) return "model-fallback";
+  return "error";
+}
+
 /** Neutral transcript entries -> the two download formats (spec #259). */
 function serializeTranscript(entries: readonly TranscriptEntry[], format: "jsonl" | "md", title?: string | null): string {
   if (format === "jsonl") return entries.map((e) => JSON.stringify(e)).join("\n") + (entries.length > 0 ? "\n" : "");
@@ -955,10 +973,11 @@ export async function startServer(o: StartServerOptions): Promise<RunningServer>
         }
       } catch (err) {
         const aborted = controller.signal.aborted;
+        const kind = classifyTurnError(err, aborted);
         const frame = JSON.stringify({
           type: "result",
           payload: {
-            subtype: aborted ? "aborted" : "error",
+            subtype: kind,
             isError: true,
             message: aborted ? "aborted by user" : err instanceof Error ? err.message : String(err),
           },

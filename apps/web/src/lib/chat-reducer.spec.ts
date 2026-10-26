@@ -246,3 +246,28 @@ describe("abort result (spec #255)", () => {
     expect(out.conn).toBe("idle");
   });
 });
+
+describe("error taxonomy rendering (spec #264)", () => {
+  it("each classified subtype produces its own error entry; partial text stays", () => {
+    for (const category of ["tool-missing", "gate-denied", "model-fallback", "network"] as const) {
+      const out = run(initialState, [
+        { t: "send", text: "go" },
+        frame("assistant.text", { text: "partial" }),
+        frame("result", { subtype: category, isError: true, message: "detail" }),
+      ]);
+      const err = out.entries.find((e) => e.kind === "error");
+      expect(err, category).toMatchObject({ kind: "error", category, detail: "detail" });
+      expect(out.entries.some((e) => e.kind === "assistant" && e.text === "partial")).toBe(true);
+    }
+  });
+
+  it("an unknown subtype degrades to the generic error card, never disappears", () => {
+    const out = run(initialState, [frame("result", { subtype: "weird-future-kind", isError: true })]);
+    expect(out.entries.find((e) => e.kind === "error")).toMatchObject({ category: "error" });
+  });
+
+  it("an aborted result is NOT an error card", () => {
+    const out = run(initialState, [frame("result", { subtype: "aborted", isError: true })]);
+    expect(out.entries.some((e) => e.kind === "error")).toBe(false);
+  });
+});
