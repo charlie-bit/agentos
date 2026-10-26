@@ -83,7 +83,7 @@
 - [x] 56 write:false 诚实声明 — `governance/tools.ts:31`
 - [x] 57 socket README 一等跟踪 — `knowledge-base/README.md` git 跟踪
 - [x] 58 kb gate — `cli/src/kb-gate.ts`
-- [x] 59 kb lint（frontmatter；链接检查见 #234） — `cli/src/kb-lint.ts`
+- [x] 59 kb lint（frontmatter + 相对链接/README 索引） — `cli/src/kb-lint.ts`（#234）
 - [x] 60 kb stale — `cli/src/kb-stale.ts`
 - [x] 61 目录索引 1–2K token — #225 `renderIndex` 预算 + 截断
 - [x] 62 RAG 触发条件四条 — `.docs/product-vision.md` / README
@@ -150,13 +150,13 @@
 
 ## M14 Web 入口产品化（101–112）——当前主要缺口
 
-- [ ] 101 SSE keepalive ≥15s — 未实现
+- [x] 101 SSE keepalive ≥15s — #252：15s `: keepalive` 帧 + 测试
 - [~] 102 会话运行状态机 — running/idle/error/aborted 落库（#215）；abort 未做（#103）
 - [ ] 103 会话中断 abort 端点 + 停止按钮 — 未实现
-- [ ] 104 workspace 文件浏览器端点 — 未实现
-- [ ] 105 workspace 文件读取端点 — 未实现
-- [ ] 106 会话转录导出 — 未实现
-- [ ] 107 批量会话导出 — 未实现
+- [x] 104 workspace 文件浏览器端点 — #256 `GET /api/workspace/files`（围栏 + 上限）
+- [~] 105 workspace 文件读取端点 — #257 端点已落地（双层围栏+1MB 帽）；前端 file panel 见 #258
+- [~] 106 会话转录导出 — #259 端点已落地（jsonl/md 下载）；UI 见 #261
+- [~] 107 批量会话导出 — #260 端点已落地（NDJSON bundle）；UI 见 #261
 - [ ] 108 /api/status 扩展 provider/manifest 路径 — 部分（mounts 只有 key/transport）
 - [ ] 109 错误分级呈现 — 未实现
 - [ ] 110 移动端响应式 — 未系统验证
@@ -168,17 +168,17 @@
 - [~] 113 配置只读披露 — ConfigDialog 有 preset/model/tools；四层 manifest 路径缺（#262）
 - [ ] 114 env 参数负向用例 — 负向 conformance 未加
 - [ ] 115 模型切换器（只读+请求级） — 未实现
-- [ ] 116 本地一次性 token — 未实现
+- [x] 116 本地一次性 token — #287 启动生成/打印 + 常量时间校验 + 前端 TokenGate；127.0.0.1 边界 Q&A 写入 SECURITY.md
 - [x] 117 identity() 插座留白 — 契约 + 两实现
-- [ ] 118 /api/presets 列表端点 — 未实现
-- [ ] 119 preset 热校验端点 — 未实现
+- [x] 118 /api/presets 列表端点 — #288
+- [x] 119 preset 热校验端点 — #289（复用 runPresetValidate，CLI 回显一致）
 - [x] 120 配置变更审计 = git — 无第二 audit 表，成立
 
 ## M16 可观测与诊断（121–128）
 
-- [ ] 121 /api/tools 诊断端点 — 未实现
+- [x] 121 /api/tools 诊断端点 — #290（key/transport/manifest/幂等切分）
 - [ ] 122 Registry 面板 — 未实现
-- [ ] 123 /api/usage 查询端点 — 未实现
+- [x] 123 /api/usage 查询端点 — #291（按 provider/model 聚合）
 - [ ] 124 debug 日志捕获 — 未实现
 - [~] 125 healthz 扩展 — 恒 {ok:true}（#220）
 - [x] 126 Graceful shutdown — SIGINT/SIGTERM 关 server/ledger（`cli/src/serve.ts`）；排水见 #293
@@ -284,15 +284,15 @@
 - [ ] 201 commit 动词下沉 provider 接口 — commitDraft 仍硬绑 git（`governance/writeback.ts`）
 - [x] 202 ModelProviderRuntime 契约对齐 — `contracts/model.ts` ModelDialect；两 provider typecheck
 - [x] 203 confirmCapable 从 entry 读取 — `cli/src/serve.ts` + `serve-wiring.spec.ts`
-- [~] 204 单 provider 失败隔离 — planTools 警告降级；env 解析错误仍整体 fail（escrow 未拆）
+- [x] 204 单 provider 失败隔离 — #204：environment 类错误降级为 ⚠ + 该 provider 缺席；schema/reference 仍 fail-loud
 - [x] 205 幂等重试执行器 — `core/src/loader/retry.ts` + adapter `withToolRetry`
 - [x] 206 >10KB 结果落盘 — `core/src/governance/offload.ts` + adapter 接线
 - [x] 207 envRouting 执行器 — `loader/plan.ts` 按 AGENTOS_ENV 过滤 + conformance
-- [ ] 208 三级路由中间层 — per-channel/tenant 覆盖表未做
+- [x] 208 三级路由中间层 — #208 `preset.channelModels`（请求 > 频道 > 槽位）
 - [x] 209 tenant 归因闭环 — `Attribution.tenant/attr` + serve 接线
-- [ ] 210 第一个第三方方言 runtime（openai-compat） — 未做
+- [x] 210 第一个第三方方言 runtime — #210 `@agentos/model-openai-compat` + `config/models/openai.yml`
 - [x] 211 routing 单测归位 — `core/src/routing/__tests__/{attribution,...}.spec.ts`；channel/active/health 由 conformance/model 覆盖
-- [ ] 212 channel→(kernel,preset) 路由表 — 未做
+- [ ] 212 channel→(kernel,preset) 路由表 — 未做（模型侧三通道路由已由 #208 交付）
 - [ ] 213 兼容层身份徽章 — status 无 dialect tag，前端无徽章
 
 ## M22 审计缺陷修复（214–230）
@@ -317,18 +317,18 @@
 
 ## M23 文档即合同（231–242）
 
-- [ ] 231 README Quick Start 修复（pnpm/Node≥22.5）
-- [ ] 232 README 字段示例与 schema 对齐
-- [ ] 233 #73 路由形状对齐（spec 文字 PATCH :id vs 代码 /title）
-- [ ] 234 kb lint 链接+索引检查
-- [ ] 235 README Implementation Order 标注 shipped/planned
-- [ ] 236 README 纪律表第 5 行（现可指到 #206 代码，待文案更新）
-- [ ] 237 multi-pod 纪律条款入 README
-- [ ] 238 换库触发条件文档
-- [ ] 239 SECURITY.md
-- [ ] 240 双语同 PR CI 检查
-- [ ] 241 CHANGELOG + semver 政策
-- [ ] 242 CONTRIBUTING.md + 修 README 错链
+- [x] 231 README Quick Start 修复 — 双语同步（pnpm + Node ≥ 22.5）
+- [x] 232 README 字段示例与 schema 对齐 — 双语 + core spec 逐块加载校验
+- [x] 233 #73 路由形状对齐 — spec 文字改为 `/api/sessions/:id/title`
+- [x] 234 kb lint 链接+索引检查 — `lintLinks`（README 也查）
+- [x] 235 Implementation Order 标注 shipped/planned — 双语
+- [x] 236 纪律表第 5 行指向代码并写明边界 — 双语
+- [x] 237 multi-pod 四条纪律入 README — 双语
+- [x] 238 换库触发条件文档 — 双语（与 RAG 四触发同构）
+- [x] 239 SECURITY.md — P1–P7 承诺逐条指到实现 + 披露流程 + 127.0.0.1 边界 Q&A
+- [x] 240 双语同 PR CI 检查 — `scripts/check-bilingual.mjs`（结构比对）
+- [x] 241 CHANGELOG + semver 政策 — Keep a Changelog + additive→minor 映射
+- [x] 242 CONTRIBUTING.md — 三节 + 工作规则；README 错链修复（双语）
 
 ## M24 死代码与仓库卫生（243–251）
 
@@ -344,15 +344,15 @@
 
 ## M25 Web 一期任务分解（252–269）
 
-- [ ] 252 SSE 心跳帧
-- [ ] 253 ledger 开机清扫
+- [x] 252 SSE 心跳帧 — 15s `: keepalive`（可注入 cadence）
+- [x] 253 ledger 开机清扫 — `Ledger.sweepRunning()` + 两种 serve 启动期清扫
 - [ ] 254 abort 端点 + AbortController 注册表
 - [ ] 255 前端停止按钮
-- [ ] 256 workspace 列表端点
-- [ ] 257 workspace 读端点
+- [x] 256 workspace 列表端点 — `GET /api/workspace/files`
+- [x] 257 workspace 读端点 — `GET /api/workspace/file`（lexical + realpath 围栏，1MB 帽）
 - [ ] 258 FilePanel 前端
-- [ ] 259 单会话导出端点
-- [ ] 260 批量导出端点
+- [x] 259 单会话导出端点 — `GET /api/sessions/:id/export?format=jsonl|md`
+- [x] 260 批量导出端点 — `POST /api/sessions/export` NDJSON bundle
 - [ ] 261 导出 UI
 - [ ] 262 status 四层披露（manifestPath）
 - [ ] 263 ConfigDialog 路径渲染
@@ -385,11 +385,11 @@
 
 ## M27 配置面与诊断 API（287–293）
 
-- [ ] 287 本地一次性 token
-- [ ] 288 GET /api/presets
-- [ ] 289 POST /api/presets/validate
-- [ ] 290 GET /api/tools
-- [ ] 291 GET /api/usage
+- [x] 287 本地一次性 token — #287
+- [x] 288 GET /api/presets — #288
+- [x] 289 POST /api/presets/validate — #289
+- [x] 290 GET /api/tools — #290
+- [x] 291 GET /api/usage — #291
 - [ ] 292 debug 日志捕获 + healthz 扩展
 - [ ] 293 SIGTERM 排水（跟踪活跃 runner）
 
@@ -420,9 +420,10 @@
 
 ## 本轮执行记录（2026-10-26）
 
-关闭点（每个一点一 commit，均带测试）：#202 #203 #205 #206 #207 #209 #214 #215 #216 #218 #219 #221 #223 #224 #225 #226 #227 #228 #229 #230 #245。
+关闭点（每个一点一 commit，均带测试）：#202 #203 #204 #205 #206 #207 #208 #209 #210 #214 #215 #216 #218 #219 #221 #223 #224 #225 #226 #227 #228 #229 #230 #231 #232 #233 #234 #235 #236 #237 #238 #239 #240 #241 #242 #245 #252 #253 #256 #257 #259 #260 #287 #288 #289 #290 #291。
 
 已知约定：
 - #206 的落盘发生在 agentos 自有的 neutral tool（sdk transport）；stdio/http MCP 服务器在 kernel 内部执行，其结果在到达 adapter 前已进入模型上下文——该边界在 #301（sandbox/代理）阶段解决，当前不谎称已覆盖。
 - #211 的 active/channel/health 行为断言仍在 `packages/conformance/model/model.spec.ts`（公有 API 黑盒），attribution 已有包内 spec。
 - #205 的重试是「一次额外尝试」；第二次失败原样抛出，不形成重试风暴。
+- #292 的 debug 日志捕获（stdio 子进程 stderr）仍未做，因此 #124/#125/#220 保持开放；健康探测发生在 routing 层（HealthGate），未暴露到 /healthz。
