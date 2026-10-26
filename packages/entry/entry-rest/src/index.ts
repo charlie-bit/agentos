@@ -21,8 +21,8 @@
  * whitelisted under the built dist with traversal rejection.
  */
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
-import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { dirname, join, normalize, resolve, sep } from "node:path";
+import { appendFileSync, closeSync, existsSync, fstatSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, realpathSync, statSync } from "node:fs";
+import { dirname, isAbsolute, join, normalize, resolve, sep } from "node:path";
 import { userInfo } from "node:os";
 import { DatabaseSync } from "node:sqlite";
 import { randomUUID } from "node:crypto";
@@ -417,6 +417,63 @@ export function listWorkspaceFiles(root: string, limit = WORKSPACE_LIST_LIMIT): 
   return out;
 }
 
+/** Inline read cap for one workspace file (spec #257). */
+export const WORKSPACE_READ_MAX_BYTES = 1_000_000;
+
+export type WorkspaceRead =
+  | { ok: true; path: string; size: number; content: string; truncated: boolean }
+  | { ok: false; reason: "invalid-path" | "not-found" | "not-a-file" | "unreadable" };
+
+/**
+ * Read ONE file under a session workspace. The fence is two-layered:
+ * lexical (resolve + prefix, so "../" and absolute paths fail) and physical
+ * (realpath of the target must stay under realpath(root), so a symlink that
+ * points outside is refused even though it lives inside). Reads are bounded
+ * by WORKSPACE_READ_MAX_BYTES; the response says when it truncated.
+ */
+export function readWorkspaceFile(root: string, relPath: string, maxBytes = WORKSPACE_READ_MAX_BYTES): WorkspaceRead {
+  if (relPath.length === 0 || relPath.length > 500 || relPath.includes("\0") || isAbsolute(relPath)) {
+    return { ok: false, reason: "invalid-path" };
+  }
+  if (relPath.split(/[/\\]/).some((part) => part === "..")) return { ok: false, reason: "invalid-path" };
+
+  const rootAbs = resolve(root);
+  const target = resolve(join(rootAbs, normalize(relPath)));
+  if (target !== rootAbs && !target.startsWith(rootAbs + sep)) return { ok: false, reason: "invalid-path" };
+  if (!existsSync(target)) return { ok: false, reason: "not-found" };
+
+  let realRoot: string;
+  let realTarget: string;
+  try {
+    realRoot = realpathSync(rootAbs);
+    realTarget = realpathSync(target);
+  } catch {
+    return { ok: false, reason: "unreadable" };
+  }
+  if (!realTarget.startsWith(realRoot + sep)) return { ok: false, reason: "invalid-path" };
+  try {
+    if (!statSync(realTarget).isFile()) return { ok: false, reason: "not-a-file" };
+    const fd = openSync(realTarget, "r");
+    try {
+      const size = Number(fstatSync(fd).size);
+      const take = Math.min(size, maxBytes);
+      const buf = Buffer.alloc(take);
+      const readTotal = readSync(fd, buf, 0, take, 0);
+      return {
+        ok: true,
+        path: relPath,
+        size,
+        content: buf.subarray(0, readTotal).toString("utf8"),
+        truncated: size > maxBytes,
+      };
+    } finally {
+      closeSync(fd);
+    }
+  } catch {
+    return { ok: false, reason: "unreadable" };
+  }
+}
+
 export async function startServer(o: StartServerOptions): Promise<RunningServer> {
   const entry = new EntryRest({ presetName: o.presetName, ledger: o.ledger });
   const escalatePath = o.escalatePath ?? join(".agentos", "escalations.log");
@@ -637,6 +694,24 @@ export async function startServer(o: StartServerOptions): Promise<RunningServer>
       } catch {
         return sendJson(res, 200, { entries: [] }); // reader blew up: degrade, never 500
       }
+    }
+    if (req.method === "GET" && path === "/api/workspace/file") {
+      if (!o.workspaceDirFor) return sendJson(res, 501, { error: "workspace access not wired by this deployment" });
+      const requestedSession = url.searchParams.get("session");
+      const requestedPath = url.searchParams.get("path");
+      if (requestedSession === null || requestedSession.length === 0 || requestedSession.length > 200) {
+        return sendJson(res, 400, { error: "session is required (<= 200 chars)" });
+      }
+      if (requestedPath === null || requestedPath.length === 0) return sendJson(res, 400, { error: "path is required" });
+      const key = isWebExternalKey(requestedSession) ? requestedSession : webExternalKey(requestedSession);
+      const dir = o.workspaceDirFor(key);
+      if (dir === null) return sendJson(res, 404, { error: "session has no workspace" });
+      const result = readWorkspaceFile(dir, requestedPath);
+      if (!result.ok) {
+        const status = result.reason === "not-found" ? 404 : result.reason === "invalid-path" ? 403 : 400;
+        return sendJson(res, status, { error: result.reason });
+      }
+      return sendJson(res, 200, result);
     }
     if (req.method === "GET" && path === "/api/workspace/files") {
       if (!o.workspaceDirFor) return sendJson(res, 501, { error: "workspace access not wired by this deployment" });

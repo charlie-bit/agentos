@@ -3,7 +3,7 @@
  * a stub TurnRunner scripts the event stream; no kernel, no network beyond
  * 127.0.0.1, no real credentials (sentinel env values prove non-leakage).
  */
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
@@ -975,5 +975,63 @@ describe("GET /api/workspace/files (spec #256)", () => {
   it("unwired is 501", async () => {
     const { srv } = await boot(async () => ({}));
     expect((await api(srv, "/api/workspace/files?session=x")).status).toBe(501);
+  });
+});
+
+describe("GET /api/workspace/file (spec #257)", () => {
+  async function wired(): Promise<RunningServer> {
+    const dir = mkdtempSync(join(tmpdir(), "agentos-wsr-"));
+    tempDirs.push(dir);
+    const ws = join(dir, "workspaces", "web-ws");
+    mkdirSync(join(ws, "tool-results"), { recursive: true });
+    writeFileSync(join(ws, "note.txt"), "hello workspace");
+    writeFileSync(join(ws, "tool-results", "big.json"), "x".repeat(2_000));
+    writeFileSync(join(dir, "outside.txt"), "SECRET-OUTSIDE");
+    try {
+      symlinkSync(join(dir, "outside.txt"), join(ws, "link.txt")); // escapes by symlink
+    } catch {
+      /* platform without symlink support: the lexical fence still runs */
+    }
+    const dbPath = join(dir, "sessions.db");
+    const srv = await startServer({
+      presetName: "p",
+      model: { provider: "v" },
+      mounts: [],
+      runner: async () => ({}),
+      ledger: openLedger(dbPath),
+      port: 0,
+      dbPath,
+      staticDir: makeStaticDir(dir),
+      workspaceDirFor: (key) => (key === "web-ws" ? ws : null),
+    });
+    servers.push(srv);
+    return srv;
+  }
+
+  it("reads a file inside the session workspace", async () => {
+    const srv = await wired();
+    const body = (await (await api(srv, "/api/workspace/file?session=ws&path=note.txt")).json()) as {
+      content: string;
+      truncated: boolean;
+      size: number;
+    };
+    expect(body.content).toBe("hello workspace");
+    expect(body.truncated).toBe(false);
+  });
+
+  it("refuses traversal, absolute paths and symlink escapes with 403", async () => {
+    const srv = await wired();
+    for (const path of ["../outside.txt", "/etc/passwd", "link.txt"]) {
+      const res = await api(srv, `/api/workspace/file?session=ws&path=${encodeURIComponent(path)}`);
+      expect(res.status, `path ${path}`).toBe(403);
+      expect(await res.text()).not.toContain("SECRET");
+    }
+  });
+
+  it("missing file is 404; a session without a workspace is 404; missing params are 400", async () => {
+    const srv = await wired();
+    expect((await api(srv, "/api/workspace/file?session=ws&path=nope.txt")).status).toBe(404);
+    expect((await api(srv, "/api/workspace/file?session=nobody&path=note.txt")).status).toBe(404);
+    expect((await api(srv, "/api/workspace/file?session=ws")).status).toBe(400);
   });
 });
