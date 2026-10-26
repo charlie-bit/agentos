@@ -303,6 +303,19 @@ pnpm install
 pnpm build          # workspace packages emit dist/ before anything runs
 ```
 
+### Install (npm)
+
+```bash
+npm i -g agentos              # global CLI
+# or run without installing:
+npx agentos preset validate config/presets/example.yml
+```
+
+> Packaging status (spec #299): `bin`, `files`, `engines` and a prepack build
+> are in place and `npm pack` produces an installable-shaped tarball. Full
+> `npm i -g` distribution still needs the workspace packages bundled into the
+> CLI artifact — that bundling step is the remaining blocker, tracked as #299.
+
 ### Development
 
 ```bash

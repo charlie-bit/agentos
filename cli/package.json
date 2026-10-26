@@ -1,7 +1,6 @@
 {
   "name": "agentos-cli",
   "version": "0.0.0",
-  "private": true,
   "type": "module",
   "bin": {
     "agentos": "./main.mjs"
@@ -10,7 +9,8 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint src",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run --passWithNoTests",
+    "prepack": "tsc -p tsconfig.json"
   },
   "dependencies": {
     "@agentos/adapter-claude-sdk": "workspace:*",
@@ -22,5 +22,13 @@
     "@agentos/model-anthropic-compat": "workspace:*",
     "@agentos/model-bedrock": "workspace:*",
     "@agentos/model-openai-compat": "workspace:*"
+  },
+  "files": [
+    "dist",
+    "main.mjs",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=22.5"
   }
 }
