@@ -50,5 +50,11 @@ jobs:
       # contract is "lint runs and honestly reports 0 pages", which must be
       # green; the day the book repo is vendored/remote-mounted, the same
       # step guards real content without edits.
+      # spec #138/#297: the zero-scaffold test lives in conformance and spawns
+      # a real external MCP process — it already runs in `pnpm test` above.
+      - name: External provider smoke (opt-in lane)
+        if: vars.AGENTOS_EXTERNAL_SMOKE == 'on'
+        run: node scripts/fixtures/echo-mcp-server.mjs < /dev/null > /dev/null
+
       - name: KB lint (book socket)
         run: node cli/main.mjs kb lint knowledge-base --strict
