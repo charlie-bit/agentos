@@ -36,7 +36,7 @@ import { dialect as bedrockDialect } from "@agentos/model-bedrock";
 import { dialect as openaiDialect } from "@agentos/model-openai-compat";
 import { runPresetValidate } from "./preset-validate.js";
 import { EntryCli, formatUsageSummary } from "@agentos/entry-cli";
-import { startServer, CAPABILITIES as REST_CAPABILITIES } from "@agentos/entry-rest";
+import { startServer, CAPABILITIES as REST_CAPABILITIES, type ToolDescriptor } from "@agentos/entry-rest";
 import { BASE_SYSTEM_PROMPT, createInProcessServer, readTranscript, runTurn, type ModelLease } from "@agentos/adapter-claude-sdk";
 
 export interface ServeFlags {
@@ -61,6 +61,8 @@ export interface Assembly {
   knowledge?: KnowledgeManifest;
   plans: ReturnType<typeof planTools>["plans"];
   mounts: Array<{ key: string; transport: string; degraded?: boolean }>;
+  /** Tool manifest name -> repo-relative source path (diagnostics, spec #290). */
+  toolManifestPaths: Record<string, string>;
   repoRoot: string;
 }
 
@@ -197,6 +199,10 @@ export function assemble(flags: ServeFlags): { ok: true; value: Assembly } | { o
   if (fatal.length) return { ok: false, exitCode: 1, lines: fatal.map((e) => `✗ ${e.path}: ${e.message}`) };
   for (const w of warnings) write(`⚠ ${w.key}: ${w.message}\n`);
   const byName = new Map(tools.map((m) => [m.name, m]));
+  const toolManifestPaths: Record<string, string> = {};
+  for (const l of loaded) {
+    if (l.manifest.kind === "tool") toolManifestPaths[l.manifest.name] = relative(repoRoot, resolve(l.source));
+  }
   for (const e of degradedByEnv) {
     write(`⚠ provider absent (environment): ${e.path}: ${e.message}\n`);
   }
@@ -221,6 +227,7 @@ export function assemble(flags: ServeFlags): { ok: true; value: Assembly } | { o
       knowledge: manifests.find((m) => m.kind === "knowledge" && m.name === preset.knowledge) as KnowledgeManifest | undefined,
       plans,
       mounts,
+      toolManifestPaths,
       repoRoot,
     },
   };
@@ -596,6 +603,27 @@ export async function runServeWeb(flags: ServeFlags): Promise<number> {
     staticDir,
     systemPrompt: BASE_SYSTEM_PROMPT,
     listPresets: () => listPresetFiles(asm.value.repoRoot),
+    listTools: (): ToolDescriptor[] => {
+      const mounted: ToolDescriptor[] = asm.value.plans.map((p) => ({
+        key: p.key,
+        transport: p.transport,
+        manifestPath: asm.value.toolManifestPaths[p.key] ?? null,
+        allowedTools: p.allowedTools ?? null,
+        idempotent: p.idempotent ?? null,
+        mounted: true,
+      }));
+      const absent: ToolDescriptor[] = mounts
+        .filter((m) => m.degraded === true)
+        .map((m) => ({
+          key: m.key,
+          transport: m.transport,
+          manifestPath: asm.value.toolManifestPaths[m.key] ?? null,
+          allowedTools: null,
+          idempotent: null,
+          mounted: false,
+        }));
+      return [...mounted, ...absent];
+    },
     validatePreset: (requested) => {
       const target = resolvePresetTarget(asm.value.repoRoot, requested);
       if (target === null) return { exitCode: 1, lines: [`✗ preset not found (searched ${requested})`] };

@@ -100,6 +100,10 @@ export interface StartServerOptions {
    * GET /api/status for the config-inspection dialog. Absent = field omitted. */
   systemPrompt?: string;
   /**
+   * Tool diagnostics supplier (spec #290). Absent = the endpoint answers 501.
+   */
+  listTools?: () => ToolDescriptor[] | Promise<ToolDescriptor[]>;
+  /**
    * Preset validator (spec #289): the data-only runner, injected. Same
    * contract as the CLI: { exitCode, lines }; absent = 501.
    */
@@ -124,6 +128,24 @@ export interface PresetSummary {
   name: string;
   /** Repo-relative path of the yml. */
   path: string;
+}
+
+/**
+ * One mounted tool provider as the diagnostics endpoint reveals it (spec
+ * #290): declaration source, retry split, and the allowlist — structure and
+ * metadata only, never tool I/O.
+ */
+export interface ToolDescriptor {
+  key: string;
+  transport: string;
+  /** Repo-relative manifest path the mount came from; null when synthesized. */
+  manifestPath: string | null;
+  /** Declared allowlist; null = no declaration (drift-unverified). */
+  allowedTools: string[] | null;
+  /** Idempotency declaration (the retry split); null = undeclared = never retried. */
+  idempotent: { default: boolean; overrides?: Record<string, boolean> } | null;
+  /** False for declared-but-unmounted / env-degraded providers. */
+  mounted: boolean;
 }
 
 export interface RunningServer {
@@ -457,6 +479,15 @@ export async function startServer(o: StartServerOptions): Promise<RunningServer>
         return sendJson(res, 200, { entries: Array.isArray(entries) ? entries : [] });
       } catch {
         return sendJson(res, 200, { entries: [] }); // reader blew up: degrade, never 500
+      }
+    }
+    if (req.method === "GET" && path === "/api/tools") {
+      if (!o.listTools) return sendJson(res, 501, { error: "tool diagnostics not wired by this deployment" });
+      try {
+        const tools = await o.listTools();
+        return sendJson(res, 200, { tools: Array.isArray(tools) ? tools : [] });
+      } catch {
+        return sendJson(res, 200, { tools: [] });
       }
     }
     if (req.method === "POST" && path === "/api/presets/validate") {

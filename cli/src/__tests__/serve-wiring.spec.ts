@@ -27,6 +27,7 @@ function assembly(knowledgeRoot: string): Assembly {
     },
     plans: [],
     mounts: [],
+    toolManifestPaths: {},
     repoRoot: knowledgeRoot,
   };
 }

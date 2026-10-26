@@ -770,3 +770,52 @@ describe("POST /api/presets/validate (spec #289)", () => {
     expect((await postJson(srv, "/api/presets/validate", { name: "x" })).status).toBe(501);
   });
 });
+
+describe("GET /api/tools (spec #290)", () => {
+  it("exposes mount key/transport/manifest source and the idempotent split", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "agentos-tools-"));
+    tempDirs.push(dir);
+    const dbPath = join(dir, "sessions.db");
+    const srv = await startServer({
+      presetName: "p",
+      model: { provider: "v" },
+      mounts: [],
+      runner: async () => ({}),
+      ledger: openLedger(dbPath),
+      port: 0,
+      dbPath,
+      staticDir: makeStaticDir(dir),
+      listTools: () => [
+        {
+          key: "mcp-filesystem",
+          transport: "stdio",
+          manifestPath: "config/tools/mcp-filesystem.yml",
+          allowedTools: ["read_file", "write_file"],
+          idempotent: { default: false, overrides: { read_file: true } },
+          mounted: true,
+        },
+        {
+          key: "mcp-remote-example",
+          transport: "http",
+          manifestPath: "config/tools/mcp-remote-example.yml",
+          allowedTools: null,
+          idempotent: null,
+          mounted: false,
+        },
+      ],
+    });
+    servers.push(srv);
+    const body = (await (await api(srv, "/api/tools")).json()) as {
+      tools: Array<{ key: string; manifestPath: string | null; idempotent: { overrides?: Record<string, boolean> } | null; mounted: boolean }>;
+    };
+    const fs = body.tools.find((t) => t.key === "mcp-filesystem");
+    expect(fs?.manifestPath).toBe("config/tools/mcp-filesystem.yml");
+    expect(fs?.idempotent?.overrides).toEqual({ read_file: true }); // read/write split is visible
+    expect(body.tools.find((t) => t.key === "mcp-remote-example")?.mounted).toBe(false);
+  });
+
+  it("unwired is 501", async () => {
+    const { srv } = await boot(async () => ({}));
+    expect((await api(srv, "/api/tools")).status).toBe(501);
+  });
+});
