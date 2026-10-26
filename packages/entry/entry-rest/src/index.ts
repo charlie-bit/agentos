@@ -489,6 +489,53 @@ export async function startServer(o: StartServerOptions): Promise<RunningServer>
     // `:id` is the browser session id (the same value POST /api/chat takes), or
     // a raw ledger externalKey — the sidebar has the latter, a reloading tab
     // only the former.
+    if (req.method === "POST" && path === "/api/sessions/export") {
+      // Batch export (spec #260): one bundle, no archive library needed — the
+      // NDJSON stream is self-describing and streams well. R7: bounded ids,
+      // exact lookup only (never a path built from user input).
+      const body = await readJson(req);
+      const ids = body?.ids;
+      if (!Array.isArray(ids) || ids.length === 0 || ids.length > 100) {
+        return sendJson(res, 400, { error: "ids must be a non-empty array of at most 100 session ids" });
+      }
+      if (!ids.every((id): id is string => typeof id === "string" && id.length > 0 && id.length <= 200)) {
+        return sendJson(res, 400, { error: "every id must be a string of 1..200 chars" });
+      }
+      const lines: string[] = [JSON.stringify({ "agentos.bundle": "1", exportedAtMs: Date.now(), sessions: ids.length })];
+      let exported = 0;
+      for (const requestedId of ids) {
+        const row =
+          o.ledger.getByExternalKey(isWebExternalKey(requestedId) ? requestedId : webExternalKey(requestedId)) ??
+          o.ledger.getByExternalKey(requestedId);
+        if (!row) {
+          lines.push(JSON.stringify({ session: { externalKey: requestedId }, error: "not-found" }));
+          continue;
+        }
+        let entries: TranscriptEntry[] = [];
+        if (row.sdkSessionId !== null && o.readTranscript) {
+          try {
+            entries = await o.readTranscript({ sdkSessionId: row.sdkSessionId, externalKey: row.externalKey });
+          } catch {
+            entries = [];
+          }
+        }
+        lines.push(
+          JSON.stringify({
+            session: { externalKey: row.externalKey, title: row.title, preset: row.preset, createdAtMs: row.createdAtMs },
+          }),
+        );
+        for (const e of entries) lines.push(JSON.stringify({ entry: e }));
+        exported += 1;
+      }
+      const bodyText = lines.join("\n") + "\n";
+      res.writeHead(200, {
+        "content-type": "application/x-ndjson; charset=utf-8",
+        "content-disposition": `attachment; filename="agentos-sessions-${new Date().toISOString().slice(0, 10)}.jsonl"`,
+        "content-length": Buffer.byteLength(bodyText),
+      });
+      res.end(bodyText);
+      return;
+    }
     const exportMatch = /^\/api\/sessions\/([^/]+)\/export$/.exec(path);
     if (req.method === "GET" && exportMatch) {
       const rawId = exportMatch[1] ?? "";

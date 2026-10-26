@@ -901,3 +901,40 @@ describe("GET /api/sessions/:id/export (spec #259)", () => {
     expect((await api(srv, "/api/sessions/ghost/export")).status).toBe(404);
   });
 });
+
+describe("POST /api/sessions/export (spec #260)", () => {
+  it("bundles several sessions into one downloadable NDJSON stream", async () => {
+    const { srv, dbPath } = await boot(
+      async () => ({ sdkSessionId: "sdk-bulk" }),
+      (args) =>
+        args.sdkSessionId === "sdk-bulk"
+          ? [
+              { role: "user", text: `hi from ${args.externalKey}`, timestampMs: 1 },
+              { role: "assistant", text: "hello", timestampMs: 2 },
+            ]
+          : [],
+    );
+    const ledger = openLedger(dbPath);
+    for (const key of ["web-one", "web-two"]) {
+      const row = ledger.createSession({ entry: "rest", externalKey: key, preset: "p" });
+      ledger.setSdkSessionId(row.id, "sdk-bulk");
+    }
+    ledger.close();
+
+    const res = await postJson(srv, "/api/sessions/export", { ids: ["one", "two", "ghost"] });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-disposition")).toContain("attachment");
+    const lines = (await res.text()).trim().split("\n").map((l) => JSON.parse(l) as Record<string, unknown>);
+    expect(lines[0]?.["agentos.bundle"]).toBe("1");
+    expect(lines.filter((l) => "session" in l)).toHaveLength(3); // two found + one not-found record
+    expect(lines.filter((l) => "entry" in l)).toHaveLength(4); // 2 entries x 2 sessions
+    expect(lines.some((l) => l.error === "not-found")).toBe(true);
+  });
+
+  it("bounds the request: empty, oversized, and non-string ids are 400", async () => {
+    const { srv } = await boot(async () => ({}));
+    expect((await postJson(srv, "/api/sessions/export", { ids: [] })).status).toBe(400);
+    expect((await postJson(srv, "/api/sessions/export", { ids: Array.from({ length: 101 }, (_, i) => `s${i}`) })).status).toBe(400);
+    expect((await postJson(srv, "/api/sessions/export", { ids: [1] })).status).toBe(400);
+  });
+});
