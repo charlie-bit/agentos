@@ -240,6 +240,7 @@ Three approaches, **Route C recommended**:
 | 3 | **idempotent required** | Medium | Non-idempotent tools under auto-retry execute irreversible operations |
 | 4 | **Registry configuration-driven** | Discipline | Module-level state forbidden in multi-pod |
 | 5 | **Large result governance in contract** | Discipline | >10KB results offload to the session workspace and the model gets a pointer — enforced in `packages/core/src/governance/offload.ts` for agentos-owned (sdk-transport) tools; kernel-side stdio/http results are still inline until #301 lands |
+| 6 | **Multi-pod discipline** (four clauses) | Discipline | ① no module-level shared state; ② session state lives ONLY in the ledger; ③ resume replays from the stored transcript, never from an in-memory emitter; ④ the database is the single source of truth. Borrowed from a multi-pod system as disciplines, not as architecture |
 
 ---
 

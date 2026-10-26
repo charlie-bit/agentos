@@ -240,6 +240,7 @@ LangGraph · CrewAI · AutoGen · 自定义框架
 | 3 | **idempotent 必填** | 中 | 非幂等工具在自动重试下执行不可逆操作 |
 | 4 | **注册表配置驱动** | 纪律 | 多 pod 下禁用 module-level 状态 |
 | 5 | **大结果治理进契约** | 纪律 | >10KB 结果落盘、只回指针——对 agentos 自有（sdk transport）工具由 `packages/core/src/governance/offload.ts` 强制执行；内核侧 stdio/http 结果在 #301 落地前仍是内联 |
+| 6 | **多 pod 纪律（四条）** | 纪律 | ① 禁止 module-level 共享状态；② 会话状态只存在 ledger；③ 恢复靠重放已存转录，不靠内存 emitter；④ 数据库是唯一事实源。抄的是多 pod 系统换来的纪律，不是它的架构 |
 
 ---
 
