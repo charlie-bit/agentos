@@ -3,7 +3,7 @@
 v1.0 is **not** a feeling. The definition, mirroring spec #170 (widened by
 v3 to the full 307-point list):
 
-1. every point in `.docs/spec.md` is green (currently 242/307),
+1. every point in `.docs/spec.md` is green (currently 251/307),
 2. both examples under `examples/` validate and run,
 3. cross-runtime acceptance (#144/#298) passes: one preset, two runtimes,
    inject → retrieve → writeback.
@@ -12,9 +12,9 @@ v3 to the full 307-point list):
 
 | Status | Count |
 |--------|-------|
-| closed `[x]` | 242 |
+| closed `[x]` | 251 |
 | partial `[~]` (endpoint or half done; see the ledger line) | 18 |
-| open `[ ]` | 47 |
+| open `[ ]` | 38 |
 | **total** | 307 |
 
 This table is updated by hand alongside `.docs/progress.md`; the ledger is

@@ -179,8 +179,8 @@
 - [x] 121 /api/tools 诊断端点 — #290（key/transport/manifest/幂等切分）
 - [ ] 122 Registry 面板 — 未实现
 - [x] 123 /api/usage 查询端点 — #291（按 provider/model 聚合）
-- [ ] 124 debug 日志捕获 — 未实现
-- [~] 125 healthz 扩展 — 恒 {ok:true}（#220）
+- [x] 124 debug 日志 — `.agentos/logs/` 元数据日志（脱敏）+ `/api/logs` + LogsPanel（内核 stdio stderr 边界如实注明）
+- [x] 125 healthz 扩展 — per-mount {key,healthy,version,reason} + model 探测
 - [x] 126 Graceful shutdown — SIGINT/SIGTERM 关 server/ledger（`cli/src/serve.ts`）；排水见 #293
 - [ ] 127 escalations 面板 — 未实现（只有计数）
 - [ ] 128 会话内事件时间线 — 未实现
@@ -203,7 +203,7 @@
 - [x] 139 skills 即知识通道 — 无跨仓同步脚本；`skills/` vendored 待处置（#248）
 - [x] 140 第三方 onboarding = conformance — README/契约如此声明
 - [x] 141 entry 契约稳定承诺 — 契约 + conformance
-- [ ] 142 provider 生态位清单 — README 未维护
+- [x] 142 生态位清单 — docs/onboarding.md 表 + README 链接（刻意非注册表）
 
 ## M19 开源工程化（143–148）
 
@@ -281,7 +281,7 @@
 
 ## M21 契约与内核收口（201–213）
 
-- [ ] 201 commit 动词下沉 provider 接口 — commitDraft 仍硬绑 git（`governance/writeback.ts`）
+- [x] 201 commit 动词下沉 provider 接口 — contracts `commit()` + knowledge-markdown 实现 + governance 只留策略壳
 - [x] 202 ModelProviderRuntime 契约对齐 — `contracts/model.ts` ModelDialect；两 provider typecheck
 - [x] 203 confirmCapable 从 entry 读取 — `cli/src/serve.ts` + `serve-wiring.spec.ts`
 - [x] 204 单 provider 失败隔离 — #204：environment 类错误降级为 ⚠ + 该 provider 缺席；schema/reference 仍 fail-loud
@@ -292,7 +292,7 @@
 - [x] 209 tenant 归因闭环 — `Attribution.tenant/attr` + serve 接线
 - [x] 210 第一个第三方方言 runtime — #210 `@agentos/model-openai-compat` + `config/models/openai.yml`
 - [x] 211 routing 单测归位 — `core/src/routing/__tests__/{attribution,...}.spec.ts`；channel/active/health 由 conformance/model 覆盖
-- [ ] 212 channel→(kernel,preset) 路由表 — 未做（模型侧三通道路由已由 #208 交付）
+- [x] 212 channel→entry 路由表 — preset.channels + validate 悬空报错 + serve 严格校验
 - [x] 213 兼容层身份徽章 — status.dialect + StatusStrip warn 徽章（#262/#213）
 
 ## M22 审计缺陷修复（214–230）
@@ -303,7 +303,7 @@
 - [x] 217 删除运行中会话的迟到失败 — 删除前先 abort；迟到写被守卫（#217 测试）
 - [x] 218 lastDrift 全局串号 — per-session map + ?session= 查询
 - [x] 219 API 客户端忽略 HTTP 状态 — HttpError + api.spec
-- [ ] 220 /healthz 装饰性 — 仍恒 {ok:true}（随 #292）
+- [x] 220 /healthz 装饰性 — 死通道可见 unhealthy，端点仍 200
 - [x] 221 GET /api/sessions 硬 LIMIT — limit/offset/total/hasMore
 - [x] 222 entry-rest 包内回归测试 — routes.spec（healthz/status/title/delete/messages） — 仅 conformance 覆盖
 - [x] 223 web- 前缀四处手写 — contracts/session-key 单一定义
@@ -390,7 +390,7 @@
 - [x] 289 POST /api/presets/validate — #289
 - [x] 290 GET /api/tools — #290
 - [x] 291 GET /api/usage — #291
-- [ ] 292 debug 日志捕获 + healthz 扩展
+- [x] 292 日志捕获 + healthz — 见 #124/#125/#220
 - [ ] 293 SIGTERM 排水（跟踪活跃 runner）
 
 ## M28 生态与分发（294–300）
@@ -400,12 +400,12 @@
 - [x] 296 examples 双预设 — triage-demo + docs-assistant，validate exit 0
 - [ ] 297 零脚手架 CI 测试
 - [ ] 298 第二 runtime + 跨运行时验收
-- [ ] 299 npm 分发就绪
-- [ ] 300 onboarding 指南 + 生态位清单
+- [~] 299 npm 分发 — bin/files/engines/prepack 就位，`npm pack` 产出含 main.mjs+dist；workspace bundling 仍缺
+- [x] 300 onboarding 指南 + 生态位清单 — docs/onboarding.md + README 双语链接
 
 ## M29 沙箱与部署（301–303）
 
-- [ ] 301 sandbox manifest 声明
+- [x] 301 sandbox manifest 声明 — tool.sandbox.fsRoots/network 透传，adapter 只授予声明根
 - [x] 302 Dockerfile + 部署文档 — 多阶段镜像 + docs/deploy.md（--network host 说明）
 - [x] 303 数据目录规范成文 — 双语 README 六类子路径表
 
