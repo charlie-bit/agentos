@@ -92,21 +92,9 @@
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
   --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  --animate-fade-in: fade-in 0.3s ease-out both;
-  --animate-accordion-down: accordion-down 0.2s ease-out;
-  --animate-accordion-up: accordion-up 0.2s ease-out;
-  --animate-shimmer: shimmer 2.5s linear infinite;
 }
 
 /* motion keyframes — hand-written standard CSS, no animation package */
-@keyframes fade-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
 /* height-variable collapse; the var is what Radix exposes on the content box */
 @keyframes accordion-down {
   from {
@@ -124,40 +112,10 @@
     height: 0;
   }
 }
-@keyframes shimmer {
-  from {
-    background-position: 200% 0;
-  }
-  to {
-    background-position: -200% 0;
-  }
-}
 
 /* aesthetic utilities — public CSS techniques, no copied text from anywhere */
-@utility text-brand-gradient {
-  background-image: linear-gradient(
-    in oklab,
-    var(--primary),
-    color-mix(in oklab, var(--primary) 55%, white)
-  );
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
 
-@utility panel-glow {
-  box-shadow:
-    0 0 0 1px color-mix(in oklab, var(--primary) 30%, transparent),
-    0 8px 32px -8px color-mix(in oklab, var(--primary) 25%, transparent);
-}
 
-@utility focus-glow {
-  &:focus-visible {
-    outline: none;
-    border-color: var(--ring);
-    box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 30%, transparent);
-  }
-}
 
 html,
 body,
