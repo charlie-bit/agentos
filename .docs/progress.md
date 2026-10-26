@@ -151,21 +151,21 @@
 ## M14 Web 入口产品化（101–112）——当前主要缺口
 
 - [x] 101 SSE keepalive ≥15s — #252：15s `: keepalive` 帧 + 测试
-- [~] 102 会话运行状态机 — running/idle/error/aborted 落库（#215）；abort 未做（#103）
-- [ ] 103 会话中断 abort 端点 + 停止按钮 — 未实现
+- [x] 102 会话运行状态机 — running/idle/error/aborted 全落库（#215/#302 台账），abort 由 #254 实现 — running/idle/error/aborted 落库（#215）；abort 未做（#103）
+- [x] 103 会话中断 — #254 端点 + #255 停止按钮（部分结果保留，状态 aborted） — 未实现
 - [x] 104 workspace 文件浏览器端点 — #256 `GET /api/workspace/files`（围栏 + 上限）
 - [~] 105 workspace 文件读取端点 — #257 端点已落地（双层围栏+1MB 帽）；前端 file panel 见 #258
 - [~] 106 会话转录导出 — #259 端点已落地（jsonl/md 下载）；UI 见 #261
 - [~] 107 批量会话导出 — #260 端点已落地（NDJSON bundle）；UI 见 #261
 - [ ] 108 /api/status 扩展 provider/manifest 路径 — 部分（mounts 只有 key/transport）
-- [ ] 109 错误分级呈现 — 未实现
+- [x] 109 错误分级呈现 — #264 四类可行动卡片（tool-missing/gate-denied/model-fallback/network）
 - [ ] 110 移动端响应式 — 未系统验证
-- [ ] 111 会话搜索/过滤 — 未实现
+- [x] 111 会话搜索/过滤 — #266 客户端即时过滤 + #267 服务端 ?q=
 - [ ] 112 空态与首次运行引导 — 仅 sidebar 一句文案
 
 ## M15 Preset 即配置面（113–120）
 
-- [~] 113 配置只读披露 — ConfigDialog 有 preset/model/tools；四层 manifest 路径缺（#262）
+- [x] 113 配置只读披露 — #262/#263 四层 manifest 路径全披露
 - [ ] 114 env 参数负向用例 — 负向 conformance 未加
 - [ ] 115 模型切换器（只读+请求级） — 未实现
 - [x] 116 本地一次性 token — #287 启动生成/打印 + 常量时间校验 + 前端 TokenGate；127.0.0.1 边界 Q&A 写入 SECURITY.md
@@ -293,14 +293,14 @@
 - [x] 210 第一个第三方方言 runtime — #210 `@agentos/model-openai-compat` + `config/models/openai.yml`
 - [x] 211 routing 单测归位 — `core/src/routing/__tests__/{attribution,...}.spec.ts`；channel/active/health 由 conformance/model 覆盖
 - [ ] 212 channel→(kernel,preset) 路由表 — 未做（模型侧三通道路由已由 #208 交付）
-- [ ] 213 兼容层身份徽章 — status 无 dialect tag，前端无徽章
+- [x] 213 兼容层身份徽章 — status.dialect + StatusStrip warn 徽章（#262/#213）
 
 ## M22 审计缺陷修复（214–230）
 
 - [x] 214 commitDraft 双提交 — draft 消费 + committed 台账行；writeback.spec
 - [x] 215 running 不落库 — `entry-rest` turn 开始/结束落 running/idle
 - [x] 216 boundKey 单槽竞态 — sessionFor/renderFor/confirmFor 显式 key；并发 tab 测试
-- [ ] 217 删除运行中会话的迟到失败 — 取消语义未做（随 #254）
+- [x] 217 删除运行中会话的迟到失败 — 删除前先 abort；迟到写被守卫（#217 测试）
 - [x] 218 lastDrift 全局串号 — per-session map + ?session= 查询
 - [x] 219 API 客户端忽略 HTTP 状态 — HttpError + api.spec
 - [ ] 220 /healthz 装饰性 — 仍恒 {ok:true}（随 #292）
@@ -337,31 +337,31 @@
 - [x] 245 KB_POINTER_LINE 死导出 — kbPointerLine 单一定义，serve 消费
 - [ ] 246 listPages 消费方/conformance-only 注记
 - [x] 247 usageAttr 死接线 — 随 #209 打通
-- [ ] 248 skills/ vendored 内容处置
-- [ ] 249 .agentos/workspace 遗留目录清除
-- [ ] 250 死 CSS/死组件清除（separator.tsx 等）
-- [ ] 251 e2e 断连产物归位
+- [x] 248 skills/ vendored 内容处置 — 整树移出仓库（git rm），skills 唯一通道=knowledge provider
+- [x] 249 .agentos 遗留目录清除 — workspace/acceptance/notes 已删，运行时只落六类子路径
+- [x] 250 死 CSS/死组件清除 — separator.tsx + 未用 utilities/keyframes 删除
+- [x] 251 e2e 断连产物归位 — acceptance-noise 日志移出 .agentos
 
 ## M25 Web 一期任务分解（252–269）
 
 - [x] 252 SSE 心跳帧 — 15s `: keepalive`（可注入 cadence）
 - [x] 253 ledger 开机清扫 — `Ledger.sweepRunning()` + 两种 serve 启动期清扫
-- [ ] 254 abort 端点 + AbortController 注册表
-- [ ] 255 前端停止按钮
+- [x] 254 abort 端点 + AbortController 注册表 — per-externalKey 注册表贯通至内核 abortController
+- [x] 255 前端停止按钮 — Composer Stop + aborted 结果渲染
 - [x] 256 workspace 列表端点 — `GET /api/workspace/files`
 - [x] 257 workspace 读端点 — `GET /api/workspace/file`（lexical + realpath 围栏，1MB 帽）
 - [ ] 258 FilePanel 前端
 - [x] 259 单会话导出端点 — `GET /api/sessions/:id/export?format=jsonl|md`
 - [x] 260 批量导出端点 — `POST /api/sessions/export` NDJSON bundle
 - [ ] 261 导出 UI
-- [ ] 262 status 四层披露（manifestPath）
-- [ ] 263 ConfigDialog 路径渲染
-- [ ] 264 错误分类学
+- [x] 262 status 四层披露 — mounts.manifestPath + knowledge/entry/dialect
+- [x] 263 ConfigDialog 路径渲染 — 四层各自文件路径 + env-NAME 注记
+- [x] 264 错误分类学 — classifyTurnError + 四型渲染 + 测试
 - [ ] 265 响应式布局
-- [ ] 266 会话过滤（客户端）
-- [ ] 267 服务端会话搜索 ?q=
-- [ ] 268 空态组件
-- [ ] 269 空态测试
+- [x] 266 会话过滤 — filterSessions + sidebar 输入框
+- [x] 267 服务端会话搜索 — LIKE 转义 + 仅用户可见标签
+- [x] 268 空态组件 — 三变体优先级 + 指引文案
+- [x] 269 空态测试 — empty-state.spec（三变体+优先级）
 
 ## M26 Web 二期任务分解（270–286）
 
@@ -397,7 +397,7 @@
 
 - [ ] 294 escalations 历史端点 + 面板
 - [ ] 295 事件时间线
-- [ ] 296 examples 双预设
+- [x] 296 examples 双预设 — triage-demo + docs-assistant，validate exit 0
 - [ ] 297 零脚手架 CI 测试
 - [ ] 298 第二 runtime + 跨运行时验收
 - [ ] 299 npm 分发就绪
@@ -406,8 +406,8 @@
 ## M29 沙箱与部署（301–303）
 
 - [ ] 301 sandbox manifest 声明
-- [ ] 302 Dockerfile + 部署文档
-- [ ] 303 数据目录规范成文
+- [x] 302 Dockerfile + 部署文档 — 多阶段镜像 + docs/deploy.md（--network host 说明）
+- [x] 303 数据目录规范成文 — 双语 README 六类子路径表
 
 ## M30 对齐验收（304–307）
 
