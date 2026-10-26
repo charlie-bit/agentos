@@ -23,7 +23,7 @@
 import { appendFileSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 import type { ModelProviderManifest, NeutralTool, RenderEvent, ToolMountPlan } from "@agentos/contracts";
-import { driftReport, selectDialect } from "@agentos/core";
+import { driftReport, offloadIfLarge, selectDialect } from "@agentos/core";
 import { dialect as anthropicCompat } from "@agentos/model-anthropic-compat";
 import { dialect as bedrock } from "@agentos/model-bedrock";
 import { createSdkMcpServer, query, type SDKMessage } from "@anthropic-ai/claude-agent-sdk";
@@ -376,12 +376,22 @@ export function withToolRetry(tools: readonly NeutralTool[], policy: RetryPolicy
   }));
 }
 
+export interface InProcessServerOptions {
+  /** Retry executor policy (spec #205). Absent = no retry wrapping. */
+  retry?: RetryPolicy;
+  /**
+   * Session workspace for large-result offload (spec #206). Absent = results
+   * return inline (callers without a workspace keep the old behavior).
+   */
+  workspaceDir?: string;
+}
+
 export function createInProcessServer(
   tools: readonly NeutralTool[],
   serverName = "agentos-kb",
-  retry?: RetryPolicy,
+  options: InProcessServerOptions = {},
 ): { type: "sdk"; name: string; instance: unknown } {
-  const effective = retry ? withToolRetry(tools, retry) : tools;
+  const effective = options.retry ? withToolRetry(tools, options.retry) : tools;
   return createSdkMcpServer({
     name: serverName,
     version: "0.1.0",
@@ -391,7 +401,13 @@ export function createInProcessServer(
       inputSchema: toZodShape(t.inputSchema),
       handler: async (args: Record<string, unknown>): Promise<{ content: { type: "text"; text: string }[] }> => {
         const result = await t.handler(args ?? {});
-        return { content: [{ type: "text" as const, text: JSON.stringify(result ?? null) }] };
+        // >10KB never rides inline (spec #206): write to the session workspace,
+        // hand the model a pointer it can Read.
+        const out =
+          options.workspaceDir === undefined
+            ? { value: result }
+            : offloadIfLarge(result, { workspaceDir: options.workspaceDir, toolName: t.name });
+        return { content: [{ type: "text" as const, text: JSON.stringify(out.value ?? null) }] };
       },
     })),
   }) as unknown as { type: "sdk"; name: string; instance: unknown };

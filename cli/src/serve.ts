@@ -284,16 +284,19 @@ export async function wireKnowledge(
   // server's retry policy can branch on the surfaced plan, not a guess.
   const { plans: kbPlans, errors } = planTools([kbManifest], { sdkFactories: { kb: {} } });
   const kbPlan = kbPlans[0];
-  const serverConfig = createInProcessServer(
-    tools,
-    "kb",
-    kbPlan
+  const serverConfig = createInProcessServer(tools, "kb", {
+    ...(kbPlan
       ? {
-          idempotentFor: (toolName) => isIdempotent(kbPlan, toolName),
-          onRetry: (toolName) => write(`⚠ transport failure on ${toolName}: retrying once (declared idempotent)\n`),
+          retry: {
+            idempotentFor: (toolName: string) => isIdempotent(kbPlan, toolName),
+            onRetry: (toolName: string) =>
+              write(`⚠ transport failure on ${toolName}: retrying once (declared idempotent)\n`),
+          },
         }
-      : undefined,
-  );
+      : {}),
+    // Large kb pages/results land in the session workspace, not in context.
+    workspaceDir,
+  });
   if (errors.length > 0 || kbPlans[0] === undefined) {
     write(
       `⚠ kb plan failed — session runs without kb: ${errors.length ? errors.map((e) => `${e.path}: ${e.message}`).join("; ") : "sdk factory 'kb' produced no plan"}\n`,
