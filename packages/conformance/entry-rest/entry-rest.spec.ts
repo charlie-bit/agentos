@@ -574,3 +574,35 @@ describe("per-session drift status (spec #218)", () => {
     expect((await statusOf()).lastDrift).toBeNull();
   });
 });
+
+describe("turn lifecycle in the ledger (spec #215)", () => {
+  it("a turn is 'running' while it runs — including turns 2..N — and idle after", async () => {
+    let release: (() => void) | undefined;
+    let gate = Promise.resolve();
+    const { srv } = await boot(async (ctx) => {
+      await gate;
+      ctx.emit({ type: "result", payload: { subtype: "success", isError: false }, timestampMs: 1 });
+      return {};
+    });
+
+    const statusOf = async (sessionId: string) => {
+      const body = (await (await api(srv, "/api/sessions")).json()) as {
+        sessions: Array<{ external_key: string; status: string }>;
+      };
+      return body.sessions.find((s) => s.external_key === `web-${sessionId}`)?.status;
+    };
+
+    for (const turn of [1, 2]) {
+      gate = new Promise<void>((r) => {
+        release = r;
+      });
+      const stream = postJson(srv, "/api/chat", { sessionId: "life", message: `turn ${turn}` });
+      // Wait until the row exists and the turn has begun.
+      await new Promise((r) => setTimeout(r, 20));
+      expect(await statusOf("life"), `turn ${turn} in flight`).toBe("running");
+      release?.();
+      await (await stream).text();
+      expect(await statusOf("life"), `turn ${turn} settled`).toBe("idle");
+    }
+  });
+});

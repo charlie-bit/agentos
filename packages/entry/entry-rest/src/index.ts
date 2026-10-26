@@ -455,6 +455,13 @@ export async function startServer(o: StartServerOptions): Promise<RunningServer>
         connection: "keep-alive",
         "x-accel-buffering": "no",
       });
+      // Turn lifecycle is ledger state, not memory state (spec #215): every
+      // turn starts running and the sidebar reads the DB, so turns 2..N must
+      // flip it back on — otherwise the row shows idle while work is happening.
+      if (row) {
+        o.ledger.markStatus(row.id, "running");
+        o.ledger.touch(row.id);
+      }
       entry.addStream(externalKey, res);
       const meta = JSON.stringify({
         type: "session.meta",
@@ -470,8 +477,10 @@ export async function startServer(o: StartServerOptions): Promise<RunningServer>
           emit: (ev) => entry.renderFor(externalKey, [ev]),
           confirm: (partial) => entry.confirmFor(externalKey, { ...partial, requestId: randomUUID() }),
         });
-        if (out.sdkSessionId && row) {
-          o.ledger.setSdkSessionId(row.id, out.sdkSessionId);
+        // Settle the row on EVERY completed turn, not only when the kernel
+        // minted a session id — a turn without one still finished.
+        if (row) {
+          if (out.sdkSessionId) o.ledger.setSdkSessionId(row.id, out.sdkSessionId);
           o.ledger.markStatus(row.id, "idle");
           o.ledger.touch(row.id);
         }
