@@ -45,6 +45,18 @@ export interface TranscriptEntry {
   readonly timestampMs?: number;
 }
 
+/**
+ * The authoritative registry of entry adapters shipped in this repo (spec
+ * #228). Entry adapters are code, not manifests, so preset validation needs
+ * one list — it used to be kept separately in preset-validate (["cli"]) and
+ * serve (["cli","rest"]), and a preset naming "rest" validated in one place
+ * and failed in the other. Community adapters extend the list at their own
+ * composition root; this is the set the CLI itself knows how to mount.
+ */
+export const ENTRY_ADAPTER_NAMES = ["cli", "rest"] as const;
+
+export type EntryAdapterName = (typeof ENTRY_ADAPTER_NAMES)[number];
+
 /** Mapping between the client-side session and the agent session it drives. */
 export interface SessionBinding {
   readonly clientSessionId: string;

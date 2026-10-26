@@ -28,12 +28,12 @@ import {
   type AnyManifest,
 } from "@agentos/core";
 import { createMarkdownProvider } from "@agentos/knowledge-markdown";
-import { toolProviderManifestSchema } from "@agentos/contracts";
+import { ENTRY_ADAPTER_NAMES, toolProviderManifestSchema } from "@agentos/contracts";
 import type { ConfirmRequest, ConfirmResult, KnowledgeManifest, ModelProviderManifest, NeutralTool, ToolProviderManifest } from "@agentos/contracts";
 import { dialect as compatDialect } from "@agentos/model-anthropic-compat";
 import { dialect as bedrockDialect } from "@agentos/model-bedrock";
-import { ENTRY_NAME as CLI_ENTRY, EntryCli, formatUsageSummary } from "@agentos/entry-cli";
-import { startServer, CAPABILITIES as REST_CAPABILITIES, ENTRY_NAME as REST_ENTRY } from "@agentos/entry-rest";
+import { EntryCli, formatUsageSummary } from "@agentos/entry-cli";
+import { startServer, CAPABILITIES as REST_CAPABILITIES } from "@agentos/entry-rest";
 import { BASE_SYSTEM_PROMPT, createInProcessServer, readTranscript, runTurn, type ModelLease } from "@agentos/adapter-claude-sdk";
 
 export interface ServeFlags {
@@ -136,7 +136,7 @@ function assemble(flags: ServeFlags): { ok: true; value: Assembly } | { ok: fals
   // both entry names resolve: the preset may reference cli or rest; the
   // serving shape is chosen by the flag, not the file — local-tool pragmatism
   // (config/presets is protected in P5; full entry-manifest design is P6+).
-  const refErrors = validatePresetRefs(loaded, { entryNames: [CLI_ENTRY, REST_ENTRY] });
+  const refErrors = validatePresetRefs(loaded, { entryNames: ENTRY_ADAPTER_NAMES });
   if (refErrors.length) return { ok: false, exitCode: 1, lines: refErrors.map((e) => `✗ ${e.path}: ${e.message}`) };
   const manifests = loaded.map((l) => l.manifest);
   const preset = manifests.find((m) => m.kind === "preset");

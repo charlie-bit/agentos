@@ -14,7 +14,7 @@ import {
   type AnyManifest,
   type LoadedManifest,
 } from "@agentos/core";
-import { ENTRY_NAME } from "@agentos/entry-cli";
+import { ENTRY_ADAPTER_NAMES } from "@agentos/contracts";
 
 export interface CliResult {
   exitCode: number;
@@ -23,10 +23,10 @@ export interface CliResult {
 
 /**
  * Entry adapters are code-registered — no entry manifest kind exists in the
- * contract envelope (P1b gap, closed in P4): the name comes from the entry
- * package itself, single source of truth.
+ * contract envelope. The list is the CONTRACT's (spec #228), shared with
+ * serve so both agree on what the CLI can mount.
  */
-export const REGISTERED_ENTRY_NAMES: readonly string[] = [ENTRY_NAME];
+export const REGISTERED_ENTRY_NAMES: readonly string[] = ENTRY_ADAPTER_NAMES;
 
 /**
  * Config root convention (documented in README of cli, kept here as truth):

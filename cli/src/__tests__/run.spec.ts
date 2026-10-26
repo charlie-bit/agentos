@@ -100,3 +100,34 @@ describe("agentos serve — P4 gate", () => {
     expect(r.lines.join("\n")).toContain("usage:");
   });
 });
+
+describe("entry adapter registry is single-sourced (spec #228)", () => {
+  const preset = (entry: string) =>
+    [
+      "kind: preset",
+      'version: "1"',
+      "name: p",
+      "knowledge: k",
+      "model: m",
+      "tools: []",
+      `entry: ${entry}`,
+      "",
+    ].join("\n");
+  const manifests = {
+    "knowledge/k.yml": ["kind: knowledge", 'version: "1"', "name: k", "provider: markdown", "mount: { type: path, path: ./kb }", ""].join("\n"),
+    "models/m.yml": ["kind: model", 'version: "1"', "name: m", "provider: x", "models: { a: real-a }", ""].join("\n"),
+  };
+
+  it("a preset naming entry: rest validates (preset validate knows both adapters)", async () => {
+    const dir = makeTempConfig({ ...manifests, "presets/p.yml": preset("rest") });
+    const r = await run(["preset", "validate", join(dir, "presets/p.yml")]);
+    expect(r.exitCode).toBe(0);
+  });
+
+  it("an unregistered entry name is still rejected", async () => {
+    const dir = makeTempConfig({ ...manifests, "presets/p.yml": preset("ghost") });
+    const r = await run(["preset", "validate", join(dir, "presets/p.yml")]);
+    expect(r.exitCode).toBe(1);
+    expect(r.lines.join("\n")).toContain("ghost");
+  });
+});
