@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { browserSessionId } from "@agentos/contracts/session-key";
 import { cn, relTime } from "../lib/utils";
 import type { SessionRow } from "../lib/api";
+import { filterSessions } from "../lib/session-filter";
 import { InlineEditableTitle } from "./InlineEditableTitle";
 
 const dotColor: Record<string, string> = {
@@ -106,6 +107,8 @@ export function SessionSidebar({
   onRename: (id: string, title: string) => Promise<void>;
   onDelete: (id: string) => void;
 }) {
+  const [query, setQuery] = useState("");
+  const visible = useMemo(() => filterSessions(sessions, query), [sessions, query]);
   return (
     <aside className="flex w-52 shrink-0 flex-col gap-1 overflow-y-auto border-r border-border p-2">
       <div className="flex items-center justify-between px-1 pb-1">
@@ -118,10 +121,20 @@ export function SessionSidebar({
           <Plus className="h-3.5 w-3.5" />
         </button>
       </div>
+      <input
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder="filter title / status…"
+        aria-label="filter sessions"
+        className="mx-1 mb-1 rounded-md border border-border bg-background px-2 py-1 text-xs outline-none placeholder:text-muted-foreground focus:border-primary"
+      />
       {sessions.length === 0 && (
         <div className="px-1 text-xs text-muted-foreground">send your first message to create one</div>
       )}
-      {sessions.map((row) => {
+      {sessions.length > 0 && visible.length === 0 && (
+        <div className="px-1 text-xs text-muted-foreground">no session matches "{query}"</div>
+      )}
+      {visible.map((row) => {
         const browserId = browserSessionId(row.external_key);
         return (
           <SessionItem
