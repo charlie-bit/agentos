@@ -10,7 +10,7 @@
  */
 import { createInterface } from "node:readline";
 import { existsSync, mkdirSync, readdirSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import {
   loadManifestDir,
   validatePresetRefs,
@@ -127,6 +127,16 @@ function collectYml(dir: string): string[] {
 }
 
 const write = (s: string) => process.stdout.write(s);
+
+/** Preset catalogue for GET /api/presets (spec #288): names + repo-relative paths, no contents. */
+export function listPresetFiles(repoRoot: string): Array<{ name: string; path: string }> {
+  const dir = join(repoRoot, "config", "presets");
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir)
+    .filter((f) => /\.ya?ml$/i.test(f))
+    .sort()
+    .map((f) => ({ name: f.replace(/\.ya?ml$/i, ""), path: relative(repoRoot, join(dir, f)) }));
+}
 
 /** Shared assembly: dogfood manifest loading -> reference validation -> plans. */
 export function assemble(flags: ServeFlags): { ok: true; value: Assembly } | { ok: false; exitCode: number; lines: string[] } {
@@ -565,6 +575,7 @@ export async function runServeWeb(flags: ServeFlags): Promise<number> {
     dbPath,
     staticDir,
     systemPrompt: BASE_SYSTEM_PROMPT,
+    listPresets: () => listPresetFiles(asm.value.repoRoot),
   });
   write(`● agentos serve --web | preset=${presetName} mounts=${plans.length}\n  console: ${server.url}\n  Ctrl+C exits cleanly (ledger stays zombie-free)\n`);
 

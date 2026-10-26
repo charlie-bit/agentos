@@ -142,3 +142,22 @@ describe("single-tool failure isolation (spec #204)", () => {
     }
   });
 });
+
+describe("preset catalogue (spec #288)", () => {
+  it("lists config/presets/*.yml as name + repo-relative path", async () => {
+    const { listPresetFiles } = await import("../serve.js");
+    const { locateTarget } = await import("../preset-validate.js");
+    const preset = locateTarget("config/presets/example.yml");
+    expect(preset).not.toBeNull();
+    const repoRoot = preset!.replace(/\/config\/presets\/example\.yml$/, "");
+    const presets = listPresetFiles(repoRoot);
+    expect(presets).toContainEqual({ name: "example", path: "config/presets/example.yml" });
+  });
+
+  it("a repo without config/presets gets an empty catalogue", async () => {
+    const { listPresetFiles } = await import("../serve.js");
+    const dir = mkdtempSync(join(tmpdir(), "agentos-nopresets-"));
+    roots.push(dir);
+    expect(listPresetFiles(dir)).toEqual([]);
+  });
+});

@@ -100,11 +100,25 @@ export interface StartServerOptions {
    * GET /api/status for the config-inspection dialog. Absent = field omitted. */
   systemPrompt?: string;
   /**
+   * Preset listing supplier (spec #288). Injected for the same reason the
+   * runner is: config lives on disk, this package must not learn the layout.
+   * Absent = the endpoint answers 501.
+   */
+  listPresets?: () => PresetSummary[] | Promise<PresetSummary[]>;
+  /**
    * SSE keepalive cadence (spec #252). Long turns can sit silent for minutes
    * (model thinking, slow tool); an idle proxy/browser kills the connection.
    * Absent = 15000 ms, per the product promise.
    */
   heartbeatMs?: number;
+}
+
+/** One available preset as revealed read-only (name + file, never contents). */
+export interface PresetSummary {
+  /** Preset manifest name or file stem. */
+  name: string;
+  /** Repo-relative path of the yml. */
+  path: string;
 }
 
 export interface RunningServer {
@@ -438,6 +452,15 @@ export async function startServer(o: StartServerOptions): Promise<RunningServer>
         return sendJson(res, 200, { entries: Array.isArray(entries) ? entries : [] });
       } catch {
         return sendJson(res, 200, { entries: [] }); // reader blew up: degrade, never 500
+      }
+    }
+    if (req.method === "GET" && path === "/api/presets") {
+      if (!o.listPresets) return sendJson(res, 501, { error: "preset listing not wired by this deployment" });
+      try {
+        const presets = await o.listPresets();
+        return sendJson(res, 200, { presets: Array.isArray(presets) ? presets : [] });
+      } catch {
+        return sendJson(res, 200, { presets: [] }); // unreadable config dir: empty list, never 500
       }
     }
     if (req.method === "GET" && path === "/api/escalations") {

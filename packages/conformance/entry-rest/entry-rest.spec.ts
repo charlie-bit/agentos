@@ -702,3 +702,34 @@ describe("SSE keepalive (spec #252)", () => {
     expect(srv.port).toBeGreaterThan(0);
   });
 });
+
+describe("GET /api/presets (spec #288)", () => {
+  it("lists the injected presets read-only", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "agentos-presets-"));
+    tempDirs.push(dir);
+    const dbPath = join(dir, "sessions.db");
+    const srv = await startServer({
+      presetName: "p",
+      model: { provider: "v" },
+      mounts: [],
+      runner: async () => ({}),
+      ledger: openLedger(dbPath),
+      port: 0,
+      dbPath,
+      staticDir: makeStaticDir(dir),
+      listPresets: () => [
+        { name: "example", path: "config/presets/example.yml" },
+        { name: "triage-demo", path: "examples/triage-demo/preset.yml" },
+      ],
+    });
+    servers.push(srv);
+    const body = (await (await api(srv, "/api/presets")).json()) as { presets: Array<{ name: string; path: string }> };
+    expect(body.presets.map((p) => p.name)).toEqual(["example", "triage-demo"]);
+    expect(body.presets[0]?.path).toBe("config/presets/example.yml");
+  });
+
+  it("an unwired deployment answers 501, not a fabricated list", async () => {
+    const { srv } = await boot(async () => ({}));
+    expect((await api(srv, "/api/presets")).status).toBe(501);
+  });
+});
