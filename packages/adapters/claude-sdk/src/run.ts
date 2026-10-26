@@ -134,14 +134,28 @@ export function fsRootsFromPlans(
   plans: readonly ToolMountPlan[],
   workspaceDir?: string,
 ): string[] {
-  const roots = new Set<string>();
+  const declared: string[] = [];
+  const inferred: string[] = [];
   for (const plan of plans) {
+    if (plan.sandbox?.fsRoots !== undefined) {
+      declared.push(...plan.sandbox.fsRoots.filter((r) => isAbsolute(r)));
+      continue; // a declared plan is never widened by argv guessing (#301)
+    }
     for (const arg of plan.stdio?.args ?? []) {
-      if (isAbsolute(arg)) roots.add(arg);
+      if (isAbsolute(arg)) inferred.push(arg);
     }
   }
+  const roots = new Set<string>([...declared, ...inferred]);
   if (workspaceDir !== undefined) roots.add(workspaceDir);
   return [...roots];
+}
+
+/**
+ * Which plans declare no sandbox at all (spec #301). Callers can surface
+ * "this mount's file surface was inferred, not declared" honestly.
+ */
+export function sandboxUnverified(plans: readonly ToolMountPlan[]): string[] {
+  return plans.filter((p) => p.sandbox?.fsRoots === undefined).map((p) => p.key);
 }
 
 /**

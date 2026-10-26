@@ -6,6 +6,7 @@ export {
   plansToMcpServers,
   allowedToolsFromPlans,
   fsRootsFromPlans,
+  sandboxUnverified,
   canUseToolFromPlans,
   collectDrift,
   createInProcessServer,

@@ -128,6 +128,15 @@ export function planTools(manifests: readonly ToolProviderManifest[], opts: Plan
 
     if (m.allowedTools !== undefined) candidate.allowedTools = m.allowedTools;
     if (m.idempotent !== undefined) candidate.idempotent = m.idempotent;
+    // Sandbox declaration (spec #301): roots may carry ${VAR} like commands do.
+    if (m.sandbox !== undefined) {
+      candidate.sandbox = {
+        ...(m.sandbox.fsRoots
+          ? { fsRoots: m.sandbox.fsRoots.map((r) => expandEnv(r, env, `${m.name}.sandbox.fsRoots`, errors)) }
+          : {}),
+        ...(m.sandbox.network ? { network: { allow: [...m.sandbox.network.allow] } } : {}),
+      };
+    }
 
     const checked = toolMountPlanSchema.safeParse(candidate);
     if (checked.success) plans.push(checked.data);

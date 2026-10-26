@@ -47,6 +47,21 @@ const toolManifestBase = manifestEnvelopeSchema.extend({
   /** false = declared but not mounted; kept for diff visibility. */
   enabled: z.boolean().optional(),
   /**
+   * Sandbox declaration (spec #301): the filesystem roots and network
+   * destinations this provider is allowed to touch. The loader passes it
+   * through; the adapter grants exactly these roots — never a guess from
+   * argv. Absent = not declared (adapter falls back to today's inference and
+   * reports the mount as sandbox-unverified).
+   */
+  sandbox: z
+    .strictObject({
+      /** Absolute paths (after ${VAR} expansion) the provider may read/write. */
+      fsRoots: z.array(z.string().min(1)).optional(),
+      /** Outbound destinations (host or host:port) the provider may reach. */
+      network: z.strictObject({ allow: z.array(z.string().min(1)) }).optional(),
+    })
+    .optional(),
+  /**
    * Cross-kernel tool schemas are exchanged as JSON Schema only; each side
    * converts to its own dialect. Deliberately a fixed literal: Zod v3/v4
    * schemas are mutually incompatible (per public changelog) and passing them
@@ -120,8 +135,15 @@ export const toolMountPlanSchema = z
     sdk: toolMountPlanSdkSchema.optional(),
     /** Pass-through allowlist (bare tool names, no mcp__ prefix); absent = all discovered. */
     allowedTools: z.array(z.string().min(1)).optional(),
-    /** Pass-through retry metadata; the loader never acts on it (future executor does). */
+    /** Pass-through retry metadata; the executor branches on it (spec #205). */
     idempotent: toolIdempotencySchema.optional(),
+    /** Pass-through sandbox declaration (spec #301); roots are already expanded. */
+    sandbox: z
+      .strictObject({
+        fsRoots: z.array(z.string().min(1)).optional(),
+        network: z.strictObject({ allow: z.array(z.string().min(1)) }).optional(),
+      })
+      .optional(),
   })
   .refine(
     (p) =>
