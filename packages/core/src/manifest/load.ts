@@ -13,17 +13,19 @@ import {
   knowledgeManifestSchema,
   modelProviderManifestSchema,
   presetSchema,
+  workflowManifestSchema,
   toolProviderManifestSchema,
   type AgentManifest,
   type KnowledgeManifest,
   type ModelProviderManifest,
   type Preset,
+  type WorkflowManifest,
   type ToolProviderManifest,
 } from "@agentos/contracts";
 import { formatIssues, type ManifestError } from "./errors.js";
 
 /** Any validated manifest, discriminated by its envelope kind. */
-export type AnyManifest = ToolProviderManifest | ModelProviderManifest | KnowledgeManifest | Preset | AgentManifest;
+export type AnyManifest = ToolProviderManifest | ModelProviderManifest | KnowledgeManifest | Preset | AgentManifest | WorkflowManifest;
 
 export interface LoadedManifest {
   source: string;
@@ -43,6 +45,7 @@ const ROUTES = {
   knowledge: knowledgeManifestSchema,
   preset: presetSchema,
   agent: agentManifestSchema,
+  workflow: workflowManifestSchema,
 } as const;
 
 const KNOWN_KINDS = Object.keys(ROUTES).sort();

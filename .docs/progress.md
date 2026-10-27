@@ -485,7 +485,7 @@
 - [ ] 355 顺序执行
 - [x] 356 trigger 三型
 - [x] 357 cron 解析（零依赖）
-- [ ] 358 workflow validate
+- [x] 358 workflow validate
 - [ ] 359 顺序执行器
 - [ ] 360 step 间上下文传递
 - [ ] 361 human-in-the-loop 步骤
@@ -587,6 +587,8 @@
 - [ ] 457 v4 首跑演示脚本
 
 ## v4 执行记录（2026-10-27 起）
+
+- 358 workflow 校验：loader 路由 kind workflow；preset 增 `workflows: []` 第六层引用；validate 检查悬空 workflow 引用与步骤内的未知 agent；`agentos workflows validate` 复用数据型 runner。测试覆盖合法/悬空/未知 agent。
 
 - 357 零依赖 cron：五字段 + 步长/区间/列表 + @hourly/@daily/@weekly/@monthly/@yearly；DOM/DOW 标准"两者皆限定时取或"规则；nextRunAfter 以分钟窗推进（4 年上界，覆盖闰日）；坏输入抛错。测试覆盖别名、*/15、办公时间、月末、2028-02-29。
 

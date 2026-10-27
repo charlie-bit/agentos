@@ -106,6 +106,15 @@ export function validatePresetRefs(
     // remain manifest references and are checked above.
   }
 
+  for (const { source, manifest } of loaded) {
+    if (manifest.kind !== "workflow") continue;
+    manifest.steps.forEach((step, i) => {
+      if (step.type === "agent" && !byName.has(step.agent)) {
+        errors.push({ source, category: REF, path: `steps.${i}.agent`, message: `references agent ${JSON.stringify(step.agent)}, which no config/agents manifest declares`, hint: "external agents are MCP tools; workflow agent steps name local roles" });
+      }
+    });
+  }
+
   const entryNames = new Set(opts.entryNames ?? []);
   for (const { source, manifest } of loaded) {
     if (manifest.kind !== "preset") continue;
@@ -151,6 +160,12 @@ export function validatePresetRefs(
           message: `references ${JSON.stringify(ref)} as a tool, but that name is a ${JSON.stringify(found.kind)} manifest`,
         });
       }
+    });
+
+    (manifest.workflows ?? []).forEach((ref, i) => {
+      const found = byName.get(ref);
+      if (!found) errors.push({ source, category: REF, path: `workflows.${i}`, message: `references workflow ${JSON.stringify(ref)}, which no config/workflows manifest declares` });
+      else if (found.kind !== "workflow") errors.push({ source, category: REF, path: `workflows.${i}`, message: `references ${JSON.stringify(ref)} as a workflow, but it is a ${JSON.stringify(found.kind)} manifest` });
     });
 
     (manifest.agents ?? []).forEach((ref, i) => {

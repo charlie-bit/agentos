@@ -58,6 +58,8 @@ export const presetSchema = manifestEnvelopeSchema.extend({
   fallbackModels: z.array(z.string().min(1)).optional(),
   /** Fifth reference layer (spec #333): agent roles this business may run. */
   agents: z.array(z.string().min(1)).optional(),
+  /** Sixth reference layer (spec #358): workflows this business may run. */
+  workflows: z.array(z.string().min(1)).optional(),
 });
 
 export type Preset = z.infer<typeof presetSchema>;
