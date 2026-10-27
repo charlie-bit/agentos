@@ -499,9 +499,9 @@
 - [x] 369 错过窗策略
 - [x] 370 手动触发端点
 - [x] 371 webhook 触发器
-- [ ] 372 `GET /api/workflows`
-- [ ] 373 `GET /api/workflows/:name/runs`
-- [ ] 374 `GET /api/workflows/runs/:id`
+- [x] 372 `GET /api/workflows`
+- [x] 373 `GET /api/workflows/:name/runs`
+- [x] 374 `GET /api/workflows/runs/:id`
 - [ ] 375 WorkflowsPanel 前端
 - [ ] 376 workflow 只读图
 - [ ] 377 运行按钮 + 实例化
@@ -587,6 +587,8 @@
 - [ ] 457 v4 首跑演示脚本
 
 ## v4 执行记录（2026-10-27 起）
+
+- 372–374 只读 API：`GET /api/workflows`（名字/描述/触发器/步骤数/manifest 路径/+ schedule 的 nextRun 与 missed）、`GET /api/workflows/:name/runs`、`GET /api/workflows/runs/:id`（步骤级 detail，未知 404，未接线 501）。供应商注入，entry 不背引擎。
 
 - 370/371 触发端点：`POST /api/workflows/:name/run`（manual，支持 resumeFrom，404/400/501）与 `POST /api/hooks/:name`（Bearer = secretEnv 指向的 env 值，常量时间比较；错 401、未配置 503、成功 202）。引擎经注入，entry 只路由与鉴权。
 

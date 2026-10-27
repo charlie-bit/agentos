@@ -143,6 +143,10 @@ export interface StartServerOptions {
    * The engine is injected; this package only routes and authenticates.
    */
   runWorkflow?: (name: string, trigger: "manual" | "webhook", opts?: { project?: string; resumeFrom?: number }) => Promise<{ ok: boolean; runId?: string; reason?: string }>;
+  /** Read-only workflow catalogue / runs (#372–#374). Absent = 501. */
+  workflows?: () => WorkflowSummary[] | Promise<WorkflowSummary[]>;
+  workflowRuns?: (name?: string) => WorkflowRunSummary[] | Promise<WorkflowRunSummary[]>;
+  workflowRunDetail?: (id: string) => { run: WorkflowRunSummary; steps: unknown[] } | undefined | Promise<{ run: WorkflowRunSummary; steps: unknown[] } | undefined>;
   /** Webhook secret VALUE for a workflow, resolved from its env-var name (#12). */
   hookSecretFor?: (name: string) => string | undefined;
   /** Read-only role catalogue (spec #342). Absent = 501. */
@@ -219,6 +223,31 @@ export interface ToolDescriptor {
   idempotent: { default: boolean; overrides?: Record<string, boolean> } | null;
   /** False for declared-but-unmounted / env-degraded providers. */
   mounted: boolean;
+}
+
+/** One mounted workflow as the panels see it (#372). */
+export interface WorkflowSummary {
+  name: string;
+  description?: string;
+  trigger: "manual" | "schedule" | "webhook";
+  stepCount: number;
+  manifestPath: string | null;
+  /** Schedule only: next boundary and skipped windows (#380/#381). */
+  nextRun?: string | null;
+  missed?: number;
+}
+
+/** One workflow instance, run-list shaped (#373). */
+export interface WorkflowRunSummary {
+  id: string;
+  workflow: string;
+  status: "pending" | "running" | "done" | "error" | "aborted";
+  trigger: string;
+  project?: string | null;
+  startedAtMs: number;
+  endedAtMs?: number | null;
+  resumeFrom?: number | null;
+  error?: string | null;
 }
 
 /** One pending kb_write draft as the inbox shows it (metadata + preview, no full body). */
@@ -1046,6 +1075,44 @@ export async function startServer(o: StartServerOptions): Promise<RunningServer>
       } catch {
         return sendJson(res, 200, { files: [] });
       }
+    }
+    if (req.method === "GET" && path === "/api/workflows") {
+      if (!o.workflows) return sendJson(res, 501, { error: "workflow catalogue not wired by this deployment" });
+      try {
+        const workflows = await o.workflows();
+        return sendJson(res, 200, { workflows: Array.isArray(workflows) ? workflows : [] });
+      } catch {
+        return sendJson(res, 200, { workflows: [] });
+      }
+    }
+    const runsListMatch = /^\/api\/workflows\/([^/]+)\/runs$/.exec(path);
+    if (req.method === "GET" && runsListMatch) {
+      if (!o.workflowRuns) return sendJson(res, 501, { error: "workflow runs not wired by this deployment" });
+      let name: string;
+      try {
+        name = decodeURIComponent(runsListMatch[1] ?? "");
+      } catch {
+        return sendJson(res, 400, { error: "undecodable workflow name" });
+      }
+      try {
+        const runs = await o.workflowRuns(name);
+        return sendJson(res, 200, { runs: Array.isArray(runs) ? runs : [] });
+      } catch {
+        return sendJson(res, 200, { runs: [] });
+      }
+    }
+    const runDetailMatch = /^\/api\/workflows\/runs\/([^/]+)$/.exec(path);
+    if (req.method === "GET" && runDetailMatch) {
+      if (!o.workflowRunDetail) return sendJson(res, 501, { error: "workflow run details not wired by this deployment" });
+      let id: string;
+      try {
+        id = decodeURIComponent(runDetailMatch[1] ?? "");
+      } catch {
+        return sendJson(res, 400, { error: "undecodable run id" });
+      }
+      const detail = await o.workflowRunDetail(id);
+      if (!detail) return sendJson(res, 404, { error: "run not found" });
+      return sendJson(res, 200, detail);
     }
     const runMatch = /^\/api\/workflows\/([^/]+)\/run$/.exec(path);
     if (req.method === "POST" && runMatch) {

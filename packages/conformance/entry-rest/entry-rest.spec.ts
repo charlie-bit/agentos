@@ -1700,3 +1700,39 @@ describe("workflow triggers (spec #370/#371)", () => {
     expect((await api(srv, "/api/hooks/no-secret", { method: "POST", headers: { authorization: "Bearer x" } })).status).toBe(503);
   });
 });
+
+describe("workflow read APIs (spec #372–#374)", () => {
+  it("lists workflows, their runs, and one run's step detail", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "agentos-wfread-"));
+    tempDirs.push(dir);
+    const dbPath = join(dir, "sessions.db");
+    const run = { id: "run-1", workflow: "daily-brief", status: "error" as const, trigger: "schedule", project: "proj-1", startedAtMs: 1, endedAtMs: 2, resumeFrom: 1, error: "step 1 failed" };
+    const srv = await startServer({
+      presetName: "p",
+      model: { provider: "v" },
+      mounts: [],
+      runner: async () => ({}),
+      ledger: openLedger(dbPath),
+      port: 0,
+      dbPath,
+      staticDir: makeStaticDir(dir),
+      workflows: () => [{ name: "daily-brief", description: "brief", trigger: "schedule", stepCount: 3, manifestPath: "config/workflows/daily-brief.yml", nextRun: "2026-03-02T00:00:00.000Z", missed: 2 }],
+      workflowRuns: (name) => (name === "daily-brief" ? [run] : []),
+      workflowRunDetail: (id) => (id === "run-1" ? { run, steps: [{ index: 0, status: "ok" }, { index: 1, status: "error" }] } : undefined),
+    });
+    servers.push(srv);
+
+    const list = (await (await api(srv, "/api/workflows")).json()) as { workflows: Array<{ trigger: string; missed: number }> };
+    expect(list.workflows[0]).toMatchObject({ trigger: "schedule", missed: 2 });
+
+    const runs = (await (await api(srv, "/api/workflows/daily-brief/runs")).json()) as { runs: Array<{ resumeFrom: number }> };
+    expect(runs.runs[0]?.resumeFrom).toBe(1);
+
+    const detail = (await (await api(srv, "/api/workflows/runs/run-1")).json()) as { steps: unknown[] };
+    expect(detail.steps).toHaveLength(2);
+    expect((await api(srv, "/api/workflows/runs/ghost")).status).toBe(404);
+
+    const unwired = await boot(async () => ({}));
+    expect((await api(unwired.srv, "/api/workflows")).status).toBe(501);
+  });
+});
