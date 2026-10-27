@@ -1629,3 +1629,27 @@ describe("role tag on sessions (spec #340/#350)", () => {
     expect((await api(srv, `/api/sessions?agent=${"x".repeat(121)}`)).status).toBe(400);
   });
 });
+
+describe("role removal boundary (spec #351)", () => {
+  it("an unmounted role leaves old sessions readable, tag intact, and unstartable", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "agentos-roleremove-"));
+    tempDirs.push(dir);
+    const dbPath = join(dir, "sessions.db");
+    const ledger = openLedger(dbPath);
+    const shared = { presetName: "p", model: { provider: "v" }, mounts: [], runner: async () => ({}), ledger, port: 0, dbPath, staticDir: makeStaticDir(dir) };
+
+    const withRole = await startServer({ ...shared, agents: () => [{ name: "retired", chain: ["retired"], promptPreview: "p", tools: [], manifestPath: "config/agents/retired.yml" }] as never });
+    servers.push(withRole);
+    await (await postJson(withRole, "/api/chat", { sessionId: "old", message: "hi", agent: "retired" })).text();
+    await withRole.close();
+    servers.pop();
+
+    // role yml deleted + restart: no catalogue, no runner-side role map
+    const after = await startServer({ ...shared, ledger });
+    servers.push(after);
+    const list = (await (await api(after, "/api/sessions")).json()) as { sessions: Array<{ external_key: string; agent: string | null }> };
+    expect(list.sessions.find((s) => s.external_key === "web-old")?.agent).toBe("retired"); // snapshot survives
+    expect(((await (await api(after, "/api/sessions/old/messages")).json()) as { entries: unknown[] }).entries).toEqual([]); // replay path still answers
+    expect((await api(after, "/api/agents")).status).toBe(501); // catalogue gone; old data untouched
+  });
+});
