@@ -785,11 +785,20 @@ export async function runServeWeb(flags: ServeFlags): Promise<number> {
         : null,
     tools: buildTodoTools({ ledger }),
     audit: (record) => appendLog(repoRoot, "workflow-audit", record),
+    signalForRun: (runId) => {
+      const key = `wf-${runId}`;
+      const controller = new AbortController();
+      workflowAborts.set(key, controller);
+      return controller.signal;
+    },
   });
   // Resource governance (spec #163/#164): the preset declares both; absent =
   // unlimited / no budget gate. Queueing is FIFO and never drops a turn.
   const turnSlots = new Semaphore(asm.value.maxConcurrentSessions ?? 64);
   const workflowSlots = new Semaphore(asm.value.maxConcurrentWorkflows ?? 64);
+  // One cancellable controller per workflow run, addressed by its wf- session
+  // key so the existing abort endpoint reaches it (#365).
+  const workflowAborts = new Map<string, AbortController>();
   const budgetUsd = asm.value.budgetUsd;
   const server = await startServer({
     presetName,
@@ -925,7 +934,12 @@ export async function runServeWeb(flags: ServeFlags): Promise<number> {
         return await wfRunner(name, trigger, opts);
       } finally {
         release();
+        if (opts?.runId) workflowAborts.delete(`wf-${opts.runId}`);
       }
+    },
+    onAbort: (externalKey) => {
+      const controller = workflowAborts.get(externalKey);
+      if (controller) controller.abort();
     },
     hookSecretFor: (name) => {
       const w = asm.value.workflows.get(name);

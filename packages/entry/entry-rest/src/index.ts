@@ -146,7 +146,9 @@ export interface StartServerOptions {
    * Workflow trigger surface (spec #370/#371): manual runs and webhook runs.
    * The engine is injected; this package only routes and authenticates.
    */
-  runWorkflow?: (name: string, trigger: "manual" | "webhook", opts?: { project?: string; resumeFrom?: number }) => Promise<{ ok: boolean; runId?: string; reason?: string }>;
+  runWorkflow?: (name: string, trigger: "manual" | "webhook", opts?: { project?: string; resumeFrom?: number; runId?: string }) => Promise<{ ok: boolean; runId?: string; reason?: string }>;
+  /** Hook for surfaces whose work is NOT an entry turn (workflow runs, #365). */
+  onAbort?: (externalKey: string) => void;
   /** Scheduler heartbeat supplier (#428); absent = field omitted. */
   schedulerStatus?: () => { alive: boolean; activeRuns: number } | Promise<{ alive: boolean; activeRuns: number }>;
   /** Project templates (config, read-only) and instances (data, writable) — #389/#390. */
@@ -887,8 +889,11 @@ export async function startServer(o: StartServerOptions): Promise<RunningServer>
         return sendJson(res, 400, { error: "undecodable session id" });
       }
       if (requested.length === 0 || requested.length > 200) return sendJson(res, 400, { error: "invalid session id" });
-      const key = isWebExternalKey(requested) ? requested : webExternalKey(requested);
+      // Resolve the key as the ledger does: a raw key that exists is used as-is
+      // (workflow sessions are wf-*), otherwise the web prefix applies.
+      const key = isWebExternalKey(requested) || o.ledger.getByExternalKey(requested) ? requested : webExternalKey(requested);
       const aborted = entry.abort(key);
+      o.onAbort?.(key);
       const row = o.ledger.getByExternalKey(key);
       if (row) {
         try {

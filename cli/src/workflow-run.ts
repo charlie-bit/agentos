@@ -25,6 +25,8 @@ export interface WorkflowRunnerConfig {
   runAgentTurn(step: Extract<WorkflowStep, { type: "agent" }>, prompt: string, runId: string): Promise<string>;
   /** Session key created/used by this run (#387); recorded on the instance. */
   sessionKeyForRun?(runId: string): string | undefined;
+  /** Cancellation for one run (#365); aborting leaves partial step outcomes. */
+  signalForRun?(runId: string): AbortSignal | undefined;
   kbProvider(): KnowledgeProvider | null;
   /** In-process tools available for `tool` steps (todo_* today). */
   tools: readonly NeutralTool[];
@@ -103,7 +105,7 @@ export function createWorkflowRunner(cfg: WorkflowRunnerConfig) {
         const out = offloadIfLarge({ text }, { workspaceDir: workspace, toolName: `wf-${label}` });
         return out.offloaded && out.pointer ? `result offloaded: ${out.pointer.path}` : text;
       },
-      signal: undefined,
+      signal: cfg.signalForRun?.(runId),
       now,
     }, opts.resumeFrom !== undefined ? { resumeFrom: opts.resumeFrom } : {});
 

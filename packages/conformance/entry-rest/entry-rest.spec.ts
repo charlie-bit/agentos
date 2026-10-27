@@ -2010,3 +2010,22 @@ describe("workflow instance dedupe (spec #363)", () => {
     expect(seen).toEqual(["fresh", "taken"]);
   });
 });
+
+describe("abort reaches workflow runs (spec #365)", () => {
+  it("aborting a wf-* session resolves the raw key and notifies the hook", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "agentos-wfabort-"));
+    tempDirs.push(dir);
+    const dbPath = join(dir, "sessions.db");
+    const ledger = openLedger(dbPath);
+    ledger.createSession({ entry: "workflow", externalKey: "wf-run-1", preset: "p" });
+    const aborted: string[] = [];
+    const srv = await startServer({
+      presetName: "p", model: { provider: "v" }, mounts: [], runner: async () => ({}),
+      ledger, port: 0, dbPath, staticDir: makeStaticDir(dir),
+      onAbort: (key) => aborted.push(key),
+    });
+    servers.push(srv);
+    expect((await postJson(srv, "/api/sessions/wf-run-1/abort", {})).status).toBe(200);
+    expect(aborted).toEqual(["wf-run-1"]);
+  });
+});
