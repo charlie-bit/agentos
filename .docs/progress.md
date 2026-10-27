@@ -441,7 +441,7 @@
 - [x] 311 todo 待办视图（transcript）
 - [x] 312 待办门禁对齐
 - [x] 313 todo_extractor 系统提示段
-- [ ] 314 总结待办场景模板
+- [~] 314 总结待办场景模板 — Home 卡已发送预置 prompt;产出 ≥1 条 todo 需真实模型(最后阶段 e2e)
 - [x] 315 sourceRef 回链 — 待办面板显示来源并在 web-/wf- 前缀时跳回会话
 - [x] 316 MCP 源标注
 - [x] 317 todo 导出
@@ -504,7 +504,7 @@
 - [x] 374 `GET /api/workflows/runs/:id`
 - [x] 375 WorkflowsPanel 前端
 - [x] 376 workflow 只读图
-- [ ] 377 运行按钮 + 实例化
+- [~] 377 运行按钮+实例化 — run now 可用、实例可查;逐步骤实时点亮需为面板新增 SSE 订阅(未做)
 - [x] 378 实例时间线
 - [x] 379 失败步骤重续 UI
 - [x] 380 schedule 下一跑时间显示
@@ -537,19 +537,19 @@
 - [x] 407 项目 docs
 - [x] 408 外部 agent = tool manifest — 仅有 MCP 工具路径(echo 外部进程实证)
 - [x] 409 接入规范 — docs/external-agents.md 双语清单(allowedTools 镜像/幂等/沙箱/drift)
-- [ ] 410 agent 步骤调外部 agent
+- [ ] 410 agent 步骤调外部 agent — headless tool 步骤只能调进程内工具;跨进程 MCP 调用需 adapter 直连(显式报错,不伪造)
 - [x] 411 幂等保护 — conformance 断言外部工具 echo 重试一次、bump 零重试(#205 执行器)
 - [x] 412 健康可见 — /healthz per-mount + /api/tools 覆盖外部挂载(#292/#290)
 - [x] 413 生态位清单 — onboarding 已知实现表 + 外部 agent 文档
-- [ ] 414 外部结果进待办
-- [ ] 415 外部结果落盘
-- [ ] 416 外部 agent 审计
+- [ ] 414 外部结果进待办 — 依赖真实外部调用 + 模型解析(最后阶段)
+- [ ] 415 外部结果落盘 — 跨进程大结果内核内联,需代理层(最后阶段)
+- [ ] 416 外部 agent 审计 — 逐次工具调用审计(当前仅门禁拒绝与实例级审计)
 - [x] 417 外部工具受围栏 — canUseTool 围栏对所有 mcp__ 工具统一生效(含外部)
 - [x] 418 baseAgent 不可指向外部 — validate 拒绝指向 tool manifest 的 baseAgent(测试)
 - [x] 419 外部 agent 示例 — scripts/fixtures/echo-mcp-server.mjs + 纯 yml manifest,离线 e2e
 - [x] 420 对比文档 — docs/external-agents.md「两种形态」双语表
 - [x] 421 故障隔离 — planTools 环境降级(⚠+缺席)与步骤失败语义(#204/#362)
-- [ ] 422 外部 agent 使用计量
+- [ ] 422 外部 agent 计量 — 外部工具调用未单独计入 attribution(最后阶段)
 - [x] 423 场景模板库 — Home 四类场景卡(总结待办/找角色/跑 workflow/开项目),按目录自动渲染
 - [x] 424 Home 视图 — 场景卡网格 + 今日聚焦 todo + 最近会话/项目三区块
 - [x] 425 五区导航 — Home/Chats/Todos/Workflows/Projects 顶栏可达(Agents 并入手边面板与 Chats 过滤)
@@ -559,12 +559,12 @@
 - [x] 429 移动端扩展 — 面板 <md 全宽浮层(固定 inset),md+ 恢复侧栏宽;状态条换行(375px 可用)
 - [x] 430 键盘扩展 — ⌘K 面板 + Alt+1..5 五区切换(与导航同序)
 - [x] 431 通知轮询基建 — `/api/notifications` + 铃铛 30s 轮询(零 WebSocket)
-- [ ] 432 面板组件统一
+- [ ] 432 面板组件统一 — 各面板结构一致但未抽共享 PanelShell
 - [x] 433 四空态 — todos/roles/workflows/projects 面板各有指引(含 scaffold 命令)
 - [x] 434 scaffold 文档贯通 — docs/index「From nothing to something」四类 scaffold + 中文对照
 - [x] 435 刷新协议 — 直接 fetch + 定时刷新,零第三方状态库
 - [x] 436 主题覆盖 — 新面板全部用 token,跟随 data-theme
-- [ ] 437 E2E 覆盖新面
+- [ ] 437 新面 E2E — Playwright 依赖已由维护者决定不引入
 - [x] 438 负向验收扩编 — spec M20 增补 v4 三条边界(编辑器/对等协议/待办领域模型)
 - [x] 439 README 产品面更新 — 双语「个人工作台」表(五面全部映射到 yml/契约/数据分界)
 - [x] 440 架构图更新 — README 双语 mermaid:配置 yml → 挂载 → turn/围栏 → .agentos 数据 → 五区控制台(只读回指配置)
@@ -587,6 +587,8 @@
 - [x] 457 演示脚本 — scripts/demo-workbench.mjs 五段离线演示(validate/kb lint/bench/跨运行时),一条命令全绿
 
 ## v4 执行记录（2026-10-27 起）
+
+- 当前 v4 收口：141/150 关闭；余 9 点逐条写明原因(真实阶段 6：314/410/414/415/416/422；未建面 2：377 实时点亮、432 面板壳；维护者决策 1：437 E2E)。
 
 - 365 中止联动：runWorkflow 每次运行注册 `wf-<runId>` 控制器并传入 runner signal；abort 端点对 raw(wf-) 键按 ledger 解析并调用 onAbort；conformance 验证键解析与钩子触发。
 
