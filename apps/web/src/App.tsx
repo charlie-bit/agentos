@@ -21,6 +21,7 @@ import { AgentsPanel } from "./components/AgentsPanel";
 import { UsagePanel } from "./components/UsagePanel";
 import { WorkflowsPanel } from "./components/WorkflowsPanel";
 import { ProjectsPanel } from "./components/ProjectsPanel";
+import { CommandPalette } from "./components/CommandPalette";
 import { UsageBar } from "./components/UsageBar";
 
 /** Sidebar polling cadence — a session running from another tab/device must
@@ -47,6 +48,7 @@ export default function App() {
   const [showUsagePanel, setShowUsagePanel] = useState(false);
   const [showWorkflows, setShowWorkflows] = useState(false);
   const [showProjects, setShowProjects] = useState(false);
+  const [showPalette, setShowPalette] = useState(false);
   const [clearNonce, setClearNonce] = useState(0);
 
   const refresh = useCallback(async () => {
@@ -66,6 +68,10 @@ export default function App() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setClearNonce((n) => n + 1);
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setShowPalette((v) => !v);
+      }
       if (e.altKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
         const keys = sessions.map((s) => s.external_key.replace(/^web-/, ""));
         const at = keys.indexOf(sessionId);
@@ -198,6 +204,17 @@ export default function App() {
       </div>
       <UsageBar usage={state.usage} live={state.live} escalations={escalations} sessionId={sessionId} onEscalated={setEscalations} modelShort={state.modelShort} />
       <ConfirmModal pending={state.pending} onResolved={resolveConfirm} />
+      <CommandPalette
+        open={showPalette}
+        onOpenChange={setShowPalette}
+        onPickSession={(id) => pickSession(id)}
+        onPickRole={(agent) => setScope({ agent })}
+        onOpenPanel={(panel) => {
+          if (panel === "workflows") setShowWorkflows(true);
+          if (panel === "projects") setShowProjects(true);
+          if (panel === "todos") setShowTodos(true);
+        }}
+      />
       {needsToken && (
         <TokenGate
           onSubmit={(token) => {

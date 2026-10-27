@@ -553,7 +553,7 @@
 - [ ] 423 场景模板库
 - [ ] 424 Home 视图
 - [ ] 425 五区导航
-- [ ] 426 ⌘K 快捷启动
+- [x] 426 ⌘K 命令面板 — 五类目录客户端过滤,Enter 跳转(会话/角色/面板)
 - [ ] 427 通知中心
 - [x] 428 调度心跳 — /api/status.scheduler {alive, activeRuns} + 状态条徽章
 - [ ] 429 移动端适配扩展
@@ -587,6 +587,8 @@
 - [x] 457 演示脚本 — scripts/demo-workbench.mjs 五段离线演示(validate/kb lint/bench/跨运行时),一条命令全绿
 
 ## v4 执行记录（2026-10-27 起）
+
+- 426 ⌘K：命令面板打开时并发拉五类目录(会话/角色/workflows/projects/todos)，纯前端过滤，Enter 选择——会话切会话、角色设 scope、其余打开对应面板。
 
 - 428 调度心跳：status 增 `scheduler {alive, activeRuns}`（serve 从调度循环与 ledger running 实例计算），状态条显示 sched alive/dead 徽章；conformance 覆盖未接线 null 与接线值。
 

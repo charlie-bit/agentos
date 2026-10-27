@@ -96,6 +96,8 @@ export interface SessionRow {
   preset: string;
   last_active_ms: number;
   title: string | null;
+  agent?: string | null;
+  project?: string | null;
 }
 
 /** Drift is per-session server-side (#218): name the session being viewed. */
