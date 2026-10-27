@@ -143,6 +143,8 @@ export interface StartServerOptions {
    * The engine is injected; this package only routes and authenticates.
    */
   runWorkflow?: (name: string, trigger: "manual" | "webhook", opts?: { project?: string; resumeFrom?: number }) => Promise<{ ok: boolean; runId?: string; reason?: string }>;
+  /** Notification feed (#386/#427): todo due, workflow done/error — metadata only. */
+  notifications?: () => Array<{ kind: string; title: string; ref?: string; ts?: number }> | Promise<Array<{ kind: string; title: string; ref?: string; ts?: number }>>;
   /** Read-only workflow catalogue / runs (#372–#374). Absent = 501. */
   workflows?: () => WorkflowSummary[] | Promise<WorkflowSummary[]>;
   workflowRuns?: (name?: string) => WorkflowRunSummary[] | Promise<WorkflowRunSummary[]>;
@@ -1076,6 +1078,15 @@ export async function startServer(o: StartServerOptions): Promise<RunningServer>
         return sendJson(res, 200, { files: Array.isArray(files) ? files : [] });
       } catch {
         return sendJson(res, 200, { files: [] });
+      }
+    }
+    if (req.method === "GET" && path === "/api/notifications") {
+      if (!o.notifications) return sendJson(res, 200, { notifications: [] });
+      try {
+        const notifications = await o.notifications();
+        return sendJson(res, 200, { notifications: Array.isArray(notifications) ? notifications : [] });
+      } catch {
+        return sendJson(res, 200, { notifications: [] });
       }
     }
     if (req.method === "GET" && path === "/api/workflows") {

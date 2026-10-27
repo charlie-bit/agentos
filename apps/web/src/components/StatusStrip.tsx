@@ -2,6 +2,7 @@ import { Boxes, TriangleAlert } from "lucide-react";
 import type { StatusResponse } from "../lib/api";
 import { dialectBadge } from "../lib/dialect";
 import { ThemeToggle } from "./ThemeToggle";
+import { NotificationsBell } from "./NotificationsBell";
 import { Badge } from "./ui/badge";
 import { ConfigDialog } from "./ConfigDialog";
 
@@ -107,6 +108,7 @@ export function StatusStrip({
           logs
         </button>
       )}
+      <NotificationsBell />
       <ThemeToggle />
       <span className="flex-1" />
       {driftCount > 0 ? (

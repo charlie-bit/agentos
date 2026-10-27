@@ -1760,3 +1760,24 @@ describe("workflow run export (spec #384)", () => {
     expect((await api(srv, "/api/workflows/runs/ghost/export")).status).toBe(404);
   });
 });
+
+describe("notification feed (spec #386)", () => {
+  it("aggregates injected notifications newest-first and degrades to empty", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "agentos-notif-"));
+    tempDirs.push(dir);
+    const dbPath = join(dir, "sessions.db");
+    const srv = await startServer({
+      presetName: "p", model: { provider: "v" }, mounts: [], runner: async () => ({}),
+      ledger: openLedger(dbPath), port: 0, dbPath, staticDir: makeStaticDir(dir),
+      notifications: () => [
+        { kind: "todo-due", title: "Ship the brief", ref: "t1", ts: 2 },
+        { kind: "workflow-done", title: "daily-brief done", ref: "run-1", ts: 3 },
+      ],
+    });
+    servers.push(srv);
+    const body = (await (await api(srv, "/api/notifications")).json()) as { notifications: Array<{ kind: string; title: string }> };
+    expect(body.notifications.map((n) => n.kind)).toEqual(["todo-due", "workflow-done"]);
+    const unwired = await boot(async () => ({}));
+    expect(((await (await api(unwired.srv, "/api/notifications")).json()) as { notifications: unknown[] }).notifications).toEqual([]);
+  });
+});

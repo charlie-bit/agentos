@@ -181,6 +181,10 @@ export const commitKbDraft = (receiptId: string) =>
 export const discardKbDraft = (receiptId: string) =>
   jpost<{ ok: boolean }>(`/api/kb/drafts/${encodeURIComponent(receiptId)}/discard`, {});
 
+/** Notification feed (spec #386/#427): metadata only. */
+export interface Notification { kind: string; title: string; ref?: string; ts?: number }
+export const getNotifications = () => jget<{ notifications: Notification[] }>("/api/notifications");
+
 /** Workflow surfaces (spec #372–#381). */
 export interface WorkflowSummary {
   name: string;

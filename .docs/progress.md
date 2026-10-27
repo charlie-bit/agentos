@@ -513,7 +513,7 @@
 - [x] 383 每日简报示例 workflow
 - [x] 384 工作流导出
 - [x] 385 workflow 审计
-- [ ] 386 workflow 通知
+- [x] 386 workflow 通知
 - [ ] 387 workflow 会话回链
 - [ ] 388 项目模板 yml
 - [ ] 389 项目实例（数据面）
@@ -587,6 +587,8 @@
 - [ ] 457 v4 首跑演示脚本
 
 ## v4 执行记录（2026-10-27 起）
+
+- 386 完成通知：`/api/notifications` 聚合 todo 到期(≤24h 未完成)与 workflow done/error(24h 内)，元数据级；前端铃铛角标 + 下拉，30s 轮询。
 
 - 385 实例审计：runner 完成后写 `workflow.run` 审计（runId/流程/触发器/状态/每步 index,type,status,durationMs），**绝不落 prompt 或步骤输出**（测试断言）；审计失败不杀 run。
 

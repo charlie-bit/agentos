@@ -869,6 +869,18 @@ export async function runServeWeb(flags: ServeFlags): Promise<number> {
     knowledge: asm.value.knowledgeInfo ?? undefined,
     entry: { name: asm.value.entryName, confirm: REST_CAPABILITIES.confirm },
     dialect: selectDialect(modelLease),
+    notifications: () => {
+      const nowMs = Date.now();
+      const due = ledger
+        .todoList()
+        .filter((t) => t.status !== "done" && t.dueAt !== undefined && t.dueAt <= nowMs + 86_400_000)
+        .map((t) => ({ kind: "todo-due", title: t.title, ref: t.id, ts: t.dueAt as number }));
+      const runs = ledger
+        .workflowRunList()
+        .filter((r) => (r.status === "done" || r.status === "error") && nowMs - (r.endedAtMs ?? r.startedAtMs) < 86_400_000)
+        .map((r) => ({ kind: `workflow-${r.status}`, title: `${r.workflow} ${r.status}`, ref: r.id, ts: r.endedAtMs ?? r.startedAtMs }));
+      return [...due, ...runs].sort((a, b) => (b.ts ?? 0) - (a.ts ?? 0)).slice(0, 50);
+    },
     runWorkflow: (name, trigger, opts) => wfRunner(name, trigger, opts),
     hookSecretFor: (name) => {
       const w = asm.value.workflows.get(name);
