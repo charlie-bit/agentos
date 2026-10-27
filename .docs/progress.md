@@ -494,9 +494,9 @@
 - [x] 364 workflow 状态机
 - [ ] 365 abort 联动
 - [ ] 366 并发上限
-- [ ] 367 调度窗检查
+- [x] 367 调度窗检查
 - [ ] 368 lastRun 持久
-- [ ] 369 错过窗策略
+- [x] 369 错过窗策略
 - [ ] 370 手动触发端点
 - [ ] 371 webhook 触发器
 - [ ] 372 `GET /api/workflows`
@@ -587,6 +587,8 @@
 - [ ] 457 v4 首跑演示脚本
 
 ## v4 执行记录（2026-10-27 起）
+
+- 367/369 调度窗：`windowVerdict` 纯函数判定"边界已过即触发一次"，并统计停机期间跳过的窗口数；长停机不连发回放，`nextRun` 总为未来边界。测试用假时钟覆盖准点、未到、首跑、三日停机、两周停机。
 
 - 364 实例状态机：`workflow_runs` 表(additive user_version 2) + create/update/get/list 动词；状态 pending/running/done/error/aborted、steps 快照、resumeFrom、project/trigger 标签；重启后可查。测试覆盖状态迁移与三类过滤。
 
