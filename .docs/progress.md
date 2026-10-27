@@ -588,6 +588,8 @@
 
 ## v4 执行记录（2026-10-27 起）
 
+- 引擎接线（#370/#371 真实化 + #383 可执行）：`cli/src/workflow-run.ts` 将执行器做成可注入 runner（agent=真实 turn、kb=provider、tool=进程内 todo_*、human 无通道即拒、MCP 工具明确报错不伪造）；serve 提供 runWorkflow/hookSecret + 60s 调度循环（先持久 lastRun 再触发，崩溃不双发）。离线测试覆盖 done/拒绝/未知/MCP 拒绝四条路径。
+
 - serve 接线（#372–#374 的真实数据源）：workflow 目录按 preset.workflows 收窄挂载；`/api/workflows` 返回步骤型序列 + schedule 的 `nextRun`(cron 解析) 与 `missed`(scheduler_state)；runs/detail 直读 ledger。执行引擎（runWorkflow 供应商）仍未接线，触发端点保持 501。
 
 - 383 daily-brief 示例：`examples/workbench/workflows/daily-brief.yml`（@daily：角色总结 → kb_search → human 门禁 → todo_add），preset 增 `workflows: [daily-brief]`；validate 9 manifests 全绿。（手动触发的端到端执行待引擎接线，如实保留。）

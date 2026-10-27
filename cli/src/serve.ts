@@ -31,6 +31,7 @@ import {
   isIdempotent,
   kbPointerLine,
   parseCron,
+  windowVerdict,
   resolveAgent,
   type Attribution,
   type AnyManifest,
@@ -43,6 +44,7 @@ import { dialect as bedrockDialect } from "@agentos/model-bedrock";
 import { dialect as openaiDialect } from "@agentos/model-openai-compat";
 import { runPresetValidate } from "./preset-validate.js";
 import { appendLog, readLogs } from "./logs.js";
+import { createWorkflowRunner } from "./workflow-run.js";
 import { budgetExceeded, Semaphore } from "./concurrency.js";
 import { commitDraft } from "@agentos/core";
 import { EntryCli, formatUsageSummary } from "@agentos/entry-cli";
@@ -716,6 +718,48 @@ export async function runServeWeb(flags: ServeFlags): Promise<number> {
   // for in-flight turns (bounded), then the sweep settles any row they left.
   const activeTurns = new Set<Promise<unknown>>();
   const todoMount = wireTodo(ledger);
+  // Headless workflow engine (spec #370/#377/#383): agent steps drive real
+  // turns, tool steps use in-process tools, kb steps the mounted provider.
+  const wfRunner = createWorkflowRunner({
+    ledger,
+    workflows: asm.value.workflows,
+    workspaceFor: (runId) => {
+      const ws = join(repoRoot, ".agentos", "workspaces", `wf-${runId}`);
+      mkdirSync(ws, { recursive: true });
+      return ws;
+    },
+    runAgentTurn: async (step, prompt, runId) => {
+      const role = resolveAgent(step.agent, asm.value.agents);
+      const ws = join(repoRoot, ".agentos", "workspaces", `wf-${runId}`);
+      mkdirSync(ws, { recursive: true });
+      const out = await runTurn({
+        model: modelLease,
+        prompt,
+        toolMounts: [...plans, ...(todoMount ? [todoMount.plan] : [])],
+        sdkServers: todoMount?.sdkServers ?? {},
+        systemPromptAdditions: [role.systemPrompt],
+        ...(role.tools.length > 0 ? { toolAllowlist: role.tools } : {}),
+        workspaceDir: ws,
+        modelId,
+      });
+      const text = out.events
+        .filter((e) => e.type === "assistant.text")
+        .map((e) => String((e.payload as { text?: string }).text ?? ""))
+        .join("\n")
+        .trim();
+      return text.length > 0 ? text : "(no assistant text)";
+    },
+    kbProvider: () =>
+      asm.value.knowledge?.mount.type === "path"
+        ? createMarkdownProvider({
+            name: asm.value.knowledge.provider,
+            root: resolve(repoRoot, asm.value.knowledge.mount.path),
+            draftsDir: join(repoRoot, ".agentos", "kb-drafts"),
+            receiptsLog: join(repoRoot, ".agentos", "kb-receipts.jsonl"),
+          })
+        : null,
+    tools: buildTodoTools({ ledger }),
+  });
   // Resource governance (spec #163/#164): the preset declares both; absent =
   // unlimited / no budget gate. Queueing is FIFO and never drops a turn.
   const turnSlots = new Semaphore(asm.value.maxConcurrentSessions ?? 64);
@@ -824,6 +868,12 @@ export async function runServeWeb(flags: ServeFlags): Promise<number> {
     knowledge: asm.value.knowledgeInfo ?? undefined,
     entry: { name: asm.value.entryName, confirm: REST_CAPABILITIES.confirm },
     dialect: selectDialect(modelLease),
+    runWorkflow: (name, trigger, opts) => wfRunner(name, trigger, opts),
+    hookSecretFor: (name) => {
+      const w = asm.value.workflows.get(name);
+      if (!w || w.trigger?.type !== "webhook") return undefined;
+      return process.env[w.trigger.secretEnv];
+    },
     workflows: () =>
       [...asm.value.workflows.values()].map((w) => {
         const last = ledger.schedulerGetLastRun(w.name);
@@ -981,6 +1031,25 @@ export async function runServeWeb(flags: ServeFlags): Promise<number> {
       return runPresetValidate(target);
     },
   });
+  // Schedule loop (spec #367–#369): one minute window, lastRun persisted
+  // BEFORE firing so a crash between the two can never double-fire.
+  const scheduler = setInterval(() => {
+    for (const w of asm.value.workflows.values()) {
+      if (w.trigger?.type !== "schedule") continue;
+      try {
+        const last = ledger.schedulerGetLastRun(w.name)?.lastRunMs ?? null;
+        const verdict = windowVerdict(parseCron(w.trigger.cron), last, Date.now());
+        if (!verdict.due || verdict.nextRun === null) continue;
+        ledger.schedulerSetLastRun(w.name, verdict.nextRun.getTime(), (ledger.schedulerGetLastRun(w.name)?.missed ?? 0) + verdict.missed);
+        void wfRunner(w.name, "schedule").then((r) =>
+          appendLog(repoRoot, "workflows", { event: "scheduled", workflow: w.name, ok: r.ok, runId: r.runId ?? null }),
+        );
+      } catch (err) {
+        appendLog(repoRoot, "workflows", { event: "schedule-error", workflow: w.name, error: err instanceof Error ? err.message : String(err) });
+      }
+    }
+  }, 60_000);
+  scheduler.unref?.();
   write(
     `● agentos serve --web | preset=${presetName} mounts=${plans.length}\n  console: ${server.url}\n  token:   ${webToken}\n  (paste the token into the console once; it is stored in this browser only)\n  Ctrl+C exits cleanly (ledger stays zombie-free)\n`,
   );
