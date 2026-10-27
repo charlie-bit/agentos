@@ -45,6 +45,7 @@ import { dialect as openaiDialect } from "@agentos/model-openai-compat";
 import { runPresetValidate } from "./preset-validate.js";
 import { appendLog, readLogs } from "./logs.js";
 import { createWorkflowRunner } from "./workflow-run.js";
+import { fenceError, projectAllows } from "./project-fence.js";
 import { budgetExceeded, Semaphore } from "./concurrency.js";
 import { commitDraft } from "@agentos/core";
 import { EntryCli, formatUsageSummary } from "@agentos/entry-cli";
@@ -85,6 +86,8 @@ export interface Assembly {
   agents: Map<string, AgentManifest>;
   /** Mounted workflow manifests by name (spec #353; preset.workflows = advertised subset). */
   workflows: Map<string, WorkflowManifest>;
+  /** Project templates by name (spec #388/#392 fence source). */
+  projectTemplates: Map<string, import("@agentos/contracts").ProjectManifest>;
   /** Role name -> repo-relative manifest path (#342 read-only disclosure). */
   agentManifestPaths: Record<string, string>;
   /** channel -> entry adapter routes (spec #212), defaulting to entryName. */
@@ -331,6 +334,11 @@ export function assemble(flags: ServeFlags): { ok: true; value: Assembly } | { o
       ...(knowledgeInfo ? { knowledgeInfo } : {}),
       entryName: preset.entry,
       agentManifestPaths,
+      projectTemplates: new Map(
+        manifests
+          .filter((m): m is import("@agentos/contracts").ProjectManifest => m.kind === "project")
+          .map((m) => [m.name, m] as const),
+      ),
       workflows: new Map<string, WorkflowManifest>(
         manifests
           .filter((m): m is WorkflowManifest => m.kind === "workflow")
@@ -783,6 +791,14 @@ export async function runServeWeb(flags: ServeFlags): Promise<number> {
       // the turn loudly instead of silently running as the preset.
       const role = ctx.agent ? resolveAgent(ctx.agent, asm.value.agents) : undefined;
       if (ctx.agent && !role) throw new Error(`unknown agent role: ${ctx.agent}`);
+      // Project fence (#392): a turn inside an instance may only use the
+      // template's advertised roles. Unknown instance = refusal, not silence.
+      if (ctx.project) {
+        const instance = ledger.projectInstanceGet(ctx.project);
+        const template = instance ? asm.value.projectTemplates.get(instance.template) : undefined;
+        if (!instance || !template) throw new Error(`unknown project instance: ${ctx.project}`);
+        if (ctx.agent && !projectAllows(template, "agents", ctx.agent)) throw fenceError("agents", ctx.agent, template.name);
+      }
       const releaseSlot = await turnSlots.acquire();
       const turn = (async () => {
       if (budgetExceeded(aggregateUsage(usageLogPath()).totals.costUsd, budgetUsd)) {

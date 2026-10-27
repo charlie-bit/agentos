@@ -519,7 +519,7 @@
 - [x] 389 项目实例（数据面）
 - [x] 390 模板 vs 实例边界守护
 - [x] 391 项目 validate + 脚手架
-- [ ] 392 项目范围角色/流程
+- [x] 392 项目范围角色/流程
 - [ ] 393 项目会话聚合
 - [ ] 394 项目 workflow 聚合
 - [ ] 395 项目仪表盘
@@ -587,6 +587,8 @@
 - [ ] 457 v4 首跑演示脚本
 
 ## v4 执行记录（2026-10-27 起）
+
+- 392 项目围栏：纯函数 `projectAllows/fenceIntersect/fenceError`（模板只收窄不放宽）；聊天 turn 携带 `project`，serve 校验实例存在且模板声明了该角色，否则明确拒绝；未知实例同样拒绝。单元测试覆盖允许/拒绝/交集/错误措辞。
 
 - 391 项目配置面：`agentos projects validate`（复用数据型 runner）与 `projects scaffold`（模板骨架、kebab 校验、拒绝覆盖、写出即 validate）。
 
