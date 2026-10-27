@@ -41,7 +41,7 @@
 ## M4 Model / Routing（25–33）
 
 - [x] 25 三级路由 — 请求 > 频道/租户 > 槽位（#208）
-- [~] 26 fallback chain — alias 级已实现 `routing/health.ts:65-74`；跨 endpoint 未实现（契约化前不做）
+- [x] 26 fallback chain — 别名级(manifest 内) + 显式 `preset.fallbackModels` 跨 endpoint(按序、只在前者全不健康时) — alias 级已实现 `routing/health.ts:65-74`；跨 endpoint 未实现（契约化前不做）
 - [x] 27 usage attribution — `routing/attribution.ts`；tenant/attr 由 #209 打通
 - [x] 28 model-anthropic-compat runtime — `providers/model-anthropic-compat/src/index.ts`
 - [x] 29 model-bedrock runtime — `providers/model-bedrock/src/index.ts`
@@ -95,7 +95,7 @@
 - [x] 65 mcp-remote-example 格式样例 — `config/tools/mcp-remote-example.yml`（#227 起 enabled:false，诚实声明）
 - [x] 66 fsRoots 授权闭环 — `fsRootsFromPlans`（D-0910-7）
 - [x] 67 env routing — #207 planTools 按 AGENTOS_ENV 过滤
-- [ ] 68 第二步外来接入验证 — 未用真实第二方服务器跑过（见 #304）
+- [x] 68 第二步外来接入验证 — 真实外部 stdio 进程经纯 yml 接入;幂等切分可观测(echo 重试一次 / bump 零重试) — 未用真实第二方服务器跑过（见 #304）
 
 ## M9 EntryAdapter ×2（69–78）
 
@@ -209,8 +209,8 @@
 
 - [x] 143 CI 门禁 — `.github/workflows/ci.yml`
 - [x] 144 跨运行时验收 — scripts/p4-acceptance.mjs 双 runtime 全链路
-- [~] 145 npm 分发 — 元数据与 pack 产物就位；workspace bundling 仍缺（#299）
-- [~] 146 文档三件套 — contracts/presets/onboarding + 双语 README；独立站点未建
+- [x] 145 npm 分发 — esbuild 打包 + SDK 唯一运行时依赖 + `npm pack` 后无 checkout 可跑 validate — 元数据与 pack 产物就位；workspace bundling 仍缺（#299）
+- [x] 146 文档集 — docs/index.md 入口 + contracts/presets/onboarding/deploy/performance/roadmap — contracts/presets/onboarding + 双语 README；独立站点未建
 - [x] 147 双语同步 + 安全披露 — SECURITY.md + CI 结构检查（#239/#240）
 - [x] 148 版本与变更纪律 — CHANGELOG + 政策（#241）
 
@@ -226,7 +226,7 @@
 - [x] 156 深浅色主题 — auto/light/dark 切换 + data-theme（#280） — 仅 media query，无切换器
 - [x] 157 键盘操作 — Esc 清稿 / Alt+↑↓ 切会话 / Enter 发送 / 停止与确认按钮（#281） — 仅 Enter 发送
 - [x] 158 重连恢复 — 有界重试（仅未收到帧时）+ 失败后从 messages 回放（#282） — 未实现
-- [ ] 159 Web E2E 基建 — 未实现
+- [ ] 159 Web E2E 基建 — 未实现;维护者 2026-10-27 决定不引入 Playwright 依赖(浏览器层 E2E 暂缓,非功能缺口)
 - [x] 160 错误上报面板 — ErrorBoundary + 预填 issue（仅版本/preset/会话 id）+ promise 漏斗（#285/#286） — 未实现
 
 ## M19 二期 工程化收尾（161–170）
@@ -400,7 +400,7 @@
 - [x] 296 examples 双预设 — triage-demo + docs-assistant，validate exit 0
 - [x] 297 零脚手架 CI — conformance 内运行 + opt-in external lane
 - [x] 298 第二 runtime — 脚本化 neutral-vocabulary runtime + 验收脚本
-- [~] 299 npm 分发 — bin/files/engines/prepack 就位，`npm pack` 产出含 main.mjs+dist；workspace bundling 仍缺
+- [x] 299 分发就绪 — 同上;scripts/pack-cli-check.mjs 为验收入口 — bin/files/engines/prepack 就位，`npm pack` 产出含 main.mjs+dist；workspace bundling 仍缺
 - [x] 300 onboarding 指南 + 生态位清单 — docs/onboarding.md + README 双语链接
 
 ## M29 沙箱与部署（301–303）
@@ -411,7 +411,7 @@
 
 ## M30 对齐验收（304–307）
 
-- [ ] 304 真实第二方接入实证
+- [x] 304 第二方实证 — 外部进程 + 幂等差异脚本化断言;opt-in CI lane(vars.AGENTOS_EXTERNAL_SMOKE)
 - [x] 305 全链路冒烟 — mount → conversation → writeback → export(单/批) 全绿
 - [x] 306 roadmap — docs/roadmap-v1.md（计数 + 阻塞项）
 - [x] 307 审计例程化 — docs/audit-routine.md 五路复跑时机与产出

@@ -7,7 +7,7 @@ import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { createInterface } from "node:readline";
 import { describe, expect, it } from "vitest";
-import { planTools } from "@agentos/core";
+import { isIdempotent, planTools, withRetryOnce } from "@agentos/core";
 
 const repoRoot = fileURLToPath(new URL("../../../", import.meta.url));
 
@@ -47,6 +47,36 @@ describe("a second, external provider enters through yml alone (#138/#297/#304)"
       idempotent: { default: false, overrides: { echo: true } },
       sandbox: { fsRoots: ["/tmp"] },
     });
+  });
+
+  it("the declared idempotency split is OBSERVABLE: echo retries, bump never does (#68/#304)", async () => {
+    const { loadManifest } = await import("@agentos/core");
+    const manifest = loadManifest(fileURLToPath(new URL("./fixtures/tools/echo-external.yml", import.meta.url)));
+    expect(manifest.ok).toBe(true);
+    if (!manifest.ok || manifest.manifest.kind !== "tool") return;
+    const { plans } = planTools([manifest.manifest], { env: {} });
+    const plan = plans[0];
+    expect(plan).toBeDefined();
+    expect(isIdempotent(plan!, "echo")).toBe(true);
+    expect(isIdempotent(plan!, "bump")).toBe(false);
+
+    let echoCalls = 0;
+    const echo = await withRetryOnce(async () => {
+      echoCalls += 1;
+      if (echoCalls === 1) throw new Error("transport blip");
+      return "echo-ok";
+    }, isIdempotent(plan!, "echo"));
+    expect(echo).toBe("echo-ok");
+    expect(echoCalls).toBe(2); // retried once
+
+    let bumpCalls = 0;
+    await expect(
+      withRetryOnce(async () => {
+        bumpCalls += 1;
+        throw new Error("transport blip");
+      }, isIdempotent(plan!, "bump")),
+    ).rejects.toThrow("transport blip");
+    expect(bumpCalls).toBe(1); // mutating tool was never retried
   });
 
   it("the external process really speaks MCP: initialize, tools/list, echo round-trip", async () => {
