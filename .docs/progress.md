@@ -477,7 +477,7 @@
 - [x] 347 角色导出
 - [x] 348 五角色示例包
 - [ ] 349 角色使用统计
-- [ ] 350 角色与会话列表关联
+- [x] 350 角色与会话列表关联
 - [ ] 351 角色删除边界
 - [ ] 352 角色 docs
 - [ ] 353 WorkflowManifest 契约
@@ -587,6 +587,8 @@
 - [ ] 457 v4 首跑演示脚本
 
 ## v4 执行记录（2026-10-27 起）
+
+- 340/350 角色标签：session 增 `agent` 列(additive user_version 迁移) + `setAgent`；角色 turn 自动打标；`GET /api/sessions?agent=` 过滤且 total 按过滤集计数;测试覆盖持久化与过滤/400。
 
 - 348 五角色示例：`examples/workbench`（presets/models/knowledge/agents；triage-analyst / docs-writer(base=kb-curator) / kb-curator / daily-standup / inbox-triage(base=triage-analyst)），`preset validate` 8 manifests 全绿、kb lint 绿。语义校正：agent.tools 是运行时工具名(#336)而非 manifest 引用，validate 不再误判；knowledge/model/baseAgent 仍静态校验。
 

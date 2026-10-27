@@ -30,6 +30,8 @@ export interface SessionRow {
   lastActiveMs: number;
   /** User-given label; null means "no title set, display the key". */
   title: string | null;
+  /** Role that last ran this session (spec #340); null = the preset's own kernel. */
+  agent: string | null;
 }
 
 export interface NewSession {
@@ -37,6 +39,7 @@ export interface NewSession {
   externalKey: string;
   preset: string;
   status?: SessionStatus;
+  agent?: string | null;
 }
 
 export interface Ledger {
@@ -52,6 +55,8 @@ export interface Ledger {
    * Returns the normalized value actually stored, so callers never need a
    * second read-back just to echo what was saved. */
   setTitle(id: string, title: string | null): string | null;
+  /** Record the role tag for hydrate/filter (#340); null clears it. */
+  setAgent(id: string, agent: string | null): void;
   /** Refresh last_active_ms to now. */
   touch(id: string): void;
   /**
@@ -96,6 +101,7 @@ interface DbRow {
   created_at_ms: number;
   last_active_ms: number;
   title: string | null;
+  agent: string | null;
 }
 
 function toRow(r: DbRow): SessionRow {
@@ -109,6 +115,7 @@ function toRow(r: DbRow): SessionRow {
     createdAtMs: r.created_at_ms,
     lastActiveMs: r.last_active_ms,
     title: r.title,
+    agent: (r as { agent?: string | null }).agent ?? null,
   };
 }
 
@@ -132,6 +139,11 @@ export function openLedger(dbPath: string = ledgerPathFromEnv()): Ledger {
   // just appear in CREATE TABLE IF NOT EXISTS). Re-running this is a no-op.
   try {
     db.exec(`ALTER TABLE sessions ADD COLUMN title TEXT`);
+  } catch {
+    /* column already present */
+  }
+  try {
+    db.exec(`ALTER TABLE sessions ADD COLUMN agent TEXT`);
   } catch {
     /* column already present */
   }
@@ -175,10 +187,11 @@ export function openLedger(dbPath: string = ledgerPathFromEnv()): Ledger {
         createdAtMs: now,
         lastActiveMs: now,
         title: null,
+        agent: s.agent ?? null,
       };
       db.prepare(
-        `INSERT INTO sessions (id, entry, external_key, status, sdk_session_id, preset, created_at_ms, last_active_ms)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO sessions (id, entry, external_key, status, sdk_session_id, preset, created_at_ms, last_active_ms, agent)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ).run(
         row.id,
         row.entry,
@@ -188,6 +201,7 @@ export function openLedger(dbPath: string = ledgerPathFromEnv()): Ledger {
         row.preset,
         row.createdAtMs,
         row.lastActiveMs,
+        row.agent,
       );
       return row;
     },
@@ -205,6 +219,9 @@ export function openLedger(dbPath: string = ledgerPathFromEnv()): Ledger {
     },
     setSdkSessionId(id: string, sdkSessionId: string) {
       mustExist(id, db.prepare("UPDATE sessions SET sdk_session_id = ? WHERE id = ?").run(sdkSessionId, id).changes);
+    },
+    setAgent(id: string, agent: string | null) {
+      mustExist(id, db.prepare("UPDATE sessions SET agent = ? WHERE id = ?").run(agent, id).changes);
     },
     setTitle(id: string, title: string | null) {
       const normalized = title !== null && title.trim().length > 0 ? title.trim().slice(0, 200) : null;

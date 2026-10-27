@@ -1612,3 +1612,20 @@ describe("GET /api/agents (spec #342)", () => {
     expect((await api(unwired.srv, "/api/agents")).status).toBe(501);
   });
 });
+
+describe("role tag on sessions (spec #340/#350)", () => {
+  it("a role turn tags the row; the list exposes and filters by it", async () => {
+    const { srv } = await boot(async () => ({}));
+    await (await postJson(srv, "/api/chat", { sessionId: "role-a", message: "hi", agent: "analyst" })).text();
+    await (await postJson(srv, "/api/chat", { sessionId: "plain-b", message: "hi" })).text();
+
+    const all = (await (await api(srv, "/api/sessions")).json()) as { sessions: Array<{ external_key: string; agent: string | null }> };
+    expect(all.sessions.find((s) => s.external_key === "web-role-a")?.agent).toBe("analyst");
+    expect(all.sessions.find((s) => s.external_key === "web-plain-b")?.agent).toBeNull();
+
+    const filtered = (await (await api(srv, "/api/sessions?agent=analyst")).json()) as { sessions: Array<{ external_key: string }>; total: number };
+    expect(filtered.sessions.map((s) => s.external_key)).toEqual(["web-role-a"]);
+    expect(filtered.total).toBe(1);
+    expect((await api(srv, `/api/sessions?agent=${"x".repeat(121)}`)).status).toBe(400);
+  });
+});

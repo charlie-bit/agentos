@@ -221,3 +221,20 @@ describe("todo verbs (spec #310)", () => {
     expect(led.todoList()).toEqual([]);
   });
 });
+
+describe("session role tag (spec #340)", () => {
+  it("persists the agent label across reopen and clears on null", () => {
+    const dir = mkdtempSync(join(tmpdir(), "agentos-agenttag-"));
+    tempDirs.push(dir);
+    const dbPath = join(dir, "sessions.db");
+    const a = openLedger(dbPath);
+    const row = a.createSession({ entry: "rest", externalKey: "web-r", preset: "p" });
+    a.setAgent(row.id, "analyst");
+    a.close();
+    const b = openLedger(dbPath);
+    expect(b.getByExternalKey("web-r")?.agent).toBe("analyst");
+    b.setAgent(row.id, null);
+    expect(b.getByExternalKey("web-r")?.agent).toBeNull();
+    b.close();
+  });
+});
