@@ -509,7 +509,7 @@
 - [ ] 379 失败步骤重续 UI
 - [ ] 380 schedule 下一跑时间显示
 - [ ] 381 错过窗可见性
-- [ ] 382 workflow 脚手架
+- [x] 382 workflow 脚手架
 - [ ] 383 每日简报示例 workflow
 - [ ] 384 工作流导出
 - [ ] 385 workflow 审计
@@ -587,6 +587,8 @@
 - [ ] 457 v4 首跑演示脚本
 
 ## v4 执行记录（2026-10-27 起）
+
+- 382 workflow 脚手架：`agentos workflows scaffold <name>` 产出五型样例 + 三触发器注释（webhook 只留 env 名），kebab 校验、拒绝覆盖、写出即经真实 loader 校验。
 
 - 375/376 面板：WorkflowsPanel 卡片（触发器图标/步骤数/最近运行状态点/nextRun/missed 徽章），点开为 HTML/CSS 纵向连线步骤流（五型各一图标，无图形库）；含"run now"。
 

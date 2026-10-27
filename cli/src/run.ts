@@ -10,7 +10,7 @@ import { runKbGate } from "./kb-gate.js";
 import { runKbLint } from "./kb-lint.js";
 import { runKbStale } from "./kb-stale.js";
 import { runDataExport, runDataGc, runDataImport } from "./data.js";
-import { runAgentsExport, runAgentsScaffold } from "./agents.js";
+import { runAgentsExport, runAgentsScaffold, runWorkflowsScaffold } from "./agents.js";
 
 const USAGE = [
   "agentos — pluggable agent platform (P5)",
@@ -26,6 +26,7 @@ const USAGE = [
   "  agentos kb lint <dir> [--json] [--strict]  frontmatter conformance (exit 1 = errors)",
   "  agentos kb stale [<dir>]                    re-verification queue (most overdue first)",
   "  agentos workflows validate <file-or-dir>      load + reference-check workflows",
+  "  agentos workflows scaffold <name>            write a five-step skeleton yml",
   "  agentos agents validate <file-or-dir>         load + reference-check agent roles",
   "  agentos agents scaffold <name>                write a skeleton role yml",
   "  agentos agents export <name> [--out <file>]   print/write a role yml (share or back up)",
@@ -79,12 +80,13 @@ export async function run(argv: readonly string[]): Promise<CliResult> {
     }
     case "workflows": {
       const [sub, ...args] = rest;
+      if (sub === "scaffold") return runWorkflowsScaffold(args);
       if (sub === "validate") {
         const target = args[0];
         if (!target || target.startsWith("-")) return { exitCode: 2, lines: ["✗ workflows validate requires <file-or-dir>"] };
         return runPresetValidate(target);
       }
-      return { exitCode: 2, lines: ["✗ unknown workflows subcommand (try: workflows validate)"] };
+      return { exitCode: 2, lines: ["✗ unknown workflows subcommand (try: workflows validate | scaffold)"] };
     }
     case "data": {
       const [sub, ...args] = rest;

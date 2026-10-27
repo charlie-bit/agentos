@@ -37,6 +37,37 @@ knowledge: local-markdown  # optional: restrict the knowledge socket (#337)
   return { exitCode: 0, lines: [`✓ wrote ${file}`, `  next: agentos agents validate ${file}`, `        agentos agents export ${name}`] };
 }
 
+/** `agentos workflows scaffold <name>` (spec #382): five-type skeleton. */
+export function runWorkflowsScaffold(argv: readonly string[]): CliResult {
+  const name = argv[0];
+  if (!name || name.startsWith("-")) return { exitCode: 2, lines: ["✗ workflows scaffold requires <name>"] };
+  if (!SLUG.test(name)) return { exitCode: 2, lines: ["✗ name must be kebab-case (a-z, digits, dash; 2–41 chars)"] };
+  const dir = resolve("config", "workflows");
+  const file = join(dir, `${name}.yml`);
+  if (existsSync(file)) return { exitCode: 1, lines: [`✗ ${file} already exists — edit it instead of scaffolding over it`] };
+  mkdirSync(dir, { recursive: true });
+  const body = `# Workflow scaffold (spec #382). Five step types, one of each.
+# Edit, then: agentos workflows validate config/workflows/${name}.yml
+kind: workflow
+version: "1"
+name: ${name}
+description: What this workflow is for, in one line.
+# trigger: { type: manual }                    # default
+# trigger: { type: schedule, cron: "@daily" } # five-field cron or @hourly/@daily/@weekly/@monthly/@yearly
+# trigger: { type: webhook, secretEnv: ${name.toUpperCase().replace(/-/g, "_")}_HOOK_TOKEN }  # env NAME only
+steps:
+  - { type: agent, agent: triage-analyst, prompt: "Summarise yesterday. Context: {prev}" }
+  - { type: kb_search, query: "recent changes" }
+  - { type: human, prompt: "Continue with the plan?", timeoutMs: 120000 }
+  - { type: tool, tool: todo_add, args: { title: "Follow up from ${name}" } }
+#  - { type: skill, skill: some-procedure, prompt: "Run it" }
+`;
+  writeFileSync(file, body, "utf8");
+  const checked = loadManifest(file);
+  if (!checked.ok) return { exitCode: 1, lines: ["✗ scaffold produced an invalid manifest (bug)", ...checked.errors.map((e) => `${e.path}: ${e.message}`)] };
+  return { exitCode: 0, lines: [`✓ wrote ${file}`, `  next: agentos workflows validate ${file}`] };
+}
+
 export function runAgentsExport(argv: readonly string[]): CliResult {
   let name: string | undefined;
   let out: string | undefined;
