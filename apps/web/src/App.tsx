@@ -20,6 +20,7 @@ import { TodoPanel } from "./components/TodoPanel";
 import { AgentsPanel } from "./components/AgentsPanel";
 import { UsagePanel } from "./components/UsagePanel";
 import { WorkflowsPanel } from "./components/WorkflowsPanel";
+import { ProjectsPanel } from "./components/ProjectsPanel";
 import { UsageBar } from "./components/UsageBar";
 
 /** Sidebar polling cadence — a session running from another tab/device must
@@ -45,6 +46,7 @@ export default function App() {
   const [showAgents, setShowAgents] = useState(false);
   const [showUsagePanel, setShowUsagePanel] = useState(false);
   const [showWorkflows, setShowWorkflows] = useState(false);
+  const [showProjects, setShowProjects] = useState(false);
   const [clearNonce, setClearNonce] = useState(0);
 
   const refresh = useCallback(async () => {
@@ -123,6 +125,7 @@ export default function App() {
         onToggleAgents={() => setShowAgents((v) => !v)}
         onToggleUsage={() => setShowUsagePanel((v) => !v)}
         onToggleWorkflows={() => setShowWorkflows((v) => !v)}
+        onToggleProjects={() => setShowProjects((v) => !v)}
       />
       <div className="flex min-h-0 flex-1">
         <button
@@ -177,6 +180,7 @@ export default function App() {
             {showTodos && <TodoPanel onClose={() => setShowTodos(false)} />}
             {showAgents && <AgentsPanel onClose={() => setShowAgents(false)} />}
             {showUsagePanel && <UsagePanel onClose={() => setShowUsagePanel(false)} />}
+            {showProjects && <ProjectsPanel onClose={() => setShowProjects(false)} />}
             {showWorkflows && (
               <WorkflowsPanel onClose={() => setShowWorkflows(false)} onOpenSession={(key) => pickSession(key)} />
             )}

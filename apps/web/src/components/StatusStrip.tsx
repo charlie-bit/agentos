@@ -19,6 +19,7 @@ export function StatusStrip({
   onToggleAgents,
   onToggleUsage,
   onToggleWorkflows,
+  onToggleProjects,
 }: {
   status: StatusResponse | null;
   onToggleFiles?: () => void;
@@ -31,6 +32,7 @@ export function StatusStrip({
   onToggleAgents?: () => void;
   onToggleUsage?: () => void;
   onToggleWorkflows?: () => void;
+  onToggleProjects?: () => void;
 }) {
   if (!status) return <header className="flex items-center gap-2 border-b border-border px-4 py-2 text-xs text-muted-foreground">loading status…</header>;
   const driftCount = status.lastDrift ? status.lastDrift.missing.length + status.lastDrift.undeclared.length : 0;
@@ -66,6 +68,11 @@ export function StatusStrip({
       {onToggleDrafts && (
         <button onClick={onToggleDrafts} title="pending knowledge drafts" className="rounded-md p-1 text-muted-foreground hover:bg-card hover:text-foreground">
           drafts
+        </button>
+      )}
+      {onToggleProjects && (
+        <button onClick={onToggleProjects} title="projects" className="rounded-md p-1 text-muted-foreground hover:bg-card hover:text-foreground">
+          projects
         </button>
       )}
       {onToggleWorkflows && (

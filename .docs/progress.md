@@ -525,14 +525,14 @@
 - [x] 395 项目仪表盘
 - [x] 396 项目数据导出
 - [x] 397 项目删除语义
-- [ ] 398 `GET /api/projects`（模板）+ `GET /api/project-instances`（实例）
-- [ ] 399 项目实例写端点
-- [ ] 400 ProjectsPanel 前端
-- [ ] 401 项目详情页
-- [ ] 402 新建项目向导
+- [x] 398 `GET /api/projects`（模板）+ `GET /api/project-instances`（实例）
+- [x] 399 项目实例写端点
+- [x] 400 ProjectsPanel 前端
+- [x] 401 项目详情页
+- [x] 402 新建项目向导
 - [ ] 403 项目内新建角色会话
 - [ ] 404 项目内触发 workflow
-- [ ] 405 项目搜索
+- [x] 405 项目搜索
 - [ ] 406 示例项目
 - [ ] 407 项目 docs
 - [ ] 408 外部 agent = tool manifest
@@ -587,6 +587,8 @@
 - [ ] 457 v4 首跑演示脚本
 
 ## v4 执行记录（2026-10-27 起）
+
+- 398/399 双面 API 已就绪（模板只读 / 实例增改删，负向已验证）；400/401/402/405 面板落地：ProjectsPanel 展示模板与实例两份列表、选模板→取名→建（向导）、实例详情（待办四态计数 + sessions/runs/todos 三标签 + 模板围栏 chips）、实例标题即时过滤、删实例不动模板。
 
 - 396/397 项目导出与删除：`GET /api/project-instances/:id/export?format=jsonl|md`（实例+模板+全量 todos/sessions/runs，下载头）；删除实例只删数据行，模板仍在且可再次实例化（conformance 断言）。
 

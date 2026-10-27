@@ -181,6 +181,25 @@ export const commitKbDraft = (receiptId: string) =>
 export const discardKbDraft = (receiptId: string) =>
   jpost<{ ok: boolean }>(`/api/kb/drafts/${encodeURIComponent(receiptId)}/discard`, {});
 
+/** Projects (spec #398–#405). */
+export interface ProjectTemplate { name: string; description?: string; agents?: string[]; workflows?: string[]; tools?: string[]; knowledge?: string[]; manifestPath: string | null }
+export interface ProjectInstance { id: string; template: string; title: string; createdAtMs: number; updatedAtMs: number }
+export interface ProjectDashboard {
+  instance: ProjectInstance;
+  template: { name: string; agents: string[]; workflows: string[] } | null;
+  todos: { total: number; todo: number; doing: number; blocked: number; done: number };
+  sessions: Array<{ id: string; externalKey: string; agent: string | null; status: string; lastActiveMs: number; title: string | null }>;
+  runs: Array<{ id: string; workflow: string; status: string; startedAtMs: number; endedAtMs: number | null }>;
+}
+export const getProjectTemplates = () => jget<{ templates: ProjectTemplate[] }>("/api/project-templates");
+export const getProjectInstances = () => jget<{ instances: ProjectInstance[] }>("/api/project-instances");
+export const createProjectInstance = (template: string, title: string) =>
+  jpost<{ instance: ProjectInstance }>("/api/project-instances", { template, title });
+export const deleteProjectInstance = (id: string) =>
+  jsonFetch<{ ok: boolean }>(`/api/project-instances/${encodeURIComponent(id)}`, { method: "DELETE" });
+export const getProjectDashboard = (id: string) =>
+  jget<ProjectDashboard>(`/api/project-instances/${encodeURIComponent(id)}/dashboard`);
+
 /** Notification feed (spec #386/#427): metadata only. */
 export interface Notification { kind: string; title: string; ref?: string; ts?: number }
 export const getNotifications = () => jget<{ notifications: Notification[] }>("/api/notifications");
