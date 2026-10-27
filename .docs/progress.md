@@ -550,9 +550,9 @@
 - [x] 420 对比文档 — docs/external-agents.md「两种形态」双语表
 - [x] 421 故障隔离 — planTools 环境降级(⚠+缺席)与步骤失败语义(#204/#362)
 - [ ] 422 外部 agent 使用计量
-- [ ] 423 场景模板库
-- [ ] 424 Home 视图
-- [ ] 425 五区导航
+- [x] 423 场景模板库 — Home 四类场景卡(总结待办/找角色/跑 workflow/开项目),按目录自动渲染
+- [x] 424 Home 视图 — 场景卡网格 + 今日聚焦 todo + 最近会话/项目三区块
+- [x] 425 五区导航 — Home/Chats/Todos/Workflows/Projects 顶栏可达(Agents 并入手边面板与 Chats 过滤)
 - [x] 426 ⌘K 命令面板 — 五类目录客户端过滤,Enter 跳转(会话/角色/面板)
 - [ ] 427 通知中心
 - [x] 428 调度心跳 — /api/status.scheduler {alive, activeRuns} + 状态条徽章
@@ -587,6 +587,8 @@
 - [x] 457 演示脚本 — scripts/demo-workbench.mjs 五段离线演示(validate/kb lint/bench/跨运行时),一条命令全绿
 
 ## v4 执行记录（2026-10-27 起）
+
+- 423/424/425 Home 与导航：四张场景卡(直达 todos/roles/workflows/projects)、今日聚焦(≤24h 未完成)、最近会话/项目；顶栏五区切换，Home 复用 Chat 区域渲染。
 
 - 429 移动端：所有面板 w-full(<md) + md:w-80/96，统一由固定浮层容器承载；与既有侧栏抽屉、状态条换行叠加，375px 不再横向溢出。
 

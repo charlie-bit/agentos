@@ -22,6 +22,7 @@ import { UsagePanel } from "./components/UsagePanel";
 import { WorkflowsPanel } from "./components/WorkflowsPanel";
 import { ProjectsPanel } from "./components/ProjectsPanel";
 import { CommandPalette } from "./components/CommandPalette";
+import { HomePanel } from "./components/HomePanel";
 import { UsageBar } from "./components/UsageBar";
 
 /** Sidebar polling cadence — a session running from another tab/device must
@@ -49,6 +50,7 @@ export default function App() {
   const [showWorkflows, setShowWorkflows] = useState(false);
   const [showProjects, setShowProjects] = useState(false);
   const [showPalette, setShowPalette] = useState(false);
+  const [zone, setZone] = useState<"home" | "chats" | "todos" | "workflows" | "projects">("chats");
   const [clearNonce, setClearNonce] = useState(0);
 
   const refresh = useCallback(async () => {
@@ -119,6 +121,22 @@ export default function App() {
 
   return (
     <div className="flex h-full flex-col">
+      <nav className="flex gap-1 border-b border-border px-4 py-1 text-xs">
+        {(["home", "chats", "todos", "workflows", "projects"] as const).map((z) => (
+          <button
+            key={z}
+            onClick={() => {
+              setZone(z);
+              if (z === "todos") setShowTodos(true);
+              if (z === "workflows") setShowWorkflows(true);
+              if (z === "projects") setShowProjects(true);
+            }}
+            className={"rounded px-2 py-0.5 " + (zone === z ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-card")}
+          >
+            {z}
+          </button>
+        ))}
+      </nav>
       <StatusStrip
         status={status}
         onToggleFiles={() => setShowFiles((v) => !v)}
@@ -154,6 +172,17 @@ export default function App() {
         <div className="flex min-w-0 flex-1 flex-col">
           <div className="flex min-h-0 flex-1">
             <div className="flex min-w-0 flex-1 flex-col">
+          {zone === "home" ? (
+            <HomePanel
+              onZone={(z) => {
+                setZone(z);
+                if (z === "todos") setShowTodos(true);
+                if (z === "workflows") setShowWorkflows(true);
+                if (z === "projects") setShowProjects(true);
+              }}
+              onPickSession={pickSession}
+            />
+          ) : (
           <ChatStream
             state={state}
             onQuote={(text) => setQuote({ text, nonce: Date.now() })}
@@ -163,6 +192,7 @@ export default function App() {
               hasKnowledge: Boolean(status?.knowledge),
             })}
           />
+          )}
           {/* key=sessionId: creating/switching sessions (sidebar "+", a row
               click) must be visible immediately, not only once a reply comes
               back — remounting drops stale draft text and refires autoFocus,
@@ -184,10 +214,10 @@ export default function App() {
             {showTools && <ToolsPanel onClose={() => setShowTools(false)} />}
             {showEscalations && <EscalationsPanel onClose={() => setShowEscalations(false)} />}
             {showTimeline && <TimelinePanel state={state} onClose={() => setShowTimeline(false)} />}
-            </div>
             {showTodos && <TodoPanel onClose={() => setShowTodos(false)} />}
             {showAgents && <AgentsPanel onClose={() => setShowAgents(false)} />}
             {showUsagePanel && <UsagePanel onClose={() => setShowUsagePanel(false)} />}
+            </div>
             {showProjects && (
               <ProjectsPanel
                 onClose={() => setShowProjects(false)}
