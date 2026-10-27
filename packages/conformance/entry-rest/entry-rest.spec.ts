@@ -1736,3 +1736,27 @@ describe("workflow read APIs (spec #372–#374)", () => {
     expect((await api(unwired.srv, "/api/workflows")).status).toBe(501);
   });
 });
+
+describe("workflow run export (spec #384)", () => {
+  it("downloads a run as jsonl or markdown; bad format 400, unknown 404", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "agentos-runexp-"));
+    tempDirs.push(dir);
+    const dbPath = join(dir, "sessions.db");
+    const run = { id: "run-9", workflow: "daily-brief", status: "error" as const, trigger: "manual", startedAtMs: 1, endedAtMs: 2, error: "step 2 failed" };
+    const srv = await startServer({
+      presetName: "p", model: { provider: "v" }, mounts: [], runner: async () => ({}),
+      ledger: openLedger(dbPath), port: 0, dbPath, staticDir: makeStaticDir(dir),
+      workflowRunDetail: (id) => (id === "run-9" ? { run, steps: [{ index: 0, type: "agent", status: "ok", durationMs: 5 }, { index: 1, type: "tool", status: "error", durationMs: 9 }] } : undefined),
+    });
+    servers.push(srv);
+    const jsonl = await api(srv, "/api/workflows/runs/run-9/export?format=jsonl");
+    expect(jsonl.headers.get("content-disposition")).toContain("agentos-run-run-9.jsonl");
+    expect((await jsonl.text()).trim().split("\n")).toHaveLength(3); // run + 2 steps
+    const md = await api(srv, "/api/workflows/runs/run-9/export?format=md");
+    const text = await md.text();
+    expect(text).toContain("status: error");
+    expect(text).toContain("| 2 | tool | error | 9ms |");
+    expect((await api(srv, "/api/workflows/runs/run-9/export?format=pdf")).status).toBe(400);
+    expect((await api(srv, "/api/workflows/runs/ghost/export")).status).toBe(404);
+  });
+});

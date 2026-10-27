@@ -47,6 +47,9 @@ export function WorkflowsPanel({ onClose }: { onClose: () => void }) {
           no workflows mounted — add config/workflows/*.yml or run `agentos workflows scaffold`
         </div>
       )}
+      <div className="px-1 text-[10px] text-muted-foreground">
+        schedule cards show the next boundary; "missed N" counts windows skipped while the server was down (never replayed).
+      </div>
       <ScrollArea className="min-h-0 flex-1">
         <ul className="space-y-1">
           {workflows.map((w) => {
@@ -106,7 +109,10 @@ export function WorkflowsPanel({ onClose }: { onClose: () => void }) {
                     </Button>
                     {detail && (
                       <div className="mt-1 rounded border border-border p-1">
-                        <div className="mb-1 text-[10px] text-muted-foreground">instance {detail.id.slice(0, 8)} · {detail.run.status}</div>
+                        <div className="mb-1 flex items-center justify-between text-[10px] text-muted-foreground">
+                          <span>instance {detail.id.slice(0, 8)} · {detail.run.status}</span>
+                          <a href={`/api/workflows/runs/${encodeURIComponent(detail.id)}/export?format=jsonl`} download title="download run (JSONL)">⤓</a>
+                        </div>
                         <ol className="space-y-0.5">
                           {detail.steps.map((st) => (
                             <li key={st.index} className="flex items-center gap-1 text-[10px]">

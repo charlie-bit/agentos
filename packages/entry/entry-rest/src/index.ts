@@ -1116,6 +1116,47 @@ export async function startServer(o: StartServerOptions): Promise<RunningServer>
       if (!detail) return sendJson(res, 404, { error: "run not found" });
       return sendJson(res, 200, detail);
     }
+    const runExportMatch = /^\/api\/workflows\/runs\/([^/]+)\/export$/.exec(path);
+    if (req.method === "GET" && runExportMatch) {
+      if (!o.workflowRunDetail) return sendJson(res, 501, { error: "workflow run details not wired by this deployment" });
+      let id: string;
+      try {
+        id = decodeURIComponent(runExportMatch[1] ?? "");
+      } catch {
+        return sendJson(res, 400, { error: "undecodable run id" });
+      }
+      const format = url.searchParams.get("format") ?? "jsonl";
+      if (format !== "jsonl" && format !== "md") return sendJson(res, 400, { error: "format must be jsonl or md" });
+      const detail = await o.workflowRunDetail(id);
+      if (!detail) return sendJson(res, 404, { error: "run not found" });
+      const steps = Array.isArray(detail.steps) ? detail.steps : [];
+      const body =
+        format === "jsonl"
+          ? [JSON.stringify({ run: detail.run }), ...steps.map((s) => JSON.stringify({ step: s }))].join("\n") + "\n"
+          : [
+              `# Run ${detail.run.id} — ${detail.run.workflow}`,
+              "",
+              `- status: ${detail.run.status}`,
+              `- trigger: ${detail.run.trigger}`,
+              `- started: ${new Date(detail.run.startedAtMs).toISOString()}`,
+              ...(detail.run.error ? [`- error: ${detail.run.error}`] : []),
+              "",
+              "| # | step | status | duration |",
+              "|---|------|--------|----------|",
+              ...steps.map((raw, i) => {
+                const s = raw as { type?: string; status?: string; durationMs?: number; error?: string };
+                return `| ${i + 1} | ${s.type ?? "?"} | ${s.status ?? "?"} | ${s.durationMs ?? 0}ms |`;
+              }),
+              "",
+            ].join("\n");
+      res.writeHead(200, {
+        "content-type": format === "md" ? "text/markdown; charset=utf-8" : "application/x-ndjson; charset=utf-8",
+        "content-disposition": `attachment; filename="agentos-run-${id}.${format}"`,
+        "content-length": Buffer.byteLength(body),
+      });
+      res.end(body);
+      return;
+    }
     const runMatch = /^\/api\/workflows\/([^/]+)\/run$/.exec(path);
     if (req.method === "POST" && runMatch) {
       if (!o.runWorkflow) return sendJson(res, 501, { error: "workflow engine not wired by this deployment" });
