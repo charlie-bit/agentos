@@ -1,10 +1,10 @@
-# AgentOS Spec — 307 点承诺清单
+# AgentOS Spec — 457 点承诺清单
 
-> 定位：本文件是**全量承诺清单**（what & acceptance），按模块分组、全局编号 1–307。
+> 定位：本文件是**全量承诺清单**（what & acceptance），按模块分组、全局编号 1–457。
 > 状态（done / in-progress / todo / blocked）一律不写在这里，由配对的 [progress.md](progress.md) 逐点打勾。
 > 每个点必须锚定真实代码位置或 PRD 承诺；写不出的点不许进这张表。
 >
-> 1–100 为 v1 基线（既有承诺，编号冻结）；101–170 为 v2 扩展（对标 sre-triage-copilot 后吸收/转化的产品能力，web 为唯一入口）；171–200 为**边界承诺**（30 条明确的"不做"，每条含替代出口——对标的拒绝判决见 [gap-vs-sre-triage-copilot.md](gap-vs-sre-triage-copilot.md)）；201–307 为 v3 对齐任务（2026-10-26 五路全量代码审计产出：每个 PARTIAL/MISSING 缺口、每个审计新发现的 bug、每处死代码，各成一个 PR 大小的点，100 分 = 1–307 全绿）。
+> 1–100 为 v1 基线（既有承诺，编号冻结）；101–170 为 v2 扩展（对标 sre-triage-copilot 后吸收/转化的产品能力，web 为唯一入口）；171–200 为**边界承诺**（30 条明确的"不做"，每条含替代出口——对标的拒绝判决见 [gap-vs-sre-triage-copilot.md](gap-vs-sre-triage-copilot.md)）；201–307 为 v3 对齐任务（2026-10-26 五路全量代码审计产出：每个 PARTIAL/MISSING 缺口、每个审计新发现的 bug、每处死代码，各成一个 PR 大小的点，100 分 = 1–307 全绿）；308–457 为 v4 产品面（2026-10-27：web 端待办 / 自定义 Agent 角色 / Workflow 编排含定时 / Project 编排 / 外部 agent——muse 式个人工作台能力、AgentOS 形态实现；**v1.0 判据维持 1–307 不变**，v2.0 判据见 #454）。
 >
 > v3 编号规则：新点只增不改 1–200；凡收口既有点的，标注 `（#N 收口）`——该点全绿即母点视为达标；标注 `（#Na/#Nb）` 的是母点的任务分解，母点是伞点。
 
@@ -44,6 +44,13 @@
 | M28 生态与分发 | 7 | 294–300：escalations / 时间线 / examples / 零脚手架 / 第二 runtime / npm 分发 / onboarding |
 | M29 沙箱与部署 | 3 | 301–303：sandbox 声明 / Docker / 数据目录规范 |
 | M30 对齐验收 | 4 | 304–307：第二方接入 / 全链路冒烟 / roadmap / 审计例程 |
+| M31 待办 Priorities | 20 | 308–327：todo 契约/工具族/端点/面板/通知 |
+| M32 Agent 角色自定义 | 25 | 328–352：AgentManifest/工具围栏/角色会话/归因 |
+| M33 Workflow 编排引擎 | 35 | 353–387：步骤五型/触发三型/定时/恢复/面板 |
+| M34 Projects 项目编排 | 20 | 388–407：配置vs数据分界/实例/仪表盘/范围隔离 |
+| M35 外部 Agent 第三方功能 | 15 | 408–422：MCP 唯一路径/回流/边界守护 |
+| M36 Web 产品面整合 | 20 | 423–442：Home/场景卡/⌘K/通知/五区导航 |
+| M37 快速实现基建与守护 | 15 | 443–457：脚手架/examples/复审/v2.0 判据 |
 
 ---
 
@@ -471,7 +478,229 @@
 306. **v1.0 roadmap 跟踪件**（#170 执行面）：docs/roadmap-v1.md 从 spec 1–307 生成状态列，CI 同步；v1.0 判据=1–307 全绿（含 #144 跨运行时）。验收：文件陈述 v1.0 定义与当前绿数。
 307. **审计例程化**：spec 大修（如 v3）须有对应五路审计复跑；README 即合同（#99）抽查机制纳入 CI 或定期任务。验收：审计不再是单次事件而有例程载体。
 
+---
+
+# v4 产品面（308–457）—— web 端：待办 / Agent 角色 / Workflow / Projects / 外部 Agent
+
+> 来源：2026-10-27 产品方向（用户五点需求）：① 从连接的 MCP 总结待办；② 自定义 agents 角色；③ 角色可基于其它 agent，默认自己；④ workflow 编排（跑 skill、跑 MCP、定时任务等）；⑤ project 编排——把角色当"人"来编排工作。定位：muse 式个人 agent 工作台，但以 AgentOS 形态实现，**快速响应模式：利用一切可复用基建（abort/时间线/门禁/导出/ledger）快速落地**。
+>
+> **五条设计裁决（全部点的宪法，冲突时以此为准）**：
+> **A. 配置 vs 数据分界**（不推翻 #183"不做配置写 API"）：角色/workflow/项目模板 = `config/agents|workflows|projects/*.yml`，启动期挂载、git 评审、web 只读+validate 触发（复用 #288/#289）；项目**实例**、待办、运行态 = `.agentos/` 运行时数据，web 可建可写（同会话改名 #36 先例）。web 能改的是"我的数据"，不能改的是"系统配置"。
+> **B. 待办工具族模式**：内核不解析 MCP 结果、不内置 todo 领域模型（#177）。模型在对话中总结待办并调用 `todo_*` 工具族写入；工具注册走 governance/tools.ts 既有模式（同 kb_* 族先例），kb 门控/fallback 照抄。
+> **C. 外部 agent 唯一路径 = MCP 工具 manifest**：外部 agent 是工具不是对等节点；"基于 agent"引用只能指向同仓库已挂载的角色（config 循环引用 validate 期拒绝）。#199（不做 A2A 内核化）继续成立。
+> **D. 不做图形化编排编辑器**（#196 之延伸）：workflow/agent 可视化只读渲染 + 单击实例化 + 触发按钮；编辑 = 改 yml + git PR。每类 manifest 附**场景模板**（scaffold 命令产出骨架 yml），降低纯手写门槛。
+> **E. 快速实现 = 零新增第三方依赖**：workflows 图形渲染用 HTML/CSS（复刻既有 SVG 手法，不引 dagre/d3）；流复用 SSE 心跳（#252）；中断复用 abort 基建（#254）；web 端点族复用 entry-rest 既有注入模式；定时用 node 内建（setInterval 拉起的精确窗检查或 setTimeout 链——**不引 cron 库**，调度精度=分钟窗）。zod 全仓锁 v4 照旧，跨边界 JSON Schema。
+
+## M31 待办 Priorities（308–327）
+
+**契约与工具族（308–312）**
+308. **todo_item 契约**：contracts 新增（additive-only）——`{id, project?, title, status: todo|doing|blocked|done, priority?: P0–P2, dueAt?, sourceKind, sourceRef?, createdAt, updatedAt}`；端到端 JSON Schema 定义，runtime 无 zod 泄漏。验收：契约文件 + schema 测试绿。
+309. **todo 工具族注册**：`governance/tools.ts` 照 kb_* 模式注册 `todo_list / todo_add / todo_update / todo_remove` 四工具，启动期挂载。验收：挂载的内核 turn 内可调用四工具。
+310. **todo 存储动词**：ledger 新增 verbs——`todoWrite / todoList`（同一 sqlite，独立表，DB 态非内存态，#132 纪律）。验收：重启后 todo 持久。
+311. **todo 待办视图（transcript）**：todo 变更产生中立事件（additive：`todo.changed` NeutralTool 事件，TranscriptEntry 增量字段——同 #273 增字段先例）。验收：回放历史时 todo 变更可见。
+312. **待办门禁对齐**：todo_update/remove 复用幂等 carve-out（默认非幂等）与 canUseTool 门禁路径（不新造门禁）。验收：conformance 断言非幂等 todo 工具不重试。
+
+**从 MCP 结果总结待办（313–318）**
+313. **todo_extractor 系统提示段**：BASE_SYSTEM_PROMPT 增量段落——"对话或工具结果中出现可行动项时，建议用 todo_add 记录"（提示不改行为，只给模型动词）。验收：提示文披露于 /api/status（system prompt 披露既有）。
+314. **总结待办场景模板**：场景卡"总结本次会话待办"= 预置 prompt 模板 + todo_add 调用示例，进 web 场景模板库（#423 挂钩）。验收：一键生成 ≥1 条 todo（e2e）。
+315. **sourceRef 回链**：todo_item.sourceRef 指向产生它的会话 id，web 点击跳回对话定位（transcript 回放锚点）。验收：面板 → 会话跳转闭环。
+316. **MCP 源标注**：sourceKind ∈ {chat, mcp}——工具结果产生的待办标注来源工具名（如 triage-tracker），面板按源过滤。验收：面板显示来源标签。
+317. **todo 导出**：`GET /api/todos/export?format=jsonl|md`（复用 #259 导出基建）。验收：浏览器下载 JSONL/Markdown。
+318. **todo 搜索**：面板搜索（标题/状态/来源/项目），服务端过滤（复用 #267 模式）。验收：输入即时收窄。
+
+**面板与通知（319–327）**
+319. **todo list 端点**：`GET /api/todos`（状态/项目/优先级过滤参数）。验收：curl 返回全部。
+320. **todo 写端点**：`POST /api/todos` / `PATCH /api/todos/:id` / `DELETE /api/todos/:id`——web 直接编辑（用户数据，非配置）。验收：web 增改删即时反映。
+321. **TodoPanel 前端**：列表 + 状态四列（todo/doing/blocked/done）+ 优先级标记 + 行内编辑（复用 InlineEditableTitle）。验收：四状态全可视化。
+322. **今日聚焦视图**：面板顶部"今日"过滤（dueAt ≤ 今天 + P0/P1 未完成）。验收：过滤精确。
+323. **todo.changed 实时推送**：SSE 流内推 todo 变更帧，多标签页即时同步（复用 #216 per-session 修复后的帧路由）。验收：A 标签改动 B 标签即时反映。
+324. **通知中心——todo 到期**：dueAt 临近（≤24h）时 web 通知角标 + 通知中心列表（元数据级：标题+due 时间，不透对话内容——R9）。验收：到期前可见通知。
+325. **todo 与项目联动**：todo.project 字段关联项目实例（#388+），项目仪表盘聚合未完成数（#397 挂钩）。验收：项目面板显示待办计数。
+326. **todo 变更审计**：todo 写路径双落点对齐 #47 模式（审计行记 id+动作，不记正文）。验收：审计文件可对账。
+327. **todo gc**：done 且超期（默认 30 天）的 todo 由 `agentos data gc`（#162）清扫，策略文档化。验收：gc 只清策略匹配项。
+
+## M32 Agent 角色自定义（328–352）
+
+**AgentManifest 契约与挂载（328–334）**
+328. **AgentManifest 契约**：`config/agents/*.yml`——`{name, kind: "agent", baseAgent?, systemPrompt, tools?, knowledge?, model?}`；启动期挂载（同 preset 模式，不热插——#188）。验收：zod schema 拒绝未知字段+内联密钥。
+329. **baseAgent 基座引用**：角色可 `baseAgent: <name>` 继承另一角色（您第 3 点"基于什么 agent，默认自己"）——默认无 baseAgent = 直接跑在主内核（"自己"）。继承语义：systemPrompt 拼接（base 在前、child 覆盖措辞冲突时 child 优先），tools/knowledge/model 取并集、child 覆盖同名。验收：conformance 断言拼接与覆盖规则。
+330. **循环引用拒绝**：baseAgent 链 a→b→a 在 validate 期拒绝（#17 引用完整性延伸）。验收：环状 fixture validate exit 1。
+331. **悬空引用拒绝**：baseAgent/tools/knowledge/model 引用不存在名字，validate 期报错（复用 #17）。验收：悬空 fixture exit 1。
+332. **agent manifest kind 分发**：loader 按 kind:"agent" 分发校验（#11 延伸）。验收：错误 kind 拒绝。
+333. **preset×agent 关系**：agent manifest 是 preset 的第五层引用——preset 可 `agents: [name]` 声明本业务可用的角色集（additive；缺席 = 主内核单角色，现行为不变）。验收：preset validate 检查 agents 引用。
+334. **`agentos agents validate`**：CLI 校验命令（复用 #90 数据型 runner 模式，无副作用）。验收：退出码表达结果。
+
+**角色运行时（335–341）**
+335. **角色会话启动**：`POST /api/chat` 增可选 `agent` 参数（请求级，additive）——命中角色即以该角色的拼接 systemPrompt + 围栏 tools 启动 turn。验收：带 agent 参数的 turn 工具面只含角色围栏。
+336. **工具围栏**：角色 tools 声明 = 该角色 turn 的工具白名单（canUseTool 门禁消费围栏——内核侧硬执行，#46 同模式）。验收：围栏外工具调用被拒并落审计。
+337. **knowledge 范围**：角色 knowledge 声明限制该角色 turn 的 kb search/getPage 范围（provider 挂载级过滤，#45 物理隔离精神延伸）。验收：围栏外知识页 search 不命中。
+338. **角色归因**：TranscriptEntry/usage/审计行携带 agent 标签（additive——usage.log 增 agent 字段，#209 tenant 同族）。验收：usage 查询可按 agent 聚合。
+339. **"自己"语义**：无 agent 参数的 turn = 主内核 preset 行为（现行为，零回归）；web 角色选择器默认"自己"。验收：回归测试零差异。
+340. **角色 hydrate**：会话记录其 agent 标签，回放/恢复时还原角色上下文（#88 hydrate 延伸）。验收：切换会话角色标签一致显示。
+341. **角色中止与门禁**：角色 turn 的 abort/confirm/escalate 全链路复用既有基建（#254/#287/#76），零新机制。验收：角色 turn 中 confirm 弹窗正常。
+
+**角色管理面（342–352）**
+342. **`GET /api/agents`**：列出已挂载角色（名字/基座链/摘要/来源 yml 路径——只读披露 #113 模式）。验收：curl 全量返回。
+343. **AgentsPanel 前端**：角色卡片（头像 emoji/名字/基座继承链可视化/tools chips/model 标签），点击进角色会话。验收：卡片渲染基座链。
+344. **角色场景卡**：新建会话时选角色 = 场景模板驱动（#423 挂钩：每角色自动生成"找 X 聊聊"场景卡）。验收：选卡即开角色 turn。
+345. **agents validate 触发**（web）：复用 #289 热校验端点扩展到 agents 目录。验收：web 校验回显与 CLI 一致。
+346. **角色脚手架**：`agentos agents scaffold <name>` 产出骨架 yml（含 systemPrompt 模板 + tools 注释样例）。验收：骨架 validate 绿。
+347. **角色导出**：角色定义可下载 yml（#259 模式）——分享/备份面。验收：下载文件可重新挂载。
+348. **五角色示例包**：examples/ 内置 5 个示例角色（triage-analyst / docs-writer / kb-curator / daily-standup / inbox-triage——示例虚构场景，R6），配 preset 引用。验收：示例 preset validate 绿。
+349. **角色使用统计**：usage 按 agent 聚合的面板视图（#291 延伸）。验收：面板显示每角色 token/成本。
+350. **角色与会话列表关联**：会话列表显示其 agent 标签（过滤参数 #267 延伸）。验收：按角色过滤会话。
+351. **角色删除边界**：删除角色 yml + restart 即卸载（配置面纪律 #188/#183）；引用该角色的运行中会话不中断（会话记录快照标签）。验收：卸载角色后旧会话回放正常。
+352. **角色 docs**：agent manifest 编写指南进文档站三件套（#146 延伸），双语。验收：指南双语同步。
+
+## M33 Workflow 编排引擎（353–387）
+
+**WorkflowManifest 契约（353–358）**
+353. **WorkflowManifest 契约**：`config/workflows/*.yml`——`{name, kind:"workflow", description, steps: [...], trigger: {...}}`；启动期挂载。验收：schema 拒绝未知步骤型。
+354. **步骤五型**：steps 元素是 discriminated union——`{type: "agent", agent, prompt}` | `{type: "tool", tool, args}` | `{type: "skill", skill, prompt?}` | `{type: "kb_search", query}` | `{type: "human", prompt, timeout}`——五型即全部（内核不背业务，#177 精神）。验收：union 五型 schema 测试。
+355. **顺序执行**：步骤按序执行，前一步输出自动作为后一步输入上下文（`{prev}` 引用上一步结果）。验收：e2e 三步链结果正确串联。
+356. **trigger 三型**：`{type:"manual"}`（默认）| `{type:"schedule", cron}` | `{type:"webhook", secretEnv}`——三型即全部。验收：schema 三型 union。
+357. **cron 解析（零依赖）**：`node:crypto`-free 手写解析器——五字段（分/时/日/月/周）支持 `* / - ,` 语法 + `@daily/@weekly` 别名；**不引 cron 库**（E 裁决）。验收：单测覆盖五字段边界（月末/闰年/`*/15`）。
+358. **workflow validate**：`agentos workflows validate` + preset 可 `workflows: [name]` 引用（同 #333 模式）。验收：悬空 agent/tool/skill 引用 exit 1。
+
+**执行引擎（359–366）**
+359. **顺序执行器**：core 新增 `workflow/runner.ts`——按 steps 依序调用（agent 步骤 = 带角色标签的 turn；tool 步骤 = 工具直调；kb_search = provider.search）。验收：三型步骤的 runner 单测。
+360. **step 间上下文传递**：前步结果摘要（≤1KB，超限走 #206 落盘+指针）注入后步 prompt。验收：超 1KB 结果走落盘指针。
+361. **human-in-the-loop 步骤**：`type:"human"` 步骤产生确认请求（复用 #76 confirm 端点 + #285 SSE 推送），超时默认拒绝（#77 语义）。验收：human 步骤触发 ConfirmModal，拒绝即停。
+362. **失败语义**：步骤失败 = workflow 实例状态 error + 已完成步骤结果保留 + 可从失败步重续（`resumeFrom`）。验收：失败重续不重跑已完成步。
+363. **幂等与重试**：workflow 重跑用实例 id 去重（同实例不双跑）；tool 步骤复用 #205 幂等执行器。验收：同实例重复触发拒绝。
+364. **workflow 状态机**：pending / running / done / error / aborted——落 DB（ledger 表或独立表，#132 纪律）。验收：崩溃重启后状态可查。
+365. **abort 联动**：运行中 workflow 实例可 abort（复用 #254 abort 基建 + 取消令牌传递到各步）。验收：abort 后部分结果保留、状态 aborted。
+366. **并发上限**：preset 声明 workflow 最大并发（同 #164 会话上限模式），超出排队。验收：N+1 排队不报错。
+
+**调度器（367–371）**
+367. **调度窗检查**：serve 内 setInterval（默认 60s）扫 schedule 触发器——窗内（lastRun < now ≤ nextRun）即触发一次并记 lastRun（精确到分钟窗，E 裁决）。验收：假时钟单测窗判定。
+368. **lastRun 持久**：lastRun 落 DB 非内存（重启不重跑已触发窗，#132）。验收：重启后无双重触发。
+369. **错过窗策略**：停机错过的窗（miss > 1 周期）跳过不回放（防雪崩）；missedRun 记录可见。验收：停机 2 周期后只跑下一窗。
+370. **手动触发端点**：`POST /api/workflows/:name/run`（manual + schedule 型均可手动）。验收：curl 触发产生实例。
+371. **webhook 触发器**：`POST /api/hooks/:name`（secretEnv 指定的 env var 值作 Bearer 校验，#12 env 引用模式）。验收：错误 secret 401、正确 202。
+
+**Workflow 面板（372–387）**
+372. **`GET /api/workflows`**：列出已挂载 workflow（名字/描述/触发器/步骤数/来源 yml）。验收：curl 全量。
+373. **`GET /api/workflows/:name/runs`**：实例列表（状态/开始/结束/耗时）。验收：含历史实例。
+374. **`GET /api/workflows/runs/:id`**：单实例详情——步骤级状态/输出摘要/耗时/错误（复用 #295 时间线模式）。验收：步骤级时间线可见。
+375. **WorkflowsPanel 前端**：workflow 卡片列表（触发器徽章 schedule/manual/webhook、步骤数、最近运行状态点）。验收：三型徽章渲染。
+376. **workflow 只读图**：点开 workflow 显示纵向步骤流（HTML/CSS 纵向连线，五型各一图标——**不引图形库**，E 裁决）。验收：五型图标纵向连线渲染。
+377. **运行按钮 + 实例化**：手动触发（#370 的 UI 面）+ 运行中实时步骤点亮（SSE 事件流，#252 心跳保活）。验收：点运行后步骤逐个点亮。
+378. **实例时间线**：实例详情复用 #295 事件时间线组件渲染步骤事件（开始/工具调用/落盘/确认门）。验收：时间线含门禁事件。
+379. **失败步骤重续 UI**：error 实例显示"从第 N 步重续"按钮（#362 UI 面）。验收：按钮触发 resumeFrom。
+380. **schedule 下一跑时间显示**：卡片显示 nextRun（cron 解析器产出）。验收：@daily 显示明日窗。
+381. **错过窗可见性**：missedRun 徽章 + 说明（#369 的 UI 面）。验收：徽章显示跳过数。
+382. **workflow 脚手架**：`agentos workflows scaffold <name>` 骨架 yml（五型样例 + trigger 注释）。验收：骨架 validate 绿。
+383. **每日简报示例 workflow**：examples 内置 `daily-brief.yml`——schedule @daily：triage-analyst 角色总结昨日会话 → kb_search 最近变更 → todo_add 今日聚焦（全复用 308+/328+ 既有件）。验收：示例 validate 绿 + 手动触发 e2e 绿。
+384. **工作流导出**：实例结果可导出（#259 模式：jsonl/md）。验收：浏览器下载。
+385. **workflow 审计**：实例/步骤执行落审计（id+状态+耗时，不落 prompt 正文——R2/R9）。验收：审计可对账实例数。
+386. **workflow 通知**：实例 done/error 推通知中心（#324 同中心，元数据级）。验收：完成即角标。
+387. **workflow 会话回链**：agent 步骤产生的 turn 关联实例 id，面板可跳转会话回放（#315 同模式）。验收：步骤→会话跳转。
+
+## M34 Projects 项目编排（388–407）
+
+**配置 vs 数据分界（388–391）**
+388. **项目模板 yml**：`config/projects/*.yml`——`{name, kind:"project", description, agents?: [...], workflows?: [...], tools?: [...], knowledge?: [...]}`——模板声明这个项目"可以用哪些角色/流程/工具/知识"（配置面，git）。验收：schema + 悬空引用 validate。
+389. **项目实例（数据面）**：web"新建项目"基于模板实例化——实例 = `{id, template, title, createdAt, todos:[], sessions:[], runs:[]}` 落 DB（用户数据，web 可写——A 裁决）。验收：web 建项目即时入库。
+390. **模板 vs 实例边界守护**：实例不可改模板字段（改模板 = 改 yml + git）；实例可改的只有标题 + 关联数据。conformance 增负向用例（实例 API 改 agents 列表 = 4xx）。验收：负向用例绿。
+391. **项目 validate + 脚手架**：`agentos projects validate` + `projects scaffold`（同 334/346/382 模式）。验收：骨架绿。
+
+**项目运行时（392–397）**
+392. **项目范围角色/流程**：项目实例的会话与 workflow 只能用模板声明的 agents/workflows/tools（围栏 = 模板 ∩ preset 挂载，validate 期双重检查）。验收：围栏外引用拒绝。
+393. **项目会话聚合**：项目视图列出其实例的全部会话（transcript 标签 project=实例 id——#338 归因延伸）。验收：项目页会话列表 = 该项目全部。
+394. **项目 workflow 聚合**：项目视图列出其实例触发的全部 workflow 运行（runs 标签 project）。验收：项目页运行列表全量。
+395. **项目仪表盘**：项目首页 = 待办计数（#325）+ 最近会话 + 最近运行 + 各角色用量（#349）。验收：四区块渲染。
+396. **项目数据导出**：项目实例全量导出（会话+待办+运行记录打包，#260 批量导出模式）。验收：一包下载全量。
+397. **项目删除语义**：删除实例 = 数据不可见（#37 同语义），模板 yml 不受影响。验收：删实例后模板仍可再实例化。
+
+**Projects 面板（398–407）**
+398. **`GET /api/projects`（模板）+ `GET /api/project-instances`（实例）**：两列表分置（配置只读/数据可写的 API 面）。验收：两端点分置可见。
+399. **项目实例写端点**：`POST /api/project-instances`（基于模板建）/ `PATCH .../:id`（改名）/ `DELETE`——数据面。验收：增改删即时。
+400. **ProjectsPanel 前端**：项目卡片网格（模板徽章+待办计数+最近活动）。验收：网格渲染。
+401. **项目详情页**：仪表盘（#395）+ 会话/运行/待办三标签页。验收：三标签可切换。
+402. **新建项目向导**：选模板 → 起名 → 建（模板卡驱动，#423 场景模板同模式）。验收：三步完成。
+403. **项目内新建角色会话**：项目详情选模板声明的角色直接开 turn（#344 + #392 围栏）。验收：围栏内角色可开、围栏外不显示。
+404. **项目内触发 workflow**：项目详情手动触发声明的 workflow（#370 + 实例标签）。验收：触发的 run 关联项目。
+405. **项目搜索**：实例按标题过滤（#267 模式）。验收：即时收窄。
+406. **示例项目**：examples 内置 1 个完整示例项目模板（虚构场景 R6）+ 配套 agents/workflows。验收：示例 validate 全绿。
+407. **项目 docs**：projects 编写指南（含配置vs数据分界 Q&A——"为什么不能在 web 改模板"），双语。验收：指南双语。
+
+## M35 外部 Agent 第三方功能（408–422）
+
+**MCP 唯一路径（408–413）**
+408. **外部 agent = tool manifest**：外部 agent（第三方功能，您第 2/5 点）经 `config/tools/<x>.yml` 接入（MCP stdio/http 均可，#18/#19 既有零代码路径）——不建新接入面。验收：一份外部 agent server yml 零代码挂载。
+409. **外部 agent manifest 规范**：文档化"把第三方 agent 作为 MCP server 接入"指南（allowedTools 镜像 + 幂等声明 + drift check 三件套，#63 模式）。验收：指南命令从零跑通。
+410. **agent 步骤调外部 agent**：workflow `type:"tool"` 步骤可调用外部 agent 工具（即 #354 tool 步骤的常规用法，无特判）。验收：外部 agent 工具进步骤链 e2e。
+411. **外部 agent 幂等保护**：外部 agent 工具受 #205 执行器保护——非幂等声明工具不自动重试。验收：非幂等外部工具零重试。
+412. **外部 agent 健康可见**：外部 agent server 健康态进 /healthz per-mount（#292）与 registry 面板（#122）。验收：死 server 面板红点。
+413. **外部 agent 生态位清单**：README"已知 provider 实现"节（#142）延伸收录"已知外部 agent 接入"样例链接。验收：README 节存在且双语。
+
+**回流与治理（414–418）**
+414. **外部结果进待办**：外部 agent 工具结果同享 #313 提取段——可总结为 todo（sourceKind:"mcp"，#316 标注来源）。验收：外部结果 → todo 链路 e2e。
+415. **外部结果落盘**：外部 agent 大结果（>10KB）同走 #206 落盘（无特判）。验收：大结果指针化。
+416. **外部 agent 审计**：调用落 audit.jsonl（工具名+结果摘要，不落全文——R2）。验收：审计行含外部工具名。
+417. **外部 agent 门禁**：围栏/门禁照常生效（角色 tools 未声明该外部工具则拒——#336 无特判）。验收：围栏外外部工具被拒。
+418. **外部 agent 与"基于 agent"边界**：baseAgent（#329）**只能**引用同仓库 config/agents 角色——不可引用外部 agent（外部是工具不是角色基座；避免 prompt 级联到不可见第三方）。conformance 负向用例（baseAgent 指向 tool manifest 名 = 拒绝）。验收：负向用例绿。
+
+**示例与文档（419–422）**
+419. **外部 agent 示例**：examples 内置 1 个外部 agent 接入样例（任意可离线复跑的 stdio server，虚构场景 R6）。验收：样例离线 e2e 绿。
+420. **外部 agent vs 角色对比文档**：文档站对比表——什么时候接 MCP server（外部）、什么时候写 agent yml（内部角色）；双语。验收：对比表双语。
+421. **外部 agent 故障隔离**：外部 server 崩溃 = 该工具缺席 + 告警（#22 既有），不杀 workflow 实例（步骤失败语义 #362 接管）。验收：崩溃后 workflow 状态 error 可重续。
+422. **外部 agent 使用计量**：调用计入 usage attribution（#27/#209 同打标签，manifest 名即标签）。验收：usage 查询可按外部工具聚合。
+
+## M36 Web 产品面整合（423–442）
+
+**Home 与导航（423–430）**
+423. **场景模板库**：场景卡系统——预置场景（总结待办/找角色聊聊/跑 workflow/新建项目）+ agents/workflows/projects 自动生成卡（#344/#375/#402 挂钩点）；定义进配置 yml（场景 = prompt 模板 + 目标引用，git 评审）。验收：四类卡自动渲染。
+424. **Home 视图**：登录首页 = 场景卡网格 + 今日聚焦 todo（#322）+ 最近会话/项目快捷。验收：三区块渲染。
+425. **五区导航**：console 顶栏导航——Home / Chats / Todos / Workflows / Projects（Agents 并入 Home 角色卡与 Chats 过滤，不单列）。验收：五区可达。
+426. **⌘K 快捷启动**：命令面板（⌘K）——搜会话/角色/workflow/项目/场景卡（纯前端过滤，零依赖）。验收：⌘K 全五类可搜可跳。
+427. **通知中心**：右上角铃铛 + 下拉列表（todo 到期 #324 / workflow 完成 #386 / 确认请求 #285 汇聚），点击跳转。验收：三类通知汇聚跳转。
+428. **全局状态条扩展**：StatusStrip 增 workflow 调度器心跳指示（scheduler alive/dead）+ 活跃实例计数。验收：指示实时。
+429. **移动端适配扩展**：五区导航 + 面板群在 375px 视口可用（#265 延伸到新面）。验收：无横向滚动。
+430. **键盘路径扩展**：五区导航/⌘K/通知的键盘操作（#281 延伸）。验收：全键盘可达。
+
+**面板基建复用（431–437）**
+431. **通知轮询基建**：web 通知中心数据源——`GET /api/notifications`（聚合 todo 到期+workflow 完成+pending confirm，元数据级 R9）+ 前端 30s 轮询（简单可靠，不造 WebSocket——E 裁决）。验收：轮询数据三类齐全。
+432. **面板组件统一**：TodoPanel / AgentsPanel / WorkflowsPanel / ProjectsPanel 共用面板壳（标题栏+空态+加载态，EmptyState #268 复用）。验收：四面板共享壳组件。
+433. **空态四连**：无 todo/无角色/无 workflow/无项目的空态指引（#268 模式延伸，各指向 scaffold 命令）。验收：四空态指引文案。
+434. **scaffold 文档贯通**：四类 scaffold（agents/workflows/projects/场景模板）统一文档节"从空到有"（双语）。验收：命令逐条可跑。
+435. **面板数据刷新协议**：面板间导航时的数据获取统一走 SWR-like 简单缓存或直接 fetch（零依赖，手写 useFetch hook——不引 SWR/react-query，E 裁决）。验收：无第三方状态库。
+436. **深浅色主题覆盖新面**：四面板 + Home + ⌘K 全部过 #280 主题切换。验收：切换全 UI 一致。
+437. **E2E 覆盖新面**：Playwright（#283 基建）扩展 spec——建 todo/开角色会话/跑 workflow/建项目四链路。验收：四 spec 绿。
+
+**产品面守护（438–442）**
+438. **负向验收扩编**：M20 新增边界——不做图形化 workflow 编辑器、不做外部 agent 对等协议、不做待办领域模型进内核（对应 #196/#199/#177 延伸——见 M37 复审点）。验收：边界条目入 spec M20（本批即立法）。
+439. **README 产品面更新**：Core Claims 增"个人工作台五件套（待办/角色/workflow/项目/外部 agent）"——全部映射到 yml/契约/数据分界，双语同 PR（#240）。验收：README 与实现同步。
+440. **架构图更新**：`.docs/architecture-diagram`（或 README 内嵌图）纳入五区产品面 + 数据流（配置 yml → 挂载 → 实例数据 → 面板）。验收：图与代码一致。
+441. **progress.md 扩编**：308–457 进跟踪件（#306 roadmap 延伸）。验收：点号连续可勾。
+442. **v4 审计点**：五路审计复跑一次 v4 新面（#307 例程的首个执行样例）。验收：审计报告落 .docs。
+
+## M37 快速实现基建与守护（443–457）
+
+**基建（443–448）**
+443. **todo/agent/workflow/project schema 单测**：四类新 manifest 的 loader/conformance 契约测试（#93–97 模式）。验收：四套件绿。
+444. **DB migration 纪律**：todo/实例/runs 新表用 additive migration（`PRAGMA user_version` 递增，向后兼容——不删不改既有表）。验收：旧库升级零损。
+445. **调度器单测（假时钟）**：cron 解析 + 窗判定 + 错过策略全假时钟单测（不 sleep 真时钟）。验收：套件 <5s 跑完。
+446. **围栏矩阵测试**：角色×项目×preset 三层围栏的组合 conformance（围栏 = 最严交集）。验收：矩阵用例绿。
+447. **并发与恢复**：workflow 实例崩溃恢复 e2e（kill -TERM 中途 → 重启 → resumeFrom 可续）。验收：恢复 e2e 绿。
+448. **性能预算扩展**：#169 预算表增——调度窗判定 <10ms / 五面板冷加载 <1s / ⌘K 过滤 <100ms。验收：预算表成文 + 基准脚本。
+
+**examples 打包（449–452）**
+449. **examples/workbench 完整示例**：聚合示例——1 项目模板 + 3 角色 + 2 workflow（含 daily-brief）+ todo 场景 + 外部 agent 样例（#348/#383/#406/#419 汇聚）。验收：`preset validate` + 手动 e2e 绿。
+450. **examples 脚本化冒烟**：`scripts/workbench-smoke.mjs`——挂载→建项目→开角色会话→产 todo→跑 workflow→导出，一键验证五件套。验收：一条命令绿。
+451. **examples README**：五件套各自一段"这是什么/为什么 yml"——差异化叙事（对照 muse 式产品的黑箱配置）。验收：双语。
+452. **CI 扩展**：workbench-smoke 进 CI opt-in job（#297 同模式——重 E2E 不卡每 PR）。验收：CI 有该 job。
+
+**复审与验收（453–457）**
+453. **M20 边界复审**：逐条复核 171–200 对五件套是否漏防（如 #197 会话主权 vs workflow 会话、#199 vs 外部 agent、#183 vs 项目实例写 API——分界已在 A 裁决成文），产出复审记录。验收：复审记录落 .docs。
+454. **v2.0 判据**：v2.0 = 1–457 全绿（v1.0 判据 #170 维持 1–307）；判据写死进 roadmap（#306）。验收：roadmap 呈现双判据。
+455. **隐私复审**：五件套过 R1–R9 隐私红线逐条（todo 内容/角色 prompt/workflow 步骤/项目数据全属用户数据——本地性 R3、审计脱敏 R2/R8、通知元数据 R9）。验收：复审记录落 .docs。
+456. **文档站扩编**：三件套（#146）扩为五件套文档（+agents/workflows/projects 编写指南）。验收：五指南双语。
+457. **v4 首跑演示脚本**：`scripts/demo-workbench.mjs`——从零到五件套全部可见的演示脚本（录屏/截图友好的分步输出）。验收：脚本跑完五件套全展示。
+
 *配对文档：[progress.md](progress.md)（逐点状态）。对标判决：[gap-vs-sre-triage-copilot.md](gap-vs-sre-triage-copilot.md)。
 Spec 修订规则：点只能增或改验收标准，不许悄悄删——删除必须留 changelog。v2（2026-10-26）：1–100 冻结为基线，新增 101–200；v2 差异化定位一句话——"sre-triage-copilot 是一个 SRE 分诊产品，AgentOS 是做出任意分诊产品的框架：它的全部功能面，在我们的世界里要么是 preset 文件、要么是 config/*.yml、要么是 examples/，没有一样需要写进内核"。
 v3.1（2026-10-26）：#73 的 PATCH 路由文字修正为 `/api/sessions/:id/title`（与代码正则一致，属"只修验收标准措辞"，点未删除）；#233 相应标注为已采用此方案。
-v3（2026-10-26）：全量代码审计后新增 201–307（107 点）——每个 PARTIAL/MISSING 的收口任务、每个审计新发现缺陷、每处死代码各成一点；目标态 = 1–307 全绿即 100 分。审计口径：DONE 不重立点，证据一律 file:line。*
+v3（2026-10-26）：全量代码审计后新增 201–307（107 点）——每个 PARTIAL/MISSING 的收口任务、每个审计新发现缺陷、每处死代码各成一点；目标态 = 1–307 全绿即 100 分。审计口径：DONE 不重立点，证据一律 file:line。
+v4（2026-10-27）：新增 308–457（150 点）产品面——web 端五件套：待办 Priorities（308–327）/ Agent 角色自定义（328–352）/ Workflow 编排含定时（353–387）/ Projects 项目编排（388–407）/ 外部 Agent（408–422）+ 产品面整合（423–442）+ 快速实现基建（443–457）。五条设计裁决 A–E 为本批宪法：配置（yml+git）与数据（.agentos+web 可写）分界；待办走工具族非内核模型；外部 agent 唯一路径 MCP；不做图形化编排编辑器；零新增第三方依赖。v1.0 判据维持 1–307；v2.0 判据 = 1–457 全绿（#454）。*

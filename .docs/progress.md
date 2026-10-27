@@ -568,7 +568,7 @@
 - [ ] 438 负向验收扩编
 - [ ] 439 README 产品面更新
 - [ ] 440 架构图更新
-- [ ] 441 progress.md 扩编
+- [x] 441 progress.md 扩编
 - [ ] 442 v4 审计点
 - [ ] 443 todo/agent/workflow/project schema 单测
 - [ ] 444 DB migration 纪律
