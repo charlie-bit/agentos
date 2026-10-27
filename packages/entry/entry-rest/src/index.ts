@@ -143,6 +143,14 @@ export interface StartServerOptions {
    * The engine is injected; this package only routes and authenticates.
    */
   runWorkflow?: (name: string, trigger: "manual" | "webhook", opts?: { project?: string; resumeFrom?: number }) => Promise<{ ok: boolean; runId?: string; reason?: string }>;
+  /** Project templates (config, read-only) and instances (data, writable) — #389/#390. */
+  projectTemplates?: () => ProjectTemplateSummary[] | Promise<ProjectTemplateSummary[]>;
+  projectInstances?: {
+    list: (template?: string) => ProjectInstanceSummary[] | Promise<ProjectInstanceSummary[]>;
+    create: (template: string, title: string) => ProjectInstanceSummary | null | Promise<ProjectInstanceSummary | null>;
+    rename: (id: string, title: string) => ProjectInstanceSummary | null | Promise<ProjectInstanceSummary | null>;
+    remove: (id: string) => boolean | Promise<boolean>;
+  };
   /** Notification feed (#386/#427): todo due, workflow done/error — metadata only. */
   notifications?: () => Array<{ kind: string; title: string; ref?: string; ts?: number }> | Promise<Array<{ kind: string; title: string; ref?: string; ts?: number }>>;
   /** Read-only workflow catalogue / runs (#372–#374). Absent = 501. */
@@ -225,6 +233,26 @@ export interface ToolDescriptor {
   idempotent: { default: boolean; overrides?: Record<string, boolean> } | null;
   /** False for declared-but-unmounted / env-degraded providers. */
   mounted: boolean;
+}
+
+/** Project template summary (#398): config, read-only. */
+export interface ProjectTemplateSummary {
+  name: string;
+  description?: string;
+  agents?: string[];
+  workflows?: string[];
+  tools?: string[];
+  knowledge?: string[];
+  manifestPath: string | null;
+}
+
+/** Project instance (#389): data, web-writable — title only. */
+export interface ProjectInstanceSummary {
+  id: string;
+  template: string;
+  title: string;
+  createdAtMs: number;
+  updatedAtMs: number;
 }
 
 /** One mounted workflow as the panels see it (#372). */
@@ -1081,6 +1109,72 @@ export async function startServer(o: StartServerOptions): Promise<RunningServer>
       } catch {
         return sendJson(res, 200, { files: [] });
       }
+    }
+
+    if (req.method === "GET" && path === "/api/project-templates") {
+      if (!o.projectTemplates) return sendJson(res, 501, { error: "project templates not wired by this deployment" });
+      try {
+        return sendJson(res, 200, { templates: await o.projectTemplates() });
+      } catch {
+        return sendJson(res, 200, { templates: [] });
+      }
+    }
+    if (req.method === "GET" && path === "/api/project-instances") {
+      if (!o.projectInstances) return sendJson(res, 501, { error: "project instances not wired by this deployment" });
+      const template = url.searchParams.get("template") ?? undefined;
+      try {
+        return sendJson(res, 200, { instances: await o.projectInstances.list(template) });
+      } catch {
+        return sendJson(res, 200, { instances: [] });
+      }
+    }
+    if (req.method === "POST" && path === "/api/project-instances") {
+      if (!o.projectInstances) return sendJson(res, 501, { error: "project instances not wired by this deployment" });
+      const body = await readJson(req);
+      const template = body?.template;
+      const title = body?.title;
+      if (typeof template !== "string" || template.length === 0 || template.length > 120) {
+        return sendJson(res, 400, { error: "template is required" });
+      }
+      if (typeof title !== "string" || title.trim().length === 0 || title.length > 300) {
+        return sendJson(res, 400, { error: "title is required (<=300 chars)" });
+      }
+      const created = await o.projectInstances.create(template, title.trim());
+      if (created === null) return sendJson(res, 400, { error: `unknown project template: ${template}` });
+      return sendJson(res, 201, { instance: created });
+    }
+    const instanceMatch = /^\/api\/project-instances\/([^/]+)$/.exec(path);
+    if (instanceMatch && (req.method === "PATCH" || req.method === "DELETE")) {
+      if (!o.projectInstances) return sendJson(res, 501, { error: "project instances not wired by this deployment" });
+      let id: string;
+      try {
+        id = decodeURIComponent(instanceMatch[1] ?? "");
+      } catch {
+        return sendJson(res, 400, { error: "undecodable id" });
+      }
+      if (req.method === "DELETE") {
+        const removed = await o.projectInstances.remove(id);
+        return sendJson(res, removed ? 200 : 404, { ok: removed });
+      }
+      const body = await readJson(req);
+      if (!body) return sendJson(res, 400, { error: "body required" });
+      // THE boundary (#390): instances may change their title only. Template
+      // definition fields are config — attempting to set one is a 4xx, not a
+      // silent ignore.
+      const templateFields = ["template", "agents", "workflows", "tools", "knowledge", "description"];
+      const attempted = templateFields.filter((f) => f in body);
+      if (attempted.length > 0) {
+        return sendJson(res, 400, {
+          error: "template fields are configuration (edit the yml + git); an instance may only change its title",
+          fields: attempted,
+        });
+      }
+      if (typeof body.title !== "string" || body.title.trim().length === 0 || body.title.length > 300) {
+        return sendJson(res, 400, { error: "title is required (<=300 chars)" });
+      }
+      const renamed = await o.projectInstances.rename(id, body.title.trim());
+      if (renamed === null) return sendJson(res, 404, { error: "project instance not found" });
+      return sendJson(res, 200, { instance: renamed });
     }
     if (req.method === "GET" && path === "/api/notifications") {
       if (!o.notifications) return sendJson(res, 200, { notifications: [] });

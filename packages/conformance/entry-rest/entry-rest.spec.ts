@@ -1781,3 +1781,67 @@ describe("notification feed (spec #386)", () => {
     expect(((await (await api(unwired.srv, "/api/notifications")).json()) as { notifications: unknown[] }).notifications).toEqual([]);
   });
 });
+
+describe("project templates + instances (spec #389/#390)", () => {
+  async function wired(): Promise<RunningServer> {
+    const dir = mkdtempSync(join(tmpdir(), "agentos-projapi-"));
+    tempDirs.push(dir);
+    const dbPath = join(dir, "sessions.db");
+    const store = new Map<string, { id: string; template: string; title: string; createdAtMs: number; updatedAtMs: number }>();
+    const srv = await startServer({
+      presetName: "p", model: { provider: "v" }, mounts: [], runner: async () => ({}),
+      ledger: openLedger(dbPath), port: 0, dbPath, staticDir: makeStaticDir(dir),
+      projectTemplates: () => [{ name: "web-revamp", description: "d", agents: ["analyst"], manifestPath: "config/projects/web-revamp.yml" }],
+      projectInstances: {
+        list: (template) => [...store.values()].filter((v) => !template || v.template === template),
+        create: (template, title) => {
+          if (template !== "web-revamp") return null;
+          const row = { id: `i${store.size + 1}`, template, title, createdAtMs: 1, updatedAtMs: 1 };
+          store.set(row.id, row);
+          return row;
+        },
+        rename: (id, title) => {
+          const row = store.get(id);
+          if (!row) return null;
+          const next = { ...row, title };
+          store.set(id, next);
+          return next;
+        },
+        remove: (id) => store.delete(id),
+      },
+    });
+    servers.push(srv);
+    return srv;
+  }
+
+  it("creates from a template, renames, deletes; templates are separate and read-only", async () => {
+    const srv = await wired();
+    expect(((await (await api(srv, "/api/project-templates")).json()) as { templates: Array<{ name: string }> }).templates[0]?.name).toBe("web-revamp");
+
+    const created = await postJson(srv, "/api/project-instances", { template: "web-revamp", title: "Q2 revamp" });
+    expect(created.status).toBe(201);
+    const id = ((await created.json()) as { instance: { id: string } }).instance.id;
+
+    const renamed = await api(srv, `/api/project-instances/${id}`, { method: "PATCH", body: JSON.stringify({ title: "Q3 revamp" }), headers: { "content-type": "application/json" } });
+    expect(renamed.status).toBe(200);
+    expect(((await renamed.json()) as { instance: { title: string } }).instance.title).toBe("Q3 revamp");
+
+    expect((await api(srv, `/api/project-instances/${id}`, { method: "DELETE" })).status).toBe(200);
+    expect((await api(srv, `/api/project-instances/${id}`, { method: "DELETE" })).status).toBe(404);
+    expect((await postJson(srv, "/api/project-instances", { template: "ghost", title: "x" })).status).toBe(400);
+  });
+
+  it("NEGATIVE (#390): an instance can never change a template field", async () => {
+    const srv = await wired();
+    const id = ((await (await postJson(srv, "/api/project-instances", { template: "web-revamp", title: "t" })).json()) as { instance: { id: string } }).instance.id;
+    for (const field of ["template", "agents", "workflows", "tools", "knowledge", "description"]) {
+      const res = await api(srv, `/api/project-instances/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ title: "ok", [field]: field === "template" ? "other" : ["x"] }),
+        headers: { "content-type": "application/json" },
+      });
+      expect(res.status, field).toBe(400);
+      expect(((await res.json()) as { fields: string[] }).fields).toContain(field);
+    }
+  });
+});

@@ -516,8 +516,8 @@
 - [x] 386 workflow 通知
 - [x] 387 workflow 会话回链
 - [x] 388 项目模板 yml
-- [ ] 389 项目实例（数据面）
-- [ ] 390 模板 vs 实例边界守护
+- [x] 389 项目实例（数据面）
+- [x] 390 模板 vs 实例边界守护
 - [ ] 391 项目 validate + 脚手架
 - [ ] 392 项目范围角色/流程
 - [ ] 393 项目会话聚合
@@ -587,6 +587,8 @@
 - [ ] 457 v4 首跑演示脚本
 
 ## v4 执行记录（2026-10-27 起）
+
+- 389/390 数据面：`GET /api/project-templates`（只读）与 `GET/POST/PATCH/DELETE /api/project-instances`；创建需模板存在（400），PATCH 只接受 title，任何 template/agents/workflows/tools/knowledge/description 字段一律 400 并回显字段名（负向用例逐字段断言）。
 
 - 389 存储地基：`project_instances` 表(user_version 4) + create/list/get/rename/delete；行形状只有 template+title+时间戳，模板字段无法写入（#390 在数据层即成立）。
 
