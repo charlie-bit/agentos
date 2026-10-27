@@ -427,3 +427,166 @@
 - #211 的 active/channel/health 行为断言仍在 `packages/conformance/model/model.spec.ts`（公有 API 黑盒），attribution 已有包内 spec。
 - #205 的重试是「一次额外尝试」；第二次失败原样抛出，不形成重试风暴。
 - #292 的 debug 日志捕获（stdio 子进程 stderr）仍未做，因此 #124/#125/#220 保持开放；健康探测发生在 routing 层（HealthGate），未暴露到 /healthz。
+
+---
+
+# v4 产品面（308–457）
+
+> 五条设计裁决 A–E 是本批宪法（见 spec v4 头部）。执行顺序：M31 → M32 → M33
+> → M34 → M35 → 面板群 → M37。零新增第三方依赖。
+
+- [x] 308 todo_item 契约
+- [ ] 309 todo 工具族注册
+- [ ] 310 todo 存储动词
+- [ ] 311 todo 待办视图（transcript）
+- [ ] 312 待办门禁对齐
+- [ ] 313 todo_extractor 系统提示段
+- [ ] 314 总结待办场景模板
+- [ ] 315 sourceRef 回链
+- [ ] 316 MCP 源标注
+- [ ] 317 todo 导出
+- [ ] 318 todo 搜索
+- [ ] 319 todo list 端点
+- [ ] 320 todo 写端点
+- [ ] 321 TodoPanel 前端
+- [ ] 322 今日聚焦视图
+- [ ] 323 todo.changed 实时推送
+- [ ] 324 通知中心——todo 到期
+- [ ] 325 todo 与项目联动
+- [ ] 326 todo 变更审计
+- [ ] 327 todo gc
+- [ ] 328 AgentManifest 契约
+- [ ] 329 baseAgent 基座引用
+- [ ] 330 循环引用拒绝
+- [ ] 331 悬空引用拒绝
+- [ ] 332 agent manifest kind 分发
+- [ ] 333 preset×agent 关系
+- [ ] 334 `agentos agents validate`
+- [ ] 335 角色会话启动
+- [ ] 336 工具围栏
+- [ ] 337 knowledge 范围
+- [ ] 338 角色归因
+- [ ] 339 "自己"语义
+- [ ] 340 角色 hydrate
+- [ ] 341 角色中止与门禁
+- [ ] 342 `GET /api/agents`
+- [ ] 343 AgentsPanel 前端
+- [ ] 344 角色场景卡
+- [ ] 345 agents validate 触发
+- [ ] 346 角色脚手架
+- [ ] 347 角色导出
+- [ ] 348 五角色示例包
+- [ ] 349 角色使用统计
+- [ ] 350 角色与会话列表关联
+- [ ] 351 角色删除边界
+- [ ] 352 角色 docs
+- [ ] 353 WorkflowManifest 契约
+- [ ] 354 步骤五型
+- [ ] 355 顺序执行
+- [ ] 356 trigger 三型
+- [ ] 357 cron 解析（零依赖）
+- [ ] 358 workflow validate
+- [ ] 359 顺序执行器
+- [ ] 360 step 间上下文传递
+- [ ] 361 human-in-the-loop 步骤
+- [ ] 362 失败语义
+- [ ] 363 幂等与重试
+- [ ] 364 workflow 状态机
+- [ ] 365 abort 联动
+- [ ] 366 并发上限
+- [ ] 367 调度窗检查
+- [ ] 368 lastRun 持久
+- [ ] 369 错过窗策略
+- [ ] 370 手动触发端点
+- [ ] 371 webhook 触发器
+- [ ] 372 `GET /api/workflows`
+- [ ] 373 `GET /api/workflows/:name/runs`
+- [ ] 374 `GET /api/workflows/runs/:id`
+- [ ] 375 WorkflowsPanel 前端
+- [ ] 376 workflow 只读图
+- [ ] 377 运行按钮 + 实例化
+- [ ] 378 实例时间线
+- [ ] 379 失败步骤重续 UI
+- [ ] 380 schedule 下一跑时间显示
+- [ ] 381 错过窗可见性
+- [ ] 382 workflow 脚手架
+- [ ] 383 每日简报示例 workflow
+- [ ] 384 工作流导出
+- [ ] 385 workflow 审计
+- [ ] 386 workflow 通知
+- [ ] 387 workflow 会话回链
+- [ ] 388 项目模板 yml
+- [ ] 389 项目实例（数据面）
+- [ ] 390 模板 vs 实例边界守护
+- [ ] 391 项目 validate + 脚手架
+- [ ] 392 项目范围角色/流程
+- [ ] 393 项目会话聚合
+- [ ] 394 项目 workflow 聚合
+- [ ] 395 项目仪表盘
+- [ ] 396 项目数据导出
+- [ ] 397 项目删除语义
+- [ ] 398 `GET /api/projects`（模板）+ `GET /api/project-instances`（实例）
+- [ ] 399 项目实例写端点
+- [ ] 400 ProjectsPanel 前端
+- [ ] 401 项目详情页
+- [ ] 402 新建项目向导
+- [ ] 403 项目内新建角色会话
+- [ ] 404 项目内触发 workflow
+- [ ] 405 项目搜索
+- [ ] 406 示例项目
+- [ ] 407 项目 docs
+- [ ] 408 外部 agent = tool manifest
+- [ ] 409 外部 agent manifest 规范
+- [ ] 410 agent 步骤调外部 agent
+- [ ] 411 外部 agent 幂等保护
+- [ ] 412 外部 agent 健康可见
+- [ ] 413 外部 agent 生态位清单
+- [ ] 414 外部结果进待办
+- [ ] 415 外部结果落盘
+- [ ] 416 外部 agent 审计
+- [ ] 417 外部 agent 门禁
+- [ ] 418 外部 agent 与"基于 agent"边界
+- [ ] 419 外部 agent 示例
+- [ ] 420 外部 agent vs 角色对比文档
+- [ ] 421 外部 agent 故障隔离
+- [ ] 422 外部 agent 使用计量
+- [ ] 423 场景模板库
+- [ ] 424 Home 视图
+- [ ] 425 五区导航
+- [ ] 426 ⌘K 快捷启动
+- [ ] 427 通知中心
+- [ ] 428 全局状态条扩展
+- [ ] 429 移动端适配扩展
+- [ ] 430 键盘路径扩展
+- [ ] 431 通知轮询基建
+- [ ] 432 面板组件统一
+- [ ] 433 空态四连
+- [ ] 434 scaffold 文档贯通
+- [ ] 435 面板数据刷新协议
+- [ ] 436 深浅色主题覆盖新面
+- [ ] 437 E2E 覆盖新面
+- [ ] 438 负向验收扩编
+- [ ] 439 README 产品面更新
+- [ ] 440 架构图更新
+- [ ] 441 progress.md 扩编
+- [ ] 442 v4 审计点
+- [ ] 443 todo/agent/workflow/project schema 单测
+- [ ] 444 DB migration 纪律
+- [ ] 445 调度器单测（假时钟）
+- [ ] 446 围栏矩阵测试
+- [ ] 447 并发与恢复
+- [ ] 448 性能预算扩展
+- [ ] 449 examples/workbench 完整示例
+- [ ] 450 examples 脚本化冒烟
+- [ ] 451 examples README
+- [ ] 452 CI 扩展
+- [ ] 453 M20 边界复审
+- [ ] 454 v2.0 判据
+- [ ] 455 隐私复审
+- [ ] 456 文档站扩编
+- [ ] 457 v4 首跑演示脚本
+
+## v4 执行记录（2026-10-27 起）
+
+- [x] 308 契约落地：`packages/contracts/src/todo.ts`（zod + 同构 JSON Schema + 9 例测试）。
+- 待办工具族（309–312）→ AgentManifest（328+）→ 引擎（353+）依次推进。
