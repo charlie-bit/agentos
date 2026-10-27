@@ -1653,3 +1653,50 @@ describe("role removal boundary (spec #351)", () => {
     expect((await api(after, "/api/agents")).status).toBe(501); // catalogue gone; old data untouched
   });
 });
+
+describe("workflow triggers (spec #370/#371)", () => {
+  async function wired(): Promise<{ srv: RunningServer; calls: Array<{ name: string; trigger: string }> }> {
+    const dir = mkdtempSync(join(tmpdir(), "agentos-wftrig-"));
+    tempDirs.push(dir);
+    const dbPath = join(dir, "sessions.db");
+    const calls: Array<{ name: string; trigger: string }> = [];
+    const srv = await startServer({
+      presetName: "p",
+      model: { provider: "v" },
+      mounts: [],
+      runner: async () => ({}),
+      ledger: openLedger(dbPath),
+      port: 0,
+      dbPath,
+      staticDir: makeStaticDir(dir),
+      runWorkflow: async (name, trigger) => {
+        calls.push({ name, trigger });
+        if (name !== "daily-brief") return { ok: false, reason: "unknown workflow" };
+        return { ok: true, runId: `run-${calls.length}` };
+      },
+      hookSecretFor: (name) => (name === "daily-brief" ? "hook-secret-value" : undefined),
+    });
+    servers.push(srv);
+    return { srv, calls };
+  }
+
+  it("manual runs answer 200/404 and forward resumeFrom", async () => {
+    const { srv, calls } = await wired();
+    const ok = await postJson(srv, "/api/workflows/daily-brief/run", { resumeFrom: 2 });
+    expect(ok.status).toBe(200);
+    expect(((await ok.json()) as { runId: string }).runId).toBe("run-1");
+    expect(calls[0]).toEqual({ name: "daily-brief", trigger: "manual" });
+    expect((await postJson(srv, "/api/workflows/ghost/run", {})).status).toBe(404);
+    expect((await postJson(srv, "/api/workflows/daily-brief/run", { resumeFrom: -1 })).status).toBe(400);
+  });
+
+  it("webhooks enforce the env-named secret: 401 wrong, 202 right, 503 unconfigured", async () => {
+    const { srv } = await wired();
+    expect((await postJson(srv, "/api/hooks/daily-brief", {})).status).toBe(401);
+    const bad = await api(srv, "/api/hooks/daily-brief", { method: "POST", headers: { authorization: "Bearer nope" } });
+    expect(bad.status).toBe(401);
+    const good = await api(srv, "/api/hooks/daily-brief", { method: "POST", headers: { authorization: "Bearer hook-secret-value" } });
+    expect(good.status).toBe(202);
+    expect((await api(srv, "/api/hooks/no-secret", { method: "POST", headers: { authorization: "Bearer x" } })).status).toBe(503);
+  });
+});

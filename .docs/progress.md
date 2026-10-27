@@ -497,8 +497,8 @@
 - [x] 367 调度窗检查
 - [x] 368 lastRun 持久
 - [x] 369 错过窗策略
-- [ ] 370 手动触发端点
-- [ ] 371 webhook 触发器
+- [x] 370 手动触发端点
+- [x] 371 webhook 触发器
 - [ ] 372 `GET /api/workflows`
 - [ ] 373 `GET /api/workflows/:name/runs`
 - [ ] 374 `GET /api/workflows/runs/:id`
@@ -587,6 +587,8 @@
 - [ ] 457 v4 首跑演示脚本
 
 ## v4 执行记录（2026-10-27 起）
+
+- 370/371 触发端点：`POST /api/workflows/:name/run`（manual，支持 resumeFrom，404/400/501）与 `POST /api/hooks/:name`（Bearer = secretEnv 指向的 env 值，常量时间比较；错 401、未配置 503、成功 202）。引擎经注入，entry 只路由与鉴权。
 
 - 368 lastRun 持久：`scheduler_state` 表(user_version 3) + get/set（含 missed），重启后不重发已触发窗；测试覆盖空/写入/upsert/重开。
 

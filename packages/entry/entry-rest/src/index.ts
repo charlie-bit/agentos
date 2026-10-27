@@ -138,6 +138,13 @@ export interface StartServerOptions {
    * this route only bounds and forwards.
    */
   logs?: (q: { lines?: number }) => Array<{ name: string; lines: string[] }> | Promise<Array<{ name: string; lines: string[] }>>;
+  /**
+   * Workflow trigger surface (spec #370/#371): manual runs and webhook runs.
+   * The engine is injected; this package only routes and authenticates.
+   */
+  runWorkflow?: (name: string, trigger: "manual" | "webhook", opts?: { project?: string; resumeFrom?: number }) => Promise<{ ok: boolean; runId?: string; reason?: string }>;
+  /** Webhook secret VALUE for a workflow, resolved from its env-var name (#12). */
+  hookSecretFor?: (name: string) => string | undefined;
   /** Read-only role catalogue (spec #342). Absent = 501. */
   agents?: () => AgentInfo[] | Promise<AgentInfo[]>;
   /**
@@ -1039,6 +1046,55 @@ export async function startServer(o: StartServerOptions): Promise<RunningServer>
       } catch {
         return sendJson(res, 200, { files: [] });
       }
+    }
+    const runMatch = /^\/api\/workflows\/([^/]+)\/run$/.exec(path);
+    if (req.method === "POST" && runMatch) {
+      if (!o.runWorkflow) return sendJson(res, 501, { error: "workflow engine not wired by this deployment" });
+      let name: string;
+      try {
+        name = decodeURIComponent(runMatch[1] ?? "");
+      } catch {
+        return sendJson(res, 400, { error: "undecodable workflow name" });
+      }
+      if (name.length === 0 || name.length > 120) return sendJson(res, 400, { error: "invalid workflow name" });
+      const body = await readJson(req);
+      let resumeFrom: number | undefined;
+      if (body?.resumeFrom !== undefined) {
+        if (typeof body.resumeFrom !== "number" || !Number.isInteger(body.resumeFrom) || body.resumeFrom < 0) {
+          return sendJson(res, 400, { error: "resumeFrom must be a non-negative integer" });
+        }
+        resumeFrom = body.resumeFrom;
+      }
+      try {
+        const result = await o.runWorkflow(name, "manual", {
+          ...(typeof body?.project === "string" ? { project: body.project } : {}),
+          ...(resumeFrom !== undefined ? { resumeFrom } : {}),
+        });
+        if (!result.ok) return sendJson(res, 404, result);
+        return sendJson(res, 200, result);
+      } catch {
+        return sendJson(res, 500, { ok: false, reason: "engine failure" });
+      }
+    }
+    const hookMatch = /^\/api\/hooks\/([^/]+)$/.exec(path);
+    if (req.method === "POST" && hookMatch) {
+      if (!o.runWorkflow || !o.hookSecretFor) return sendJson(res, 501, { error: "webhook triggers not wired by this deployment" });
+      let name: string;
+      try {
+        name = decodeURIComponent(hookMatch[1] ?? "");
+      } catch {
+        return sendJson(res, 400, { error: "undecodable workflow name" });
+      }
+      const secret = o.hookSecretFor(name);
+      if (secret === undefined || secret.length === 0) return sendJson(res, 503, { error: "workflow has no webhook secret configured (secretEnv)" });
+      const header = req.headers.authorization ?? "";
+      const supplied = header.startsWith("Bearer ") ? header.slice("Bearer ".length) : "";
+      const a = Buffer.from(supplied);
+      const b = Buffer.from(secret);
+      if (a.length !== b.length || !timingSafeEqual(a, b)) return sendJson(res, 401, { error: "invalid webhook secret" });
+      const result = await o.runWorkflow(name, "webhook");
+      if (!result.ok) return sendJson(res, 404, result);
+      return sendJson(res, 202, result);
     }
     if (req.method === "GET" && path === "/api/agents") {
       if (!o.agents) return sendJson(res, 501, { error: "agent catalogue not wired by this deployment" });
