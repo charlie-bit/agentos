@@ -514,7 +514,7 @@
 - [x] 384 工作流导出
 - [x] 385 workflow 审计
 - [x] 386 workflow 通知
-- [ ] 387 workflow 会话回链
+- [x] 387 workflow 会话回链
 - [ ] 388 项目模板 yml
 - [ ] 389 项目实例（数据面）
 - [ ] 390 模板 vs 实例边界守护
@@ -587,6 +587,8 @@
 - [ ] 457 v4 首跑演示脚本
 
 ## v4 执行记录（2026-10-27 起）
+
+- 387 会话回链：每次运行一个 `wf-<runId>` 会话（agent 标签 + sdk 指针），实例行记 `session_key`；API/面板暴露"session"跳转，复用既有 hydrate 回放。
 
 - 386 完成通知：`/api/notifications` 聚合 todo 到期(≤24h 未完成)与 workflow done/error(24h 内)，元数据级；前端铃铛角标 + 下拉，30s 轮询。
 

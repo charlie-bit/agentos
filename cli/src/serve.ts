@@ -728,8 +728,12 @@ export async function runServeWeb(flags: ServeFlags): Promise<number> {
       mkdirSync(ws, { recursive: true });
       return ws;
     },
+    sessionKeyForRun: (runId) => `wf-${runId}`,
     runAgentTurn: async (step, prompt, runId) => {
       const role = resolveAgent(step.agent, asm.value.agents);
+      // One session per run (#387): replayable, agent-tagged, with a pointer.
+      const key = `wf-${runId}`;
+      if (!ledger.getByExternalKey(key)) ledger.createSession({ entry: "workflow", externalKey: key, preset: presetName, agent: step.agent });
       const ws = join(repoRoot, ".agentos", "workspaces", `wf-${runId}`);
       mkdirSync(ws, { recursive: true });
       const out = await runTurn({
@@ -742,6 +746,11 @@ export async function runServeWeb(flags: ServeFlags): Promise<number> {
         workspaceDir: ws,
         modelId,
       });
+      const wfRow = ledger.getByExternalKey(key);
+      if (wfRow) {
+        if (out.sdkSessionId) ledger.setSdkSessionId(wfRow.id, out.sdkSessionId);
+        ledger.touch(wfRow.id);
+      }
       const text = out.events
         .filter((e) => e.type === "assistant.text")
         .map((e) => String((e.payload as { text?: string }).text ?? ""))
@@ -915,12 +924,13 @@ export async function runServeWeb(flags: ServeFlags): Promise<number> {
           endedAtMs: r.endedAtMs,
           resumeFrom: r.resumeFrom,
           error: r.error,
+          sessionKey: r.sessionKey,
         })),
     workflowRunDetail: (id) => {
       const row = ledger.workflowRunGet(id);
       if (!row) return undefined;
       return {
-        run: { id: row.id, workflow: row.workflow, status: row.status, trigger: row.trigger, project: row.project, startedAtMs: row.startedAtMs, endedAtMs: row.endedAtMs, resumeFrom: row.resumeFrom, error: row.error },
+        run: { id: row.id, workflow: row.workflow, status: row.status, trigger: row.trigger, project: row.project, startedAtMs: row.startedAtMs, endedAtMs: row.endedAtMs, resumeFrom: row.resumeFrom, error: row.error, sessionKey: row.sessionKey },
         steps: Array.isArray(row.steps) ? row.steps : [],
       };
     },

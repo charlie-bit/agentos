@@ -10,7 +10,7 @@ const TRIGGER_ICON = { manual: Play, schedule: CalendarClock, webhook: Webhook }
 const STATUS_ICON = { done: CircleCheck, error: CircleAlert, running: CirclePlay, aborted: CircleStop, pending: CirclePlay } as const;
 
 /** Workflows panel (#375) with a read-only vertical step flow (#376) — HTML/CSS only, no graph lib. */
-export function WorkflowsPanel({ onClose }: { onClose: () => void }) {
+export function WorkflowsPanel({ onClose, onOpenSession }: { onClose: () => void; onOpenSession?: (key: string) => void }) {
   const [workflows, setWorkflows] = useState<WorkflowSummary[]>([]);
   const [open, setOpen] = useState<string | null>(null);
   const [runs, setRuns] = useState<WorkflowRun[]>([]);
@@ -111,7 +111,18 @@ export function WorkflowsPanel({ onClose }: { onClose: () => void }) {
                       <div className="mt-1 rounded border border-border p-1">
                         <div className="mb-1 flex items-center justify-between text-[10px] text-muted-foreground">
                           <span>instance {detail.id.slice(0, 8)} · {detail.run.status}</span>
-                          <a href={`/api/workflows/runs/${encodeURIComponent(detail.id)}/export?format=jsonl`} download title="download run (JSONL)">⤓</a>
+                          <span className="flex items-center gap-2">
+                            {detail.run.sessionKey && onOpenSession && (
+                              <button
+                                className="text-primary underline decoration-dotted"
+                                title="open the run's conversation"
+                                onClick={() => onOpenSession(detail.run.sessionKey as string)}
+                              >
+                                session
+                              </button>
+                            )}
+                            <a href={`/api/workflows/runs/${encodeURIComponent(detail.id)}/export?format=jsonl`} download title="download run (JSONL)">⤓</a>
+                          </span>
                         </div>
                         <ol className="space-y-0.5">
                           {detail.steps.map((st) => (

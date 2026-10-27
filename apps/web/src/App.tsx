@@ -177,7 +177,9 @@ export default function App() {
             {showTodos && <TodoPanel onClose={() => setShowTodos(false)} />}
             {showAgents && <AgentsPanel onClose={() => setShowAgents(false)} />}
             {showUsagePanel && <UsagePanel onClose={() => setShowUsagePanel(false)} />}
-            {showWorkflows && <WorkflowsPanel onClose={() => setShowWorkflows(false)} />}
+            {showWorkflows && (
+              <WorkflowsPanel onClose={() => setShowWorkflows(false)} onOpenSession={(key) => pickSession(key)} />
+            )}
           </div>
         </div>
       </div>

@@ -252,6 +252,8 @@ export interface WorkflowRunSummary {
   endedAtMs?: number | null;
   resumeFrom?: number | null;
   error?: string | null;
+  /** Session that ran this instance's agent steps (#387). */
+  sessionKey?: string | null;
 }
 
 /** One pending kb_write draft as the inbox shows it (metadata + preview, no full body). */

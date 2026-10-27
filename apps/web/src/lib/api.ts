@@ -206,6 +206,7 @@ export interface WorkflowRun {
   endedAtMs?: number | null;
   resumeFrom?: number | null;
   error?: string | null;
+  sessionKey?: string | null;
 }
 export const getWorkflows = () => jget<{ workflows: WorkflowSummary[] }>("/api/workflows");
 export const getWorkflowRuns = (name: string) => jget<{ runs: WorkflowRun[] }>(`/api/workflows/${encodeURIComponent(name)}/runs`);

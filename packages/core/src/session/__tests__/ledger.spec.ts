@@ -245,7 +245,7 @@ describe("workflow instance state (spec #364)", () => {
     tempDirs.push(dir);
     const dbPath = join(dir, "sessions.db");
     const a = openLedger(dbPath);
-    a.workflowRunCreate({ id: "run-1", workflow: "daily-brief", status: "running", trigger: "schedule", project: "proj-1", startedAtMs: 10, endedAtMs: null, steps: [], resumeFrom: null, error: null });
+    a.workflowRunCreate({ id: "run-1", workflow: "daily-brief", status: "running", trigger: "schedule", project: "proj-1", startedAtMs: 10, endedAtMs: null, steps: [], resumeFrom: null, error: null, sessionKey: null });
     a.workflowRunUpdate("run-1", { status: "error", endedAtMs: 20, error: "step 2 failed", resumeFrom: 2, steps: [{ index: 0, status: "ok" }] });
     a.close();
 

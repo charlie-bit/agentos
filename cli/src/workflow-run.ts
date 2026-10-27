@@ -23,6 +23,8 @@ export interface WorkflowRunnerConfig {
   workspaceFor(runId: string): string;
   /** One agent step; the caller resolves the role and drives the kernel. */
   runAgentTurn(step: Extract<WorkflowStep, { type: "agent" }>, prompt: string, runId: string): Promise<string>;
+  /** Session key created/used by this run (#387); recorded on the instance. */
+  sessionKeyForRun?(runId: string): string | undefined;
   kbProvider(): KnowledgeProvider | null;
   /** In-process tools available for `tool` steps (todo_* today). */
   tools: readonly NeutralTool[];
@@ -68,6 +70,7 @@ export function createWorkflowRunner(cfg: WorkflowRunnerConfig) {
       steps: [],
       resumeFrom: opts.resumeFrom ?? null,
       error: null,
+      sessionKey: null,
     });
 
     const result = await runWorkflow(manifest.steps, {
@@ -105,6 +108,7 @@ export function createWorkflowRunner(cfg: WorkflowRunnerConfig) {
       endedAtMs: now(),
       steps,
       resumeFrom: result.status === "error" ? (resumeIndex(result) ?? null) : null,
+      ...(cfg.sessionKeyForRun?.(runId) ? { sessionKey: cfg.sessionKeyForRun(runId) as string } : {}),
       error: result.status === "done" ? null : (steps.find((s) => s.status === "error" || s.status === "denied")?.error ?? result.status),
     });
     // Metadata-only audit (#385, R2/R9): ids, statuses, durations — no prompt

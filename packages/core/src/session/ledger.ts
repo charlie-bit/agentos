@@ -79,7 +79,7 @@ export interface Ledger {
   todoDelete(id: string): boolean;
   /** Workflow instance verbs (#364) — additive table, DB truth. */
   workflowRunCreate(run: WorkflowRunRow): WorkflowRunRow;
-  workflowRunUpdate(id: string, patch: Partial<Pick<WorkflowRunRow, "status" | "endedAtMs" | "steps" | "resumeFrom" | "error">>): WorkflowRunRow;
+  workflowRunUpdate(id: string, patch: Partial<Pick<WorkflowRunRow, "status" | "endedAtMs" | "steps" | "resumeFrom" | "error" | "sessionKey">>): WorkflowRunRow;
   workflowRunGet(id: string): WorkflowRunRow | undefined;
   workflowRunList(filter?: { workflow?: string; project?: string; status?: WorkflowRunStatus }): WorkflowRunRow[];
   /** lastRun persistence (#368): a restart never re-fires an already-fired window. */
@@ -102,6 +102,8 @@ export interface WorkflowRunRow {
   steps: unknown;
   resumeFrom: number | null;
   error: string | null;
+  /** Session created by this run's agent steps (#387), for replay/backlink. */
+  sessionKey: string | null;
 }
 
 export interface TodoFilter {
@@ -146,6 +148,7 @@ function toRunRow(r: Record<string, unknown>): WorkflowRunRow {
     steps,
     resumeFrom: r.resume_from === null || r.resume_from === undefined ? null : Number(r.resume_from),
     error: (r.error as string | null) ?? null,
+    sessionKey: (r.session_key as string | null) ?? null,
   };
 }
 
@@ -240,6 +243,11 @@ export function openLedger(dbPath: string = ledgerPathFromEnv()): Ledger {
       )`,
     );
     db.exec("PRAGMA user_version = 3");
+  }
+  try {
+    db.exec(`ALTER TABLE workflow_runs ADD COLUMN session_key TEXT`);
+  } catch {
+    /* column already present */
   }
 
   const mustExist = (id: string, changes: number | bigint) => {
@@ -373,9 +381,9 @@ export function openLedger(dbPath: string = ledgerPathFromEnv()): Ledger {
     },
     workflowRunCreate(run) {
       db.prepare(
-        `INSERT INTO workflow_runs (id, workflow, status, trigger, project, started_at_ms, ended_at_ms, steps, resume_from, error)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      ).run(run.id, run.workflow, run.status, run.trigger, run.project, run.startedAtMs, run.endedAtMs, JSON.stringify(run.steps ?? []), run.resumeFrom, run.error);
+        `INSERT INTO workflow_runs (id, workflow, status, trigger, project, started_at_ms, ended_at_ms, steps, resume_from, error, session_key)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ).run(run.id, run.workflow, run.status, run.trigger, run.project, run.startedAtMs, run.endedAtMs, JSON.stringify(run.steps ?? []), run.resumeFrom, run.error, run.sessionKey);
       return run;
     },
     workflowRunUpdate(id, patch) {
@@ -388,10 +396,11 @@ export function openLedger(dbPath: string = ledgerPathFromEnv()): Ledger {
         ...(patch.steps !== undefined ? { steps: patch.steps } : {}),
         ...(patch.resumeFrom !== undefined ? { resumeFrom: patch.resumeFrom } : {}),
         ...(patch.error !== undefined ? { error: patch.error } : {}),
+        ...(patch.sessionKey !== undefined ? { sessionKey: patch.sessionKey } : {}),
       };
       db.prepare(
-        `UPDATE workflow_runs SET status = ?, ended_at_ms = ?, steps = ?, resume_from = ?, error = ? WHERE id = ?`,
-      ).run(next.status, next.endedAtMs, JSON.stringify(next.steps ?? []), next.resumeFrom, next.error, id);
+        `UPDATE workflow_runs SET status = ?, ended_at_ms = ?, steps = ?, resume_from = ?, error = ?, session_key = ? WHERE id = ?`,
+      ).run(next.status, next.endedAtMs, JSON.stringify(next.steps ?? []), next.resumeFrom, next.error, next.sessionKey, id);
       return next;
     },
     workflowRunGet(id) {
