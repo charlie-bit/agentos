@@ -486,10 +486,10 @@
 - [x] 356 trigger 三型
 - [x] 357 cron 解析（零依赖）
 - [x] 358 workflow validate
-- [ ] 359 顺序执行器
-- [ ] 360 step 间上下文传递
-- [ ] 361 human-in-the-loop 步骤
-- [ ] 362 失败语义
+- [x] 359 顺序执行器
+- [x] 360 step 间上下文传递
+- [x] 361 human-in-the-loop 步骤
+- [x] 362 失败语义
 - [ ] 363 幂等与重试
 - [ ] 364 workflow 状态机
 - [ ] 365 abort 联动
@@ -587,6 +587,8 @@
 - [ ] 457 v4 首跑演示脚本
 
 ## v4 执行记录（2026-10-27 起）
+
+- 359–362 执行器：`runWorkflow` 五型步骤依序执行、`{prev}` 注入、>1KB 结果走 offload 指针、human 拒绝即停、失败保留已完成步并可 `resumeFrom` 重续、AbortSignal 协作取消；`resumeIndex` 给出重续点。全部依赖注入，内核零领域解析。
 
 - 358 workflow 校验：loader 路由 kind workflow；preset 增 `workflows: []` 第六层引用；validate 检查悬空 workflow 引用与步骤内的未知 agent；`agentos workflows validate` 复用数据型 runner。测试覆盖合法/悬空/未知 agent。
 
