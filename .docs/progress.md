@@ -444,16 +444,16 @@
 - [ ] 314 总结待办场景模板
 - [ ] 315 sourceRef 回链
 - [ ] 316 MCP 源标注
-- [ ] 317 todo 导出
-- [ ] 318 todo 搜索
-- [ ] 319 todo list 端点
-- [ ] 320 todo 写端点
+- [x] 317 todo 导出
+- [x] 318 todo 搜索
+- [x] 319 todo list 端点
+- [x] 320 todo 写端点
 - [ ] 321 TodoPanel 前端
 - [ ] 322 今日聚焦视图
 - [ ] 323 todo.changed 实时推送
 - [ ] 324 通知中心——todo 到期
 - [ ] 325 todo 与项目联动
-- [ ] 326 todo 变更审计
+- [x] 326 todo 变更审计
 - [ ] 327 todo gc
 - [ ] 328 AgentManifest 契约
 - [ ] 329 baseAgent 基座引用
@@ -590,6 +590,7 @@
 
 - [x] 308 契约落地：`packages/contracts/src/todo.ts`（zod + 同构 JSON Schema + 9 例测试）。
 - [x] 310 存储落地：ledger `todoWrite/todoList/todoDelete` + additive `PRAGMA user_version` 迁移 + 持久化/过滤/排序测试。
+- [x] 317–320/326 数据面：`GET/POST/PATCH/DELETE /api/todos` + `?q=&source=` 过滤 + jsonl/md 导出（下载头）+ 写路径审计（仅 id+动作）；conformance 覆盖校验/404/400/501 与审计不含标题。
 - [x] 311 回放标记：TranscriptEntry 增 `event: "todo.changed"`（契约 additive），transcript reader 对 todo_* 工具调用打标；普通工具不受影响（测试）。
 - [x] 309/312 工具族：`governance/todo-tools.ts` 四工具（todo.changed 信封）+ serve 启动期挂载；幂等切分 todo_list=true、写三件=false（分支依据 plan，复用 #205 执行器/门禁）。
 - 待办工具族（309–312）→ AgentManifest（328+）→ 引擎（353+）依次推进。

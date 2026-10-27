@@ -1423,3 +1423,79 @@ describe("request-level model override (spec #115)", () => {
     expect(seen).toEqual(["deepseek", undefined, undefined]);
   });
 });
+
+const todoListSample = { id: "a", title: "Chase retry", status: "todo" as const, sourceKind: "mcp" as const, sourceRef: "triage", createdAt: 1, updatedAt: 1 };
+
+describe("todo data plane (spec #317–#320)", () => {
+  async function wired(): Promise<{ srv: RunningServer; audit: string }> {
+    const dir = mkdtempSync(join(tmpdir(), "agentos-todos-api-"));
+    tempDirs.push(dir);
+    const dbPath = join(dir, "sessions.db");
+    const audit = join(dir, "audit.jsonl");
+    const srv = await startServer({
+      presetName: "p",
+      model: { provider: "v" },
+      mounts: [],
+      runner: async () => ({}),
+      ledger: openLedger(dbPath),
+      port: 0,
+      dbPath,
+      staticDir: makeStaticDir(dir),
+      auditPath: audit,
+      todos: (() => {
+        const store = new Map<string, (typeof todoListSample)[number]>([
+          ["a", todoListSample],
+        ]);
+        return {
+          list: () => [...store.values()],
+          write: (item: (typeof todoListSample)[number]) => {
+            store.set(item.id, item);
+            return item;
+          },
+          remove: (id: string) => store.delete(id),
+        };
+      })(),
+    });
+    servers.push(srv);
+    return { srv, audit };
+  }
+
+  it("lists, creates (validated), patches, deletes, and audits mutations by id only", async () => {
+    const { srv, audit } = await wired();
+    expect(((await (await api(srv, "/api/todos?q=retry&source=mcp")).json()) as { count: number }).count).toBe(1);
+
+    const created = await postJson(srv, "/api/todos", { title: "Write follow-up", priority: "P1" });
+    expect(created.status).toBe(201);
+    const todo = ((await created.json()) as { todo: { id: string; status: string; sourceKind: string } }).todo;
+    expect(todo).toMatchObject({ status: "todo", sourceKind: "manual" });
+
+    expect((await postJson(srv, "/api/todos", { title: "" })).status).toBe(400);
+    expect((await postJson(srv, "/api/todos", { title: "bad", priority: "P9" })).status).toBe(400);
+
+    const patched = await api(srv, `/api/todos/${todo.id}`, { method: "PATCH", body: JSON.stringify({ status: "doing" }), headers: { "content-type": "application/json" } });
+    expect(patched.status).toBe(200);
+    expect(((await patched.json()) as { todo: { status: string } }).todo.status).toBe("doing");
+
+    expect((await api(srv, "/api/todos/a", { method: "DELETE" })).status).toBe(200);
+    expect((await api(srv, "/api/todos/ghost", { method: "DELETE" })).status).toBe(404);
+
+    const lines = readFileSync(audit, "utf8").trim().split("\n").map((l) => JSON.parse(l) as Record<string, unknown>);
+    expect(lines.map((l) => l.event)).toEqual(["todo.add", "todo.update", "todo.remove"]);
+    expect(JSON.stringify(lines)).not.toContain("Chase retry"); // no titles in audit (R2)
+  });
+
+  it("exports jsonl and markdown downloads", async () => {
+    const { srv } = await wired();
+    const jsonl = await api(srv, "/api/todos/export?format=jsonl");
+    expect(jsonl.headers.get("content-disposition")).toContain("agentos-todos.jsonl");
+    expect((await jsonl.text()).trim().split("\n")).toHaveLength(1);
+    const md = await api(srv, "/api/todos/export?format=md");
+    expect(await md.text()).toContain("- [ ] Chase retry");
+    expect((await api(srv, "/api/todos/export?format=pdf")).status).toBe(400);
+  });
+
+  it("unwired is 501", async () => {
+    const { srv } = await boot(async () => ({}));
+    expect((await api(srv, "/api/todos")).status).toBe(501);
+  });
+});

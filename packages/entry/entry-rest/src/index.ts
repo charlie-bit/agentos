@@ -36,6 +36,7 @@ import type {
   TranscriptEntry,
 } from "@agentos/contracts";
 import { browserSessionId, isWebExternalKey, webExternalKey } from "@agentos/contracts/session-key";
+import { todoItemSchema, type TodoItem } from "@agentos/contracts";
 import type { Ledger, SessionRow } from "@agentos/core";
 
 /** Registration name presets may reference in the entry slot. */
@@ -135,6 +136,17 @@ export interface StartServerOptions {
    * this route only bounds and forwards.
    */
   logs?: (q: { lines?: number }) => Array<{ name: string; lines: string[] }> | Promise<Array<{ name: string; lines: string[] }>>;
+  /**
+   * Todo data plane (spec #319/#320): user data, web-writable (ruling A).
+   * Absent = 501. The entry never invents a todo shape — contracts validates.
+   */
+  todos?: {
+    list: (filter: { status?: string; project?: string; dueBefore?: number; q?: string; source?: string }) => TodoItem[] | Promise<TodoItem[]>;
+    write: (item: TodoItem) => TodoItem | Promise<TodoItem>;
+    remove: (id: string) => boolean | Promise<boolean>;
+  };
+  /** Audit sink for todo mutations (spec #326); metadata only, best effort. */
+  auditPath?: string;
   /**
    * KB draft inbox (spec #270–#272): list pending drafts, commit or discard.
    * Absent = 501. The human gate is the local token + the click itself.
@@ -473,6 +485,17 @@ function exportFileName(browserKey: string, ext: string): string {
   return `agentos-session-${safe || "session"}.${ext}`;
 }
 
+
+/** Todo mutations land in the audit log as id+action only (spec #326, R2/R8). */
+function auditTodo(o: { auditPath?: string }, action: string, id: string): void {
+  try {
+    const path = o.auditPath ?? join(".agentos", "audit.jsonl");
+    mkdirSync(dirname(path), { recursive: true });
+    appendFileSync(path, JSON.stringify({ ts: Date.now(), event: action, id }) + "\n", "utf8");
+  } catch {
+    /* audit is best-effort and never blocks the write */
+  }
+}
 
 /** One file in a session workspace, as /api/workspace/files reveals it (spec #256). */
 export interface WorkspaceFileEntry {
@@ -969,6 +992,100 @@ export async function startServer(o: StartServerOptions): Promise<RunningServer>
       } catch {
         return sendJson(res, 200, { files: [] });
       }
+    }
+    if (req.method === "GET" && path === "/api/todos") {
+      if (!o.todos) return sendJson(res, 501, { error: "todos not wired by this deployment" });
+      const status = url.searchParams.get("status") ?? undefined;
+      const project = url.searchParams.get("project") ?? undefined;
+      const source = url.searchParams.get("source") ?? undefined;
+      const q = url.searchParams.get("q") ?? undefined;
+      if (q !== undefined && q.length > 200) return sendJson(res, 400, { error: "q must be at most 200 chars" });
+      const dueRaw = url.searchParams.get("dueBefore");
+      const dueBefore = dueRaw === null ? undefined : Number(dueRaw);
+      if (dueBefore !== undefined && !Number.isFinite(dueBefore)) return sendJson(res, 400, { error: "dueBefore must be epoch ms" });
+      try {
+        const todos = await o.todos.list({ ...(status ? { status } : {}), ...(project ? { project } : {}), ...(dueBefore !== undefined ? { dueBefore } : {}), ...(q ? { q } : {}), ...(source ? { source } : {}) });
+        return sendJson(res, 200, { todos, count: todos.length });
+      } catch {
+        return sendJson(res, 200, { todos: [], count: 0 });
+      }
+    }
+    const todoExport = /^\/api\/todos\/export$/.exec(path);
+    if (req.method === "GET" && todoExport) {
+      if (!o.todos) return sendJson(res, 501, { error: "todos not wired by this deployment" });
+      const format = url.searchParams.get("format") ?? "jsonl";
+      if (format !== "jsonl" && format !== "md") return sendJson(res, 400, { error: "format must be jsonl or md" });
+      const todos = await o.todos.list({});
+      const body =
+        format === "jsonl"
+          ? todos.map((t) => JSON.stringify(t)).join("\n") + (todos.length ? "\n" : "")
+          : ["# Todos", "", ...todos.map((t) => `- [${t.status === "done" ? "x" : " "}] ${t.title}${t.priority ? ` (${t.priority})` : ""}${t.dueAt ? ` due ${new Date(t.dueAt).toISOString().slice(0, 10)}` : ""}`), ""].join("\n");
+      res.writeHead(200, {
+        "content-type": format === "md" ? "text/markdown; charset=utf-8" : "application/x-ndjson; charset=utf-8",
+        "content-disposition": `attachment; filename="agentos-todos.${format}"`,
+        "content-length": Buffer.byteLength(body),
+      });
+      res.end(body);
+      return;
+    }
+    if (req.method === "POST" && path === "/api/todos") {
+      if (!o.todos) return sendJson(res, 501, { error: "todos not wired by this deployment" });
+      const body = await readJson(req);
+      if (!body || typeof body.title !== "string" || body.title.trim().length === 0) {
+        return sendJson(res, 400, { error: "title is required" });
+      }
+      const ts = Date.now();
+      const item: TodoItem = {
+        id: randomUUID(),
+        title: body.title.trim().slice(0, 300),
+        status: "todo",
+        ...(typeof body.project === "string" ? { project: body.project } : {}),
+        ...(typeof body.priority === "string" ? { priority: body.priority as TodoItem["priority"] } : {}),
+        ...(typeof body.dueAt === "number" ? { dueAt: body.dueAt } : {}),
+        sourceKind: (typeof body.sourceKind === "string" ? body.sourceKind : "manual") as TodoItem["sourceKind"],
+        ...(typeof body.sourceRef === "string" ? { sourceRef: body.sourceRef.slice(0, 500) } : {}),
+        createdAt: ts,
+        updatedAt: ts,
+      };
+      const checked = todoItemSchema.safeParse(item);
+      if (!checked.success) return sendJson(res, 400, { error: "invalid todo", issues: checked.error.issues.map((i) => i.message) });
+      const saved = await o.todos.write(checked.data);
+      auditTodo(o, "todo.add", saved.id);
+      return sendJson(res, 201, { todo: saved });
+    }
+    const todoOne = /^\/api\/todos\/([^/]+)$/.exec(path);
+    if (todoOne && (req.method === "PATCH" || req.method === "DELETE")) {
+      if (!o.todos) return sendJson(res, 501, { error: "todos not wired by this deployment" });
+      let id: string;
+      try {
+        id = decodeURIComponent(todoOne[1] ?? "");
+      } catch {
+        return sendJson(res, 400, { error: "undecodable id" });
+      }
+      if (id.length === 0 || id.length > 200) return sendJson(res, 400, { error: "invalid id" });
+      if (req.method === "DELETE") {
+        const removed = await o.todos.remove(id);
+        if (removed) auditTodo(o, "todo.remove", id);
+        return sendJson(res, removed ? 200 : 404, { ok: removed });
+      }
+      const existing = (await o.todos.list({})).find((t) => t.id === id);
+      if (!existing) return sendJson(res, 404, { error: "todo not found" });
+      const body = await readJson(req);
+      if (!body) return sendJson(res, 400, { error: "body required" });
+      const next: TodoItem = {
+        ...existing,
+        ...(typeof body.title === "string" && body.title.trim().length > 0 ? { title: body.title.trim().slice(0, 300) } : {}),
+        ...(typeof body.status === "string" ? { status: body.status as TodoItem["status"] } : {}),
+        ...(typeof body.priority === "string" ? { priority: body.priority as TodoItem["priority"] } : {}),
+        ...(typeof body.dueAt === "number" ? { dueAt: body.dueAt } : {}),
+        ...(typeof body.project === "string" ? { project: body.project } : {}),
+        updatedAt: Date.now(),
+      };
+      const checked = todoItemSchema.safeParse(next);
+      if (!checked.success) return sendJson(res, 400, { error: "invalid todo", issues: checked.error.issues.map((i) => i.message) });
+      const saved = await o.todos.write(checked.data);
+      auditTodo(o, "todo.update", saved.id);
+      return sendJson(res, 200, { todo: saved });
     }
     if (req.method === "GET" && path === "/api/kb/drafts") {
       if (!o.kbDrafts) return sendJson(res, 501, { error: "kb drafts not wired by this deployment" });

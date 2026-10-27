@@ -780,6 +780,29 @@ export async function runServeWeb(flags: ServeFlags): Promise<number> {
     knowledge: asm.value.knowledgeInfo ?? undefined,
     entry: { name: asm.value.entryName, confirm: REST_CAPABILITIES.confirm },
     dialect: selectDialect(modelLease),
+    todos: {
+      list: (filter) => {
+        const all = ledger.todoList({
+          ...(filter.status ? { status: filter.status as never } : {}),
+          ...(filter.project ? { project: filter.project } : {}),
+          ...(filter.dueBefore !== undefined ? { dueBefore: filter.dueBefore } : {}),
+        });
+        // #318 search + #316 source filter run over the bounded metadata.
+        return all.filter((t) => {
+          if (filter.source && t.sourceKind !== filter.source) return false;
+          if (!filter.q) return true;
+          const needle = filter.q.toLowerCase();
+          return (
+            t.title.toLowerCase().includes(needle) ||
+            t.status.toLowerCase().includes(needle) ||
+            (t.sourceKind ?? "").toLowerCase().includes(needle) ||
+            (t.project ?? "").toLowerCase().includes(needle)
+          );
+        });
+      },
+      write: (item) => ledger.todoWrite(item),
+      remove: (id) => ledger.todoDelete(id),
+    },
     kbDrafts: (() => {
       const km = asm.value.knowledge;
       if (!km || km.mount.type !== "path") return undefined;
