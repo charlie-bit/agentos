@@ -16,6 +16,7 @@ Start here, then follow the path that matches what you are doing.
 - [Contracts](contracts.md) — every interface and its one law
 - [Roles](agents.md) / [角色](agents.zh-CN.md) — the agent manifest, inheritance and fence
 - [Projects](projects.md) / [项目](projects.zh-CN.md) — templates (config) vs instances (data)
+- [External agents](external-agents.md) / [外部 agent](external-agents.zh-CN.md) — MCP is the only path
 - [Examples](../examples/README.md) — two complete, fictional presets
 
 ## Operating it

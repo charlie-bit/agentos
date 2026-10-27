@@ -535,20 +535,20 @@
 - [x] 405 项目搜索
 - [x] 406 示例项目
 - [x] 407 项目 docs
-- [ ] 408 外部 agent = tool manifest
-- [ ] 409 外部 agent manifest 规范
+- [x] 408 外部 agent = tool manifest — 仅有 MCP 工具路径(echo 外部进程实证)
+- [x] 409 接入规范 — docs/external-agents.md 双语清单(allowedTools 镜像/幂等/沙箱/drift)
 - [ ] 410 agent 步骤调外部 agent
-- [ ] 411 外部 agent 幂等保护
-- [ ] 412 外部 agent 健康可见
-- [ ] 413 外部 agent 生态位清单
+- [x] 411 幂等保护 — conformance 断言外部工具 echo 重试一次、bump 零重试(#205 执行器)
+- [x] 412 健康可见 — /healthz per-mount + /api/tools 覆盖外部挂载(#292/#290)
+- [x] 413 生态位清单 — onboarding 已知实现表 + 外部 agent 文档
 - [ ] 414 外部结果进待办
 - [ ] 415 外部结果落盘
 - [ ] 416 外部 agent 审计
-- [ ] 417 外部 agent 门禁
-- [ ] 418 外部 agent 与"基于 agent"边界
-- [ ] 419 外部 agent 示例
-- [ ] 420 外部 agent vs 角色对比文档
-- [ ] 421 外部 agent 故障隔离
+- [x] 417 外部工具受围栏 — canUseTool 围栏对所有 mcp__ 工具统一生效(含外部)
+- [x] 418 baseAgent 不可指向外部 — validate 拒绝指向 tool manifest 的 baseAgent(测试)
+- [x] 419 外部 agent 示例 — scripts/fixtures/echo-mcp-server.mjs + 纯 yml manifest,离线 e2e
+- [x] 420 对比文档 — docs/external-agents.md「两种形态」双语表
+- [x] 421 故障隔离 — planTools 环境降级(⚠+缺席)与步骤失败语义(#204/#362)
 - [ ] 422 外部 agent 使用计量
 - [ ] 423 场景模板库
 - [ ] 424 Home 视图
@@ -587,6 +587,8 @@
 - [ ] 457 v4 首跑演示脚本
 
 ## v4 执行记录（2026-10-27 起）
+
+- M35：外部 agent 文档双语文档(docs/external-agents*)落地；#408/#409/#411/#412/#413/#417/#418/#419/#420/#421 依既有实现与测试落账。仍开放：#410(工作流 tool 步骤不能直调 MCP 工具,如实报错)、#414(外部结果→todo 需真模型)、#415(跨进程大结果落盘)、#416(外部调用逐次审计)、#422(外部工具用量归因)——归入最后真实阶段。
 
 - 407 Projects 文档：`docs/projects.md` + 中文版（配置 vs 数据分界 Q&A——为什么 web 不能改模板、围栏语义、生命周期），索引双语链接。
 
