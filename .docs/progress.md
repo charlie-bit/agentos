@@ -484,7 +484,7 @@
 - [x] 354 步骤五型
 - [ ] 355 顺序执行
 - [x] 356 trigger 三型
-- [ ] 357 cron 解析（零依赖）
+- [x] 357 cron 解析（零依赖）
 - [ ] 358 workflow validate
 - [ ] 359 顺序执行器
 - [ ] 360 step 间上下文传递
@@ -587,6 +587,8 @@
 - [ ] 457 v4 首跑演示脚本
 
 ## v4 执行记录（2026-10-27 起）
+
+- 357 零依赖 cron：五字段 + 步长/区间/列表 + @hourly/@daily/@weekly/@monthly/@yearly；DOM/DOW 标准"两者皆限定时取或"规则；nextRunAfter 以分钟窗推进（4 年上界，覆盖闰日）；坏输入抛错。测试覆盖别名、*/15、办公时间、月末、2028-02-29。
 
 - 353/354/356 WorkflowManifest：五步骤型(agent/tool/skill/kb_search/human)与三触发器(manual/schedule/webhook)封闭 union，strict 拒绝未知型与多余字段；webhook 只接受 env 名。
 
