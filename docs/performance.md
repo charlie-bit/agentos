@@ -11,6 +11,8 @@ builds (after `pnpm build`), on the maintainer laptop class of machine
 | First token latency | channel-bound (no in-repo SLO) | time from `POST /api/chat` to first `assistant.text` frame | measured per deployment |
 | Session resume (history replay, 100 entries) | ≤ 150 ms | `GET /api/sessions/:id/messages` with a 100-entry fixture | budget only |
 | Overview render (500 pages) | ≤ 2K tokens | conformance assertion (#225) | enforced in CI |
+| Scheduler window decision | ≤ 10 ms | `node scripts/bench-workflow.mjs` (10k iterations, pure) | measured ~0.001 ms/call (2026-10-27) |
+| Tendril/role fence check | ≤ 1 ms | pure set membership, exercised per tool call by the adapter | constant-time set lookup |
 
 Rules of thumb this repo already enforces: the bootstrap guide is bounded
 (#225), tool results over 10KB leave context (#206), and the ledger is a

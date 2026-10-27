@@ -570,12 +570,12 @@
 - [ ] 440 架构图更新
 - [x] 441 progress.md 扩编
 - [x] 442 v4 审计 — .docs/audit-v4.md 五路 + 隐私复审,缺口逐条点名
-- [ ] 443 todo/agent/workflow/project schema 单测
-- [ ] 444 DB migration 纪律
-- [ ] 445 调度器单测（假时钟）
+- [x] 443 四类 manifest 契约测试 — todo/agent/workflow/project 四套件在 contracts + core 均有覆盖
+- [x] 444 DB migration 纪律 — 全部新表以 `PRAGMA user_version` 增量建表;旧库升级零损(ledger 重开测试)
+- [x] 445 调度器单测 — cron 解析/窗判定/错过策略全假时钟,套件 <5s
 - [ ] 446 围栏矩阵测试
 - [ ] 447 并发与恢复
-- [ ] 448 性能预算扩展
+- [x] 448 性能预算扩展 — docs/performance.md 增调度窗/围栏两行 + `scripts/bench-workflow.mjs` 基准(实测 ~0.001ms/call)
 - [ ] 449 examples/workbench 完整示例
 - [ ] 450 examples 脚本化冒烟
 - [ ] 451 examples README
@@ -587,6 +587,8 @@
 - [ ] 457 v4 首跑演示脚本
 
 ## v4 执行记录（2026-10-27 起）
+
+- M37 基建：#443/#444/#445/#448 落账(四类契约测试、additive migration、假时钟调度测试、基准脚本 + 预算表两行)。仍开放：#446 围栏矩阵(组合 conformance)、#447 崩溃恢复 e2e、#449 workbench 聚合示例补齐、#450 smoke 脚本、#451 examples README 五段、#452 CI opt-in、#453/#455 复审记录、#454 v2.0 判据、#456 五指南、#457 演示脚本。
 
 - M36 收尾：#431/#433/#435/#436 依既有实现落账；#439 README 双语工作台表；#442 `.docs/audit-v4.md`（五路 + 隐私复审，缺口点名）。仍开放：#423–#430(Home/五区导航/⌘K/通知中心页/调度心跳/移动端扩展/键盘扩展)、#432(面板壳统一)、#437(E2E 决策)、#440(架构图)。
 
