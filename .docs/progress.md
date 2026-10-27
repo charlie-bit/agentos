@@ -479,7 +479,7 @@
 - [ ] 349 角色使用统计
 - [x] 350 角色与会话列表关联
 - [ ] 351 角色删除边界
-- [ ] 352 角色 docs
+- [x] 352 角色 docs
 - [ ] 353 WorkflowManifest 契约
 - [ ] 354 步骤五型
 - [ ] 355 顺序执行
@@ -587,6 +587,8 @@
 - [ ] 457 v4 首跑演示脚本
 
 ## v4 执行记录（2026-10-27 起）
+
+- 352 角色指南：`docs/agents.md` + `docs/agents.zh-CN.md`（manifest 规则、继承语义、围栏、生命周期），docs/index 双语入口链接。
 
 - 340/350 角色标签：session 增 `agent` 列(additive user_version 迁移) + `setAgent`；角色 turn 自动打标；`GET /api/sessions?agent=` 过滤且 total 按过滤集计数;测试覆盖持久化与过滤/400。
 
