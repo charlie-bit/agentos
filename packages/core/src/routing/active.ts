@@ -20,6 +20,25 @@ export interface ActiveModel {
   source: "preset" | "channel" | "override";
 }
 
+/**
+ * Cross-endpoint fallback order (spec #26): declared names that actually
+ * resolve to model manifests, deduped, primary excluded. Unknown names are
+ * the validator's business (reference integrity), not routing's.
+ */
+export function fallbackManifestOrder(
+  primary: string,
+  declared: readonly string[] = [],
+  models: readonly ModelProviderManifest[] = [],
+): string[] {
+  const known = new Set(models.map((m) => m.name));
+  const out: string[] = [];
+  for (const name of declared) {
+    if (name === primary || !known.has(name) || out.includes(name)) continue;
+    out.push(name);
+  }
+  return out;
+}
+
 export type ResolveActiveResult = { ok: true; active: ActiveModel } | { ok: false; errors: ManifestError[] };
 
 export function resolveActiveModel(args: {

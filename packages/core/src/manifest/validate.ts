@@ -114,6 +114,25 @@ export function validatePresetRefs(
       }
     });
 
+    (manifest.fallbackModels ?? []).forEach((ref, i) => {
+      const found = byName.get(ref);
+      if (!found) {
+        errors.push({
+          source,
+          category: REF,
+          path: `fallbackModels.${i}`,
+          message: `references model manifest ${JSON.stringify(ref)}, which no manifest declares`,
+        });
+      } else if (found.kind !== "model") {
+        errors.push({
+          source,
+          category: REF,
+          path: `fallbackModels.${i}`,
+          message: `references ${JSON.stringify(ref)} as a model, but that name is a ${JSON.stringify(found.kind)} manifest`,
+        });
+      }
+    });
+
     for (const [channel, target] of Object.entries(manifest.channels ?? {})) {
       if (!entryNames.has(target)) {
         errors.push({

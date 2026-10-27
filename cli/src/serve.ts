@@ -18,6 +18,7 @@ import {
   planTools,
   openLedger,
   ledgerPathFromEnv,
+  fallbackManifestOrder,
   resolveActiveModel,
   HealthGate,
   selectDialect,
@@ -78,6 +79,8 @@ export interface Assembly {
   /** Preset-declared gates (spec #163/#164); absent = unlimited. */
   budgetUsd?: number;
   maxConcurrentSessions?: number;
+  /** Declared cross-endpoint fallback order (spec #26). */
+  fallbackModels?: string[];
   repoRoot: string;
 }
 
@@ -264,6 +267,7 @@ export function assemble(flags: ServeFlags): { ok: true; value: Assembly } | { o
       channelRoutes: preset.channels ?? {},
       ...(preset.budgetUsd !== undefined ? { budgetUsd: preset.budgetUsd } : {}),
       ...(preset.maxConcurrentSessions !== undefined ? { maxConcurrentSessions: preset.maxConcurrentSessions } : {}),
+      ...(preset.fallbackModels ? { fallbackModels: preset.fallbackModels } : {}),
       repoRoot,
     },
   };
@@ -289,17 +293,34 @@ async function routeModel(flags: ServeFlags, asm: Assembly): Promise<{ ok: true;
   const { manifest } = active.active;
 
   const gate = new HealthGate(async (m) => dialects[selectDialect(m)].healthCheck(m));
-  const picked = await gate.pick(manifest, active.active.alias);
+  let picked = await gate.pick(manifest, active.active.alias);
+  let chosen = manifest;
+  // Cross-endpoint fallback (spec #26): declared preset.fallbackModels, in
+  // order, only after the primary has NO healthy alias. Explicit, never silent.
+  if (!picked.ok) {
+    for (const name of fallbackManifestOrder(manifest.name, asm.fallbackModels, asm.allModels)) {
+      const candidate = asm.allModels.find((m) => m.name === name);
+      if (!candidate) continue;
+      const attempt = await gate.pick(candidate);
+      if (attempt.ok) {
+        write(`⚠ model fallback: "${manifest.name}" unhealthy → "${candidate.name}" (declared preset.fallbackModels)\n`);
+        chosen = candidate;
+        picked = attempt;
+        break;
+      }
+    }
+  }
   if (!picked.ok) {
     return {
       ok: false,
       exitCode: 1,
       lines: [
-        `✗ no healthy alias for model manifest "${manifest.name}":`,
+        `✗ no healthy alias for model manifest "${manifest.name}"${asm.fallbackModels?.length ? " (and declared fallbacks are unhealthy)" : ""}:`,
         ...Object.entries(picked.probes).map(([alias, r]) => `    ${alias}: ${r.ok ? "ok" : (r.reason ?? "probe failed")}`),
       ],
     };
   }
+  const effectiveManifest = chosen;
 
   const smokeLease = process.env.AGENTOS_SMOKE_BASE_URL
     ? { baseUrlEnv: "AGENTOS_SMOKE_BASE_URL", credentialsEnv: "AGENTOS_SMOKE_API_KEY" }
@@ -316,11 +337,11 @@ async function routeModel(flags: ServeFlags, asm: Assembly): Promise<{ ok: true;
     ok: true,
     value: {
       lease,
-      manifestName: manifest.name,
-      provider: manifest.provider,
+      manifestName: effectiveManifest.name,
+      provider: effectiveManifest.provider,
       alias: picked.alias,
       modelId: picked.modelId,
-      usageAttr: manifest.usageAttr,
+      usageAttr: effectiveManifest.usageAttr,
     },
   };
 }
@@ -633,8 +654,16 @@ export async function runServeWeb(flags: ServeFlags): Promise<number> {
       const workspaceDir = join(asm.value.repoRoot, ".agentos", "workspaces", ctx.externalKey);
       mkdirSync(workspaceDir, { recursive: true });
       const kb = await wireKnowledge(asm.value, ctx.confirm, workspaceDir, REST_CAPABILITIES.confirm);
+      // Request-level override (#115): re-resolve through the same three-layer
+      // routing; an unknown name fails the turn rather than silently ignoring.
+      const effective = ctx.modelOverride
+        ? await routeModel({ preset: flags.preset, model: ctx.modelOverride, web: true }, asm.value)
+        : { ok: true as const, value: routed.value };
+      if (!effective.ok) {
+        throw new Error(`model override rejected: ${effective.lines.join(" ")}`);
+      }
       const out = await runTurn({
-        model: modelLease,
+        model: effective.value.lease,
         prompt: ctx.prompt,
         signal: ctx.signal,
         toolMounts: kb ? [...plans, kb.plan] : plans,
@@ -647,7 +676,7 @@ export async function runServeWeb(flags: ServeFlags): Promise<number> {
       });
       // server-side attribution: stdout line + usage.log. The web UI is frozen
       // for P5.1 visual review — attribution display there waits for that verdict.
-      const attr = attributionFor(out, routed.value, presetName, ctx.externalKey);
+      const attr = attributionFor(out, effective.value, presetName, ctx.externalKey);
       write(`${formatAttributionLine(attr)}\n`);
       appendAttribution(attr);
       // Operational log (spec #124/#292): metadata only — session key, model

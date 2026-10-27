@@ -166,3 +166,25 @@ describe("channel routing table (spec #212)", () => {
     expect(r.lines.join("\n")).toContain("ghost-kernel");
   });
 });
+
+describe("declared cross-endpoint fallback (spec #26)", () => {
+  const manifests = {
+    "knowledge/k.yml": ["kind: knowledge", 'version: "1"', "name: k", "provider: markdown", "mount: { type: path, path: ./kb }", ""].join("\n"),
+    "models/a.yml": ["kind: model", 'version: "1"', "name: a", "provider: va", "models: { g: a-real }", ""].join("\n"),
+    "models/b.yml": ["kind: model", 'version: "1"', "name: b", "provider: vb", "models: { g: b-real }", ""].join("\n"),
+  };
+  const preset = (extra: string[]) =>
+    ["kind: preset", 'version: "1"', "name: p", "knowledge: k", "model: a", "tools: []", "entry: cli", ...extra, ""].join("\n");
+
+  it("accepts a declared fallback that resolves to a model manifest", async () => {
+    const dir = makeTempConfig({ ...manifests, "presets/p.yml": preset(["fallbackModels: [b]"]) });
+    expect((await run(["preset", "validate", join(dir, "presets/p.yml")])).exitCode).toBe(0);
+  });
+
+  it("a dangling fallback names fallbackModels.<i>", async () => {
+    const dir = makeTempConfig({ ...manifests, "presets/p.yml": preset(["fallbackModels: [ghost]"]) });
+    const r = await run(["preset", "validate", join(dir, "presets/p.yml")]);
+    expect(r.exitCode).toBe(1);
+    expect(r.lines.join("\n")).toContain("fallbackModels.0");
+  });
+});

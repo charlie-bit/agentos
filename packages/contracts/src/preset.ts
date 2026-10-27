@@ -47,6 +47,13 @@ export const presetSchema = manifestEnvelopeSchema.extend({
    * running turns; further turns queue (FIFO) instead of failing.
    */
   maxConcurrentSessions: z.number().int().min(1).max(64).optional(),
+  /**
+   * Cross-endpoint fallback (spec #26): model manifest names tried IN ORDER
+   * when every alias of the primary manifest is unhealthy. Alias-level
+   * fallback stays inside a manifest (fallbackChain); this field is the
+   * explicit, declared escape across endpoints — never an implicit one.
+   */
+  fallbackModels: z.array(z.string().min(1)).optional(),
 });
 
 export type Preset = z.infer<typeof presetSchema>;
