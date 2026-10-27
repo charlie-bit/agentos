@@ -181,6 +181,19 @@ export const commitKbDraft = (receiptId: string) =>
 export const discardKbDraft = (receiptId: string) =>
   jpost<{ ok: boolean }>(`/api/kb/drafts/${encodeURIComponent(receiptId)}/discard`, {});
 
+/** Role catalogue (spec #342/#343). */
+export interface AgentInfo {
+  name: string;
+  baseAgent?: string;
+  chain: string[];
+  promptPreview: string;
+  tools: string[];
+  knowledge?: string;
+  model?: string;
+  manifestPath: string | null;
+}
+export const getAgents = () => jget<{ agents: AgentInfo[] }>("/api/agents");
+
 /** Todo data plane (spec #319/#320). */
 export interface Todo {
   id: string;

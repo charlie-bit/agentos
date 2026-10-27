@@ -470,7 +470,7 @@
 - [ ] 340 角色 hydrate
 - [x] 341 角色中止与门禁
 - [x] 342 `GET /api/agents`
-- [ ] 343 AgentsPanel 前端
+- [x] 343 AgentsPanel 前端
 - [ ] 344 角色场景卡
 - [ ] 345 agents validate 触发
 - [x] 346 角色脚手架
@@ -587,6 +587,8 @@
 - [ ] 457 v4 首跑演示脚本
 
 ## v4 执行记录（2026-10-27 起）
+
+- 343 AgentsPanel：`/api/agents` 卡片（名字/self|inherits/根→叶链/围栏摘要/manifest 路径），点击回调预留开角色 turn；链与围栏格式化是纯函数并有测试。
 
 - 352 角色指南：`docs/agents.md` + `docs/agents.zh-CN.md`（manifest 规则、继承语义、围栏、生命周期），docs/index 双语入口链接。
 

@@ -17,6 +17,7 @@ import { ToolsPanel } from "./components/ToolsPanel";
 import { EscalationsPanel } from "./components/EscalationsPanel";
 import { TimelinePanel } from "./components/TimelinePanel";
 import { TodoPanel } from "./components/TodoPanel";
+import { AgentsPanel } from "./components/AgentsPanel";
 import { UsageBar } from "./components/UsageBar";
 
 /** Sidebar polling cadence — a session running from another tab/device must
@@ -39,6 +40,7 @@ export default function App() {
   const [showSidebar, setShowSidebar] = useState(false); // mobile drawer (spec #265)
   const [showTimeline, setShowTimeline] = useState(false);
   const [showTodos, setShowTodos] = useState(false);
+  const [showAgents, setShowAgents] = useState(false);
   const [clearNonce, setClearNonce] = useState(0);
 
   const refresh = useCallback(async () => {
@@ -114,6 +116,7 @@ export default function App() {
         onToggleEscalations={() => setShowEscalations((v) => !v)}
         onToggleTimeline={() => setShowTimeline((v) => !v)}
         onToggleTodos={() => setShowTodos((v) => !v)}
+        onToggleAgents={() => setShowAgents((v) => !v)}
       />
       <div className="flex min-h-0 flex-1">
         <button
@@ -166,6 +169,7 @@ export default function App() {
             {showEscalations && <EscalationsPanel onClose={() => setShowEscalations(false)} />}
             {showTimeline && <TimelinePanel state={state} onClose={() => setShowTimeline(false)} />}
             {showTodos && <TodoPanel onClose={() => setShowTodos(false)} />}
+            {showAgents && <AgentsPanel onClose={() => setShowAgents(false)} />}
           </div>
         </div>
       </div>
