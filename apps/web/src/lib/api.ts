@@ -232,9 +232,10 @@ export const getWorkflowRuns = (name: string) => jget<{ runs: WorkflowRun[] }>(`
 export interface WorkflowStepOutcome { index: number; type: string; status: "ok" | "error" | "denied" | "skipped"; durationMs: number; error?: string }
 export const getWorkflowRun = (id: string) =>
   jget<{ run: WorkflowRun; steps: WorkflowStepOutcome[] }>(`/api/workflows/runs/${encodeURIComponent(id)}`);
-export const runWorkflow = (name: string, resumeFrom?: number) =>
+export const runWorkflow = (name: string, resumeFrom?: number, project?: string) =>
   jpost<{ ok: boolean; runId?: string; reason?: string }>(`/api/workflows/${encodeURIComponent(name)}/run`, {
     ...(resumeFrom !== undefined ? { resumeFrom } : {}),
+    ...(project !== undefined ? { project } : {}),
   });
 
 /** Usage aggregate (spec #291/#349): metadata only, grouped per provider/model/agent. */

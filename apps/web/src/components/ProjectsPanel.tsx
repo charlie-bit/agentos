@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { FolderKanban, Plus, Trash2 } from "lucide-react";
+import { runWorkflow } from "../lib/api";
 import {
   createProjectInstance,
   deleteProjectInstance,
@@ -142,8 +143,22 @@ export function ProjectsPanel({ onClose }: { onClose: () => void }) {
                     {tab === "runs" && dashboard.runs.length === 0 && <li>no runs yet</li>}
                   </ul>
                   {dashboard.template && (
-                    <div className="mt-1 text-muted-foreground">
-                      fence: agents [{dashboard.template.agents.join(", ") || "—"}] · workflows [{dashboard.template.workflows.join(", ") || "—"}]
+                    <div className="mt-1 space-y-0.5 text-muted-foreground">
+                      <div>fence: agents [{dashboard.template.agents.join(", ") || "—"}]</div>
+                      <div className="flex flex-wrap items-center gap-1">
+                        workflows:
+                        {dashboard.template.workflows.length === 0 && <span>—</span>}
+                        {dashboard.template.workflows.map((w) => (
+                          <button
+                            key={w}
+                            className="rounded border border-border px-1 hover:bg-card"
+                            title={`run ${w} in this project`}
+                            onClick={() => void runWorkflow(w, undefined, i.id).then(refresh)}
+                          >
+                            run {w}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
