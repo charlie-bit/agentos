@@ -138,6 +138,8 @@ export interface StartServerOptions {
    * this route only bounds and forwards.
    */
   logs?: (q: { lines?: number }) => Array<{ name: string; lines: string[] }> | Promise<Array<{ name: string; lines: string[] }>>;
+  /** Read-only role catalogue (spec #342). Absent = 501. */
+  agents?: () => AgentInfo[] | Promise<AgentInfo[]>;
   /**
    * Todo data plane (spec #319/#320): user data, web-writable (ruling A).
    * Absent = 501. The entry never invents a todo shape — contracts validates.
@@ -219,6 +221,20 @@ export interface KbDraftSummary {
   title: string;
   preview: string;
   createdAtMs: number | null;
+}
+
+/** One mounted role as management surfaces reveal it (#342): read-only disclosure. */
+export interface AgentInfo {
+  name: string;
+  baseAgent?: string;
+  /** Root → leaf inheritance chain (#343 visualization). */
+  chain: string[];
+  /** First 200 chars of the role's own prompt — never the full text on the wire. */
+  promptPreview: string;
+  tools: string[];
+  knowledge?: string;
+  model?: string;
+  manifestPath: string | null;
 }
 
 export interface ServerHealth {
@@ -1011,6 +1027,15 @@ export async function startServer(o: StartServerOptions): Promise<RunningServer>
         return sendJson(res, 200, { files: Array.isArray(files) ? files : [] });
       } catch {
         return sendJson(res, 200, { files: [] });
+      }
+    }
+    if (req.method === "GET" && path === "/api/agents") {
+      if (!o.agents) return sendJson(res, 501, { error: "agent catalogue not wired by this deployment" });
+      try {
+        const agents = await o.agents();
+        return sendJson(res, 200, { agents: Array.isArray(agents) ? agents : [] });
+      } catch {
+        return sendJson(res, 200, { agents: [] });
       }
     }
     if (req.method === "GET" && path === "/api/todos") {

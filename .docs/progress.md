@@ -469,7 +469,7 @@
 - [x] 339 "自己"语义
 - [ ] 340 角色 hydrate
 - [x] 341 角色中止与门禁
-- [ ] 342 `GET /api/agents`
+- [x] 342 `GET /api/agents`
 - [ ] 343 AgentsPanel 前端
 - [ ] 344 角色场景卡
 - [ ] 345 agents validate 触发
@@ -587,6 +587,8 @@
 - [ ] 457 v4 首跑演示脚本
 
 ## v4 执行记录（2026-10-27 起）
+
+- 342 角色目录端点：`GET /api/agents` 只读披露（名字/基座链/提示预览/tools/knowledge/model/manifest 路径），serve 从挂载点与 `resolveAgent` 派生；未接线 501。
 
 - M32 运行时：`/api/chat` 接受 `agent`（请求级），serve 解析角色链 → 拼接 systemPrompt + `toolAllowlist` 围栏（canUseTool + 预批准列表双消费）；usage attribution/`/api/usage` 增 agent 维度；无角色路径零改动（现有套件回归）；角色 turn 的 abort/confirm 复用既有基建。
 

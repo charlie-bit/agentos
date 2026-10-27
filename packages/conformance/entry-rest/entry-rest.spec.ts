@@ -1578,3 +1578,37 @@ describe("role turn plumbing (spec #335/#341)", () => {
     expect(frames.some((f) => f.type === "session.meta")).toBe(true);
   });
 });
+
+describe("GET /api/agents (spec #342)", () => {
+  it("returns the read-only role catalogue with chains; unwired is 501", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "agentos-agents-api-"));
+    tempDirs.push(dir);
+    const dbPath = join(dir, "sessions.db");
+    const srv = await startServer({
+      presetName: "p",
+      model: { provider: "v" },
+      mounts: [],
+      runner: async () => ({}),
+      ledger: openLedger(dbPath),
+      port: 0,
+      dbPath,
+      staticDir: makeStaticDir(dir),
+      agents: () => [
+        {
+          name: "analyst",
+          baseAgent: "base",
+          chain: ["base", "analyst"],
+          promptPreview: "You are an analyst.",
+          tools: ["kb_search"],
+          manifestPath: "config/agents/analyst.yml",
+        },
+      ],
+    });
+    servers.push(srv);
+    const body = (await (await api(srv, "/api/agents")).json()) as { agents: Array<{ name: string; chain: string[] }> };
+    expect(body.agents[0]).toMatchObject({ name: "analyst", chain: ["base", "analyst"] });
+
+    const unwired = await boot(async () => ({}));
+    expect((await api(unwired.srv, "/api/agents")).status).toBe(501);
+  });
+});

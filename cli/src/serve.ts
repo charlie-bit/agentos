@@ -80,6 +80,8 @@ export interface Assembly {
   entryName: string;
   /** Mounted role manifests by name (spec #328; preset.agents = the advertised subset). */
   agents: Map<string, AgentManifest>;
+  /** Role name -> repo-relative manifest path (#342 read-only disclosure). */
+  agentManifestPaths: Record<string, string>;
   /** channel -> entry adapter routes (spec #212), defaulting to entryName. */
   channelRoutes: Record<string, string>;
   /** Preset-declared gates (spec #163/#164); absent = unlimited. */
@@ -270,6 +272,10 @@ export function assemble(flags: ServeFlags): { ok: true; value: Assembly } | { o
   for (const l of loaded) {
     if (l.manifest.kind === "tool") toolManifestPaths[l.manifest.name] = relative(repoRoot, resolve(l.source));
   }
+  const agentManifestPaths: Record<string, string> = {};
+  for (const l of loaded) {
+    if (l.manifest.kind === "agent") agentManifestPaths[l.manifest.name] = relative(repoRoot, resolve(l.source));
+  }
   const knowledgeLoaded = loaded.find((l) => l.manifest.kind === "knowledge" && l.manifest.name === preset.knowledge);
   const knowledgeInfo = knowledgeLoaded
     ? {
@@ -310,6 +316,7 @@ export function assemble(flags: ServeFlags): { ok: true; value: Assembly } | { o
       toolManifestPaths,
       ...(knowledgeInfo ? { knowledgeInfo } : {}),
       entryName: preset.entry,
+      agentManifestPaths,
       agents: new Map<string, AgentManifest>(
         manifests
           .filter((m): m is AgentManifest => m.kind === "agent")
@@ -796,6 +803,20 @@ export async function runServeWeb(flags: ServeFlags): Promise<number> {
     knowledge: asm.value.knowledgeInfo ?? undefined,
     entry: { name: asm.value.entryName, confirm: REST_CAPABILITIES.confirm },
     dialect: selectDialect(modelLease),
+    agents: () =>
+      [...asm.value.agents.values()].map((m) => {
+        const resolved = resolveAgent(m.name, asm.value.agents);
+        return {
+          name: m.name,
+          ...(m.baseAgent ? { baseAgent: m.baseAgent } : {}),
+          chain: resolved.chain,
+          promptPreview: m.systemPrompt.slice(0, 200),
+          tools: resolved.tools,
+          ...(resolved.knowledge ? { knowledge: resolved.knowledge } : {}),
+          ...(resolved.model ? { model: resolved.model } : {}),
+          manifestPath: asm.value.agentManifestPaths[m.name] ?? null,
+        };
+      }),
     todos: {
       list: (filter) => {
         const all = ledger.todoList({

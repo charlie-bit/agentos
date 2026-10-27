@@ -31,6 +31,7 @@ function assembly(knowledgeRoot: string): Assembly {
     entryName: "cli",
     channelRoutes: {},
     agents: new Map(),
+    agentManifestPaths: {},
     repoRoot: knowledgeRoot,
   };
 }
