@@ -580,13 +580,15 @@
 - [ ] 450 examples 脚本化冒烟
 - [x] 451 examples README — 双语五件套逐段「是什么/为什么是 yml」
 - [x] 452 CI opt-in — Workbench smoke job(vars.AGENTOS_WORKBENCH_SMOKE=on)跑 preset/projects validate + kb lint
-- [ ] 453 M20 边界复审
+- [x] 453 M20 边界复审 — .docs/review-m20.md(八条逐一复核,零新增违规)
 - [x] 454 v2.0 判据 — roadmap 写死:1–457 全绿(v1.0 维持 1–307),同一台账计数
-- [ ] 455 隐私复审
-- [ ] 456 文档站扩编
-- [ ] 457 v4 首跑演示脚本
+- [x] 455 隐私复审 — .docs/review-privacy.md(R1–R9 逐条:机制而非意图)
+- [x] 456 五指南 — docs/index 收拢 presets/agents/projects/external-agents/contracts 五份双语指南
+- [x] 457 演示脚本 — scripts/demo-workbench.mjs 五段离线演示(validate/kb lint/bench/跨运行时),一条命令全绿
 
 ## v4 执行记录（2026-10-27 起）
+
+- M37 复审与演示：#453 边界复审、#455 隐私复审落 .docs；#456 docs/index 收拢五指南；#457 demo-workbench.mjs 五段离线演示。剩余开放：#446 围栏矩阵、#447 崩溃恢复 e2e、#450 workbench-smoke 脚本；M36 的 #423–#430/#432/#437/#440 与 M35 的 #410/#414/#415/#416/#422 保留(真实阶段/未建面)。
 
 - M37 收尾：#449 聚合示例、#451 examples 双语 README、#452 CI opt-in、#454 v2.0 判据落文。仍开放：#446 围栏矩阵、#447 崩溃恢复 e2e、#450 workbench-smoke 脚本、#453/#455 复审记录、#456 五指南(现为 contracts/presets/agents/projects/external-agents 五份,需在 index 收拢)、#457 演示脚本。
 

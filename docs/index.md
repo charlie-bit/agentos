@@ -10,6 +10,14 @@ Start here, then follow the path that matches what you are doing.
 - [Deployment](deploy.md) — local, container, data directory
 - [Security](../SECURITY.md) — promises, disclosure, the 127.0.0.1 boundary
 
+## The five authoring guides
+
+1. [Presets](presets.md) — the four-slot convergence file
+2. [Roles](agents.md) — prompts, inheritance, tool fence
+3. [Projects](projects.md) — templates vs instances, the 400 boundary
+4. [External agents](external-agents.md) — MCP is the only path
+5. [Contracts](contracts.md) — every interface and its one law
+
 ## Extending it
 
 - [Onboarding](onboarding.md) — the four sockets + the conformance gate
