@@ -77,7 +77,28 @@ export interface Ledger {
   todoWrite(item: TodoItem): TodoItem;
   todoList(filter?: { status?: TodoStatus; project?: string; dueBefore?: number }): TodoItem[];
   todoDelete(id: string): boolean;
+  /** Workflow instance verbs (#364) — additive table, DB truth. */
+  workflowRunCreate(run: WorkflowRunRow): WorkflowRunRow;
+  workflowRunUpdate(id: string, patch: Partial<Pick<WorkflowRunRow, "status" | "endedAtMs" | "steps" | "resumeFrom" | "error">>): WorkflowRunRow;
+  workflowRunGet(id: string): WorkflowRunRow | undefined;
+  workflowRunList(filter?: { workflow?: string; project?: string; status?: WorkflowRunStatus }): WorkflowRunRow[];
   close(): void;
+}
+
+/** Workflow instance state (#364): DB state, survives restarts. */
+export type WorkflowRunStatus = "pending" | "running" | "done" | "error" | "aborted";
+export interface WorkflowRunRow {
+  id: string;
+  workflow: string;
+  status: WorkflowRunStatus;
+  trigger: string;
+  project: string | null;
+  startedAtMs: number;
+  endedAtMs: number | null;
+  /** Persisted StepOutcome[] (bounded; pointers for large outputs). */
+  steps: unknown;
+  resumeFrom: number | null;
+  error: string | null;
 }
 
 export interface TodoFilter {
@@ -102,6 +123,27 @@ interface DbRow {
   last_active_ms: number;
   title: string | null;
   agent: string | null;
+}
+
+function toRunRow(r: Record<string, unknown>): WorkflowRunRow {
+  let steps: unknown = [];
+  try {
+    steps = JSON.parse(String(r.steps ?? "[]"));
+  } catch {
+    steps = [];
+  }
+  return {
+    id: String(r.id),
+    workflow: String(r.workflow),
+    status: String(r.status) as WorkflowRunStatus,
+    trigger: String(r.trigger),
+    project: (r.project as string | null) ?? null,
+    startedAtMs: Number(r.started_at_ms),
+    endedAtMs: r.ended_at_ms === null || r.ended_at_ms === undefined ? null : Number(r.ended_at_ms),
+    steps,
+    resumeFrom: r.resume_from === null || r.resume_from === undefined ? null : Number(r.resume_from),
+    error: (r.error as string | null) ?? null,
+  };
 }
 
 function toRow(r: DbRow): SessionRow {
@@ -168,6 +210,23 @@ export function openLedger(dbPath: string = ledgerPathFromEnv()): Ledger {
       )`,
     );
     db.exec("PRAGMA user_version = 1");
+  }
+  if (schemaVersion < 2) {
+    db.exec(
+      `CREATE TABLE IF NOT EXISTS workflow_runs (
+        id TEXT PRIMARY KEY,
+        workflow TEXT NOT NULL,
+        status TEXT NOT NULL CHECK (status IN ('pending','running','done','error','aborted')),
+        trigger TEXT NOT NULL,
+        project TEXT,
+        started_at_ms INTEGER NOT NULL,
+        ended_at_ms INTEGER,
+        steps TEXT NOT NULL DEFAULT '[]',
+        resume_from INTEGER,
+        error TEXT
+      )`,
+    );
+    db.exec("PRAGMA user_version = 2");
   }
 
   const mustExist = (id: string, changes: number | bigint) => {
@@ -298,6 +357,44 @@ export function openLedger(dbPath: string = ledgerPathFromEnv()): Ledger {
     },
     deleteSession(id: string) {
       mustExist(id, db.prepare("DELETE FROM sessions WHERE id = ?").run(id).changes);
+    },
+    workflowRunCreate(run) {
+      db.prepare(
+        `INSERT INTO workflow_runs (id, workflow, status, trigger, project, started_at_ms, ended_at_ms, steps, resume_from, error)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ).run(run.id, run.workflow, run.status, run.trigger, run.project, run.startedAtMs, run.endedAtMs, JSON.stringify(run.steps ?? []), run.resumeFrom, run.error);
+      return run;
+    },
+    workflowRunUpdate(id, patch) {
+      const existing = this.workflowRunGet(id);
+      if (!existing) throw new Error(`workflow run not found: ${id}`);
+      const next: WorkflowRunRow = {
+        ...existing,
+        ...(patch.status !== undefined ? { status: patch.status } : {}),
+        ...(patch.endedAtMs !== undefined ? { endedAtMs: patch.endedAtMs } : {}),
+        ...(patch.steps !== undefined ? { steps: patch.steps } : {}),
+        ...(patch.resumeFrom !== undefined ? { resumeFrom: patch.resumeFrom } : {}),
+        ...(patch.error !== undefined ? { error: patch.error } : {}),
+      };
+      db.prepare(
+        `UPDATE workflow_runs SET status = ?, ended_at_ms = ?, steps = ?, resume_from = ?, error = ? WHERE id = ?`,
+      ).run(next.status, next.endedAtMs, JSON.stringify(next.steps ?? []), next.resumeFrom, next.error, id);
+      return next;
+    },
+    workflowRunGet(id) {
+      const r = db.prepare("SELECT * FROM workflow_runs WHERE id = ?").get(id) as Record<string, unknown> | undefined;
+      return r ? toRunRow(r) : undefined;
+    },
+    workflowRunList(filter = {}) {
+      const where: string[] = [];
+      const params: string[] = [];
+      if (filter.workflow) { where.push("workflow = ?"); params.push(filter.workflow); }
+      if (filter.project) { where.push("project = ?"); params.push(filter.project); }
+      if (filter.status) { where.push("status = ?"); params.push(filter.status); }
+      const rows = db
+        .prepare(`SELECT * FROM workflow_runs${where.length ? ` WHERE ${where.join(" AND ")}` : ""} ORDER BY started_at_ms DESC`)
+        .all(...params) as Array<Record<string, unknown>>;
+      return rows.map(toRunRow);
     },
     close() {
       db.close();

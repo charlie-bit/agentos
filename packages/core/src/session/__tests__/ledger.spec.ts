@@ -238,3 +238,30 @@ describe("session role tag (spec #340)", () => {
     b.close();
   });
 });
+
+describe("workflow instance state (spec #364)", () => {
+  it("persists status transitions and step outcomes across reopen", () => {
+    const dir = mkdtempSync(join(tmpdir(), "agentos-wfrun-"));
+    tempDirs.push(dir);
+    const dbPath = join(dir, "sessions.db");
+    const a = openLedger(dbPath);
+    a.workflowRunCreate({ id: "run-1", workflow: "daily-brief", status: "running", trigger: "schedule", project: "proj-1", startedAtMs: 10, endedAtMs: null, steps: [], resumeFrom: null, error: null });
+    a.workflowRunUpdate("run-1", { status: "error", endedAtMs: 20, error: "step 2 failed", resumeFrom: 2, steps: [{ index: 0, status: "ok" }] });
+    a.close();
+
+    const b = openLedger(dbPath);
+    const row = b.workflowRunGet("run-1");
+    expect(row).toMatchObject({ status: "error", resumeFrom: 2, error: "step 2 failed", project: "proj-1" });
+    expect(row?.steps).toEqual([{ index: 0, status: "ok" }]);
+    expect(b.workflowRunList({ workflow: "daily-brief" })).toHaveLength(1);
+    expect(b.workflowRunList({ status: "done" })).toEqual([]);
+    expect(b.workflowRunList({ project: "other" })).toEqual([]);
+    b.close();
+  });
+
+  it("updating an unknown run fails loudly", () => {
+    const led = freshLedger();
+    expect(() => led.workflowRunUpdate("ghost", { status: "done" })).toThrow(/not found/);
+    led.close();
+  });
+});

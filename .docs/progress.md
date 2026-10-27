@@ -491,7 +491,7 @@
 - [x] 361 human-in-the-loop 步骤
 - [x] 362 失败语义
 - [ ] 363 幂等与重试
-- [ ] 364 workflow 状态机
+- [x] 364 workflow 状态机
 - [ ] 365 abort 联动
 - [ ] 366 并发上限
 - [ ] 367 调度窗检查
@@ -587,6 +587,8 @@
 - [ ] 457 v4 首跑演示脚本
 
 ## v4 执行记录（2026-10-27 起）
+
+- 364 实例状态机：`workflow_runs` 表(additive user_version 2) + create/update/get/list 动词；状态 pending/running/done/error/aborted、steps 快照、resumeFrom、project/trigger 标签；重启后可查。测试覆盖状态迁移与三类过滤。
 
 - 359–362 执行器：`runWorkflow` 五型步骤依序执行、`{prev}` 注入、>1KB 结果走 offload 指针、human 拒绝即停、失败保留已完成步并可 `resumeFrom` 重续、AbortSignal 协作取消；`resumeIndex` 给出重续点。全部依赖注入，内核零领域解析。
 
