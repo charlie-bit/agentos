@@ -10,6 +10,7 @@ import { runKbGate } from "./kb-gate.js";
 import { runKbLint } from "./kb-lint.js";
 import { runKbStale } from "./kb-stale.js";
 import { runDataExport, runDataGc, runDataImport } from "./data.js";
+import { runAgentsExport, runAgentsScaffold } from "./agents.js";
 
 const USAGE = [
   "agentos — pluggable agent platform (P5)",
@@ -25,6 +26,8 @@ const USAGE = [
   "  agentos kb lint <dir> [--json] [--strict]  frontmatter conformance (exit 1 = errors)",
   "  agentos kb stale [<dir>]                    re-verification queue (most overdue first)",
   "  agentos agents validate <file-or-dir>         load + reference-check agent roles",
+  "  agentos agents scaffold <name>                write a skeleton role yml",
+  "  agentos agents export <name> [--out <file>]   print/write a role yml (share or back up)",
   "  agentos data export <file.json>             bundle sessions + logs + drafts (no transcripts)",
   "  agentos data import <file.json>             restore a bundle (idempotent by external key)",
   "  agentos data gc [--keep-days N] [--dry-run] age out drafts/logs/workspaces",
@@ -64,12 +67,14 @@ export async function run(argv: readonly string[]): Promise<CliResult> {
     }
     case "agents": {
       const [sub, ...args] = rest;
+      if (sub === "scaffold") return runAgentsScaffold(args);
+      if (sub === "export") return runAgentsExport(args);
       if (sub === "validate") {
         const target = args[0];
         if (!target || target.startsWith("-")) return { exitCode: 2, lines: ["✗ agents validate requires <file-or-dir>"] };
         return runPresetValidate(target); // same loader path: agent kind is routed (#332)
       }
-      return { exitCode: 2, lines: ["✗ unknown agents subcommand (try: agents validate)"] };
+      return { exitCode: 2, lines: ["✗ unknown agents subcommand (try: agents validate | scaffold | export)"] };
     }
     case "data": {
       const [sub, ...args] = rest;
