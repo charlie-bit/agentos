@@ -588,6 +588,8 @@
 
 ## v4 执行记录（2026-10-27 起）
 
+- serve 接线（#372–#374 的真实数据源）：workflow 目录按 preset.workflows 收窄挂载；`/api/workflows` 返回步骤型序列 + schedule 的 `nextRun`(cron 解析) 与 `missed`(scheduler_state)；runs/detail 直读 ledger。执行引擎（runWorkflow 供应商）仍未接线，触发端点保持 501。
+
 - 383 daily-brief 示例：`examples/workbench/workflows/daily-brief.yml`（@daily：角色总结 → kb_search → human 门禁 → todo_add），preset 增 `workflows: [daily-brief]`；validate 9 manifests 全绿。（手动触发的端到端执行待引擎接线，如实保留。）
 
 - 382 workflow 脚手架：`agentos workflows scaffold <name>` 产出五型样例 + 三触发器注释（webhook 只留 env 名），kebab 校验、拒绝覆盖、写出即经真实 loader 校验。

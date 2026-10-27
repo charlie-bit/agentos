@@ -30,13 +30,14 @@ import {
   buildTodoTools,
   isIdempotent,
   kbPointerLine,
+  parseCron,
   resolveAgent,
   type Attribution,
   type AnyManifest,
 } from "@agentos/core";
 import { createMarkdownProvider } from "@agentos/knowledge-markdown";
 import { ENTRY_ADAPTER_NAMES, toolProviderManifestSchema } from "@agentos/contracts";
-import type { AgentManifest, ConfirmRequest, ConfirmResult, KnowledgeManifest, ModelProviderManifest, NeutralTool, ToolProviderManifest } from "@agentos/contracts";
+import type { AgentManifest, WorkflowManifest, ConfirmRequest, ConfirmResult, KnowledgeManifest, ModelProviderManifest, NeutralTool, ToolProviderManifest } from "@agentos/contracts";
 import { dialect as compatDialect } from "@agentos/model-anthropic-compat";
 import { dialect as bedrockDialect } from "@agentos/model-bedrock";
 import { dialect as openaiDialect } from "@agentos/model-openai-compat";
@@ -80,6 +81,8 @@ export interface Assembly {
   entryName: string;
   /** Mounted role manifests by name (spec #328; preset.agents = the advertised subset). */
   agents: Map<string, AgentManifest>;
+  /** Mounted workflow manifests by name (spec #353; preset.workflows = advertised subset). */
+  workflows: Map<string, WorkflowManifest>;
   /** Role name -> repo-relative manifest path (#342 read-only disclosure). */
   agentManifestPaths: Record<string, string>;
   /** channel -> entry adapter routes (spec #212), defaulting to entryName. */
@@ -188,6 +191,15 @@ function collectYml(dir: string): string[] {
 }
 
 const write = (s: string) => process.stdout.write(s);
+
+/** next schedule boundary for the panel; None when the cron is unusable. */
+function safeNextRun(cron: string): Date | null {
+  try {
+    return parseCron(cron).nextRunAfter(new Date());
+  } catch {
+    return null;
+  }
+}
 
 /** Dialect registry (spec #210): adding a vendor family is a package + a row. */
 const dialects = { "anthropic-compat": compatDialect, bedrock: bedrockDialect, "openai-compat": openaiDialect } as const;
@@ -317,6 +329,12 @@ export function assemble(flags: ServeFlags): { ok: true; value: Assembly } | { o
       ...(knowledgeInfo ? { knowledgeInfo } : {}),
       entryName: preset.entry,
       agentManifestPaths,
+      workflows: new Map<string, WorkflowManifest>(
+        manifests
+          .filter((m): m is WorkflowManifest => m.kind === "workflow")
+          .filter((m) => (preset.workflows ?? []).includes(m.name))
+          .map((m) => [m.name, m] as const),
+      ),
       agents: new Map<string, AgentManifest>(
         manifests
           .filter((m): m is AgentManifest => m.kind === "agent")
@@ -806,6 +824,43 @@ export async function runServeWeb(flags: ServeFlags): Promise<number> {
     knowledge: asm.value.knowledgeInfo ?? undefined,
     entry: { name: asm.value.entryName, confirm: REST_CAPABILITIES.confirm },
     dialect: selectDialect(modelLease),
+    workflows: () =>
+      [...asm.value.workflows.values()].map((w) => {
+        const last = ledger.schedulerGetLastRun(w.name);
+        const nextRun = w.trigger?.type === "schedule" ? safeNextRun(w.trigger.cron) : null;
+        return {
+          name: w.name,
+          ...(w.description ? { description: w.description } : {}),
+          trigger: w.trigger?.type ?? "manual",
+          stepCount: w.steps.length,
+          steps: w.steps.map((step) => step.type),
+          manifestPath: null,
+          ...(nextRun ? { nextRun: nextRun.toISOString() } : {}),
+          missed: last?.missed ?? 0,
+        };
+      }),
+    workflowRuns: (name) =>
+      ledger
+        .workflowRunList(name ? { workflow: name } : {})
+        .map((r) => ({
+          id: r.id,
+          workflow: r.workflow,
+          status: r.status,
+          trigger: r.trigger,
+          project: r.project,
+          startedAtMs: r.startedAtMs,
+          endedAtMs: r.endedAtMs,
+          resumeFrom: r.resumeFrom,
+          error: r.error,
+        })),
+    workflowRunDetail: (id) => {
+      const row = ledger.workflowRunGet(id);
+      if (!row) return undefined;
+      return {
+        run: { id: row.id, workflow: row.workflow, status: row.status, trigger: row.trigger, project: row.project, startedAtMs: row.startedAtMs, endedAtMs: row.endedAtMs, resumeFrom: row.resumeFrom, error: row.error },
+        steps: Array.isArray(row.steps) ? row.steps : [],
+      };
+    },
     agents: () =>
       [...asm.value.agents.values()].map((m) => {
         const resolved = resolveAgent(m.name, asm.value.agents);
