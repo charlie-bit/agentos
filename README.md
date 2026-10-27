@@ -48,6 +48,24 @@ or data — never new kernel code:
 
 ## Architecture Overview
 
+### Product surface (v4)
+
+```mermaid
+flowchart LR
+  subgraph Config["config/*.yml — git, read-only in the web"]
+    A[agents/roles] --> M[Mount at startup]
+    W[workflows] --> M
+    P[projects/templates] --> M
+    T[tools + knowledge] --> M
+  end
+  M --> K[Kernel turn + tool fence]
+  K --> D[".agentos/ — data"]
+  D --> I[project instances / todos / runs]
+  I --> C[five-zone console: Home · Chats · Todos · Workflows · Projects]
+  C -.->|read-only disclosure| Config
+```
+
+
 ![AgentOS Architecture Diagram](.docs/architecture-diagram.png)
 
 *Interactive HTML version with export options (PNG/PDF): [.docs/architecture-diagram.html](.docs/architecture-diagram.html)*

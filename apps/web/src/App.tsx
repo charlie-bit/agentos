@@ -74,6 +74,18 @@ export default function App() {
         e.preventDefault();
         setShowPalette((v) => !v);
       }
+      // Zone shortcuts (#430): Alt+1..5, matching the nav order.
+      if (e.altKey && /^[1-5]$/.test(e.key)) {
+        const zones = ["home", "chats", "todos", "workflows", "projects"] as const;
+        const z = zones[Number(e.key) - 1];
+        if (z) {
+          e.preventDefault();
+          setZone(z);
+          if (z === "todos") setShowTodos(true);
+          if (z === "workflows") setShowWorkflows(true);
+          if (z === "projects") setShowProjects(true);
+        }
+      }
       if (e.altKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
         const keys = sessions.map((s) => s.external_key.replace(/^web-/, ""));
         const at = keys.indexOf(sessionId);

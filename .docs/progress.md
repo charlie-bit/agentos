@@ -554,10 +554,10 @@
 - [x] 424 Home 视图 — 场景卡网格 + 今日聚焦 todo + 最近会话/项目三区块
 - [x] 425 五区导航 — Home/Chats/Todos/Workflows/Projects 顶栏可达(Agents 并入手边面板与 Chats 过滤)
 - [x] 426 ⌘K 命令面板 — 五类目录客户端过滤,Enter 跳转(会话/角色/面板)
-- [ ] 427 通知中心
+- [x] 427 通知中心 — 三类汇聚(todo 到期 / workflow 完成 / 待确认门禁),铃铛角标+下拉;confirm-pending 只报数量(R9)
 - [x] 428 调度心跳 — /api/status.scheduler {alive, activeRuns} + 状态条徽章
 - [x] 429 移动端扩展 — 面板 <md 全宽浮层(固定 inset),md+ 恢复侧栏宽;状态条换行(375px 可用)
-- [ ] 430 键盘路径扩展
+- [x] 430 键盘扩展 — ⌘K 面板 + Alt+1..5 五区切换(与导航同序)
 - [x] 431 通知轮询基建 — `/api/notifications` + 铃铛 30s 轮询(零 WebSocket)
 - [ ] 432 面板组件统一
 - [x] 433 四空态 — todos/roles/workflows/projects 面板各有指引(含 scaffold 命令)
@@ -567,7 +567,7 @@
 - [ ] 437 E2E 覆盖新面
 - [ ] 438 负向验收扩编
 - [x] 439 README 产品面更新 — 双语「个人工作台」表(五面全部映射到 yml/契约/数据分界)
-- [ ] 440 架构图更新
+- [x] 440 架构图更新 — README 双语 mermaid:配置 yml → 挂载 → turn/围栏 → .agentos 数据 → 五区控制台(只读回指配置)
 - [x] 441 progress.md 扩编
 - [x] 442 v4 审计 — .docs/audit-v4.md 五路 + 隐私复审,缺口逐条点名
 - [x] 443 四类 manifest 契约测试 — todo/agent/workflow/project 四套件在 contracts + core 均有覆盖
@@ -587,6 +587,8 @@
 - [x] 457 演示脚本 — scripts/demo-workbench.mjs 五段离线演示(validate/kb lint/bench/跨运行时),一条命令全绿
 
 ## v4 执行记录（2026-10-27 起）
+
+- 427/430/440：通知中心第三类(待确认门禁，只计数)、Alt+1..5 区域快捷键、README 双语 mermaid 产品面架构图(配置→挂载→运行→数据→控制台)。
 
 - 423/424/425 Home 与导航：四张场景卡(直达 todos/roles/workflows/projects)、今日聚焦(≤24h 未完成)、最近会话/项目；顶栏五区切换，Home 复用 Chat 区域渲染。
 

@@ -1248,13 +1248,21 @@ export async function startServer(o: StartServerOptions): Promise<RunningServer>
       return sendJson(res, 200, { instance: renamed });
     }
     if (req.method === "GET" && path === "/api/notifications") {
-      if (!o.notifications) return sendJson(res, 200, { notifications: [] });
-      try {
-        const notifications = await o.notifications();
-        return sendJson(res, 200, { notifications: Array.isArray(notifications) ? notifications : [] });
-      } catch {
-        return sendJson(res, 200, { notifications: [] });
+      const waiting = entry.statusSnapshot().waitingConfirms;
+      let notifications: Array<{ kind: string; title: string; ref?: string; ts?: number }> = [];
+      if (o.notifications) {
+        try {
+          notifications = await o.notifications();
+        } catch {
+          notifications = [];
+        }
       }
+      // Third class (#427): pending human gates, count only — the prompt/evidence
+      // may be user data, so it never rides the feed (R9).
+      if (waiting > 0) {
+        notifications = [{ kind: "confirm-pending", title: `${waiting} confirmation(s) waiting`, ts: Date.now() }, ...notifications];
+      }
+      return sendJson(res, 200, { notifications: Array.isArray(notifications) ? notifications : [] });
     }
     if (req.method === "GET" && path === "/api/workflows") {
       if (!o.workflows) return sendJson(res, 501, { error: "workflow catalogue not wired by this deployment" });

@@ -1961,3 +1961,29 @@ describe("scheduler heartbeat on status (spec #428)", () => {
     expect(((await (await api(wired, "/api/status")).json()) as { scheduler: unknown }).scheduler).toEqual({ alive: true, activeRuns: 2 });
   });
 });
+
+describe("notification centre includes pending gates (spec #427)", () => {
+  it("a waiting confirmation is surfaced as a count-only notification", async () => {
+    let release: (() => void) | undefined;
+    const { srv } = await boot(async (ctx) => {
+      // hold a confirm open so the pending map is non-empty
+      void ctx.confirm({ prompt: "approve secret-ish evidence?" });
+      await new Promise<void>((r) => {
+        release = r;
+        ctx.signal?.addEventListener("abort", r, { once: true });
+      });
+      return {};
+    });
+    // start a turn so a confirm is pending; it needs a live stream
+    const stream = await postJson(srv, "/api/chat", { sessionId: "gate", message: "go" });
+    const reading = readFrames(stream);
+    await new Promise((r) => setTimeout(r, 40));
+    const body = (await (await api(srv, "/api/notifications")).json()) as { notifications: Array<{ kind: string; title: string }> };
+    expect(body.notifications.some((n) => n.kind === "confirm-pending" && n.title.includes("1 confirmation"))).toBe(true);
+    // never the prompt text (R9)
+    expect(JSON.stringify(body)).not.toContain("secret-ish");
+    await postJson(srv, "/api/sessions/gate/abort", {});
+    await reading;
+    release?.();
+  });
+});

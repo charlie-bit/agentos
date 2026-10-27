@@ -47,6 +47,24 @@ AgentOS 是**可插拔的 Agent 执行框架**：一个 Harness 内核承载 age
 
 ## 架构概览
 
+### 产品面（v4）
+
+```mermaid
+flowchart LR
+  subgraph Config["config/*.yml —— git 所有，web 只读"]
+    A[角色 agents] --> M[启动期挂载]
+    W[workflow] --> M
+    P[项目模板] --> M
+    T[工具与知识] --> M
+  end
+  M --> K[内核 turn + 工具围栏]
+  K --> D[".agentos/ —— 数据"]
+  D --> I[项目实例 / 待办 / 运行记录]
+  I --> C[五区控制台:Home · Chats · Todos · Workflows · Projects]
+  C -.->|只读披露| Config
+```
+
+
 ![AgentOS 架构图](.docs/architecture-diagram.png)
 
 *交互式 HTML 版本（含导出选项 PNG/PDF）：[.docs/architecture-diagram.html](.docs/architecture-diagram.html)*
