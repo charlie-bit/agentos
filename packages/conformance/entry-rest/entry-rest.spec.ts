@@ -1893,3 +1893,53 @@ describe("project dashboard (spec #395)", () => {
     expect((await api(unwired.srv, "/api/project-instances/x/dashboard")).status).toBe(501);
   });
 });
+
+describe("project export + delete semantics (spec #396/#397)", () => {
+  it("exports a bundle (jsonl/md) and deleting an instance never touches templates", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "agentos-projexp-"));
+    tempDirs.push(dir);
+    const dbPath = join(dir, "sessions.db");
+    const instances = new Map<string, { id: string; template: string; title: string; createdAtMs: number; updatedAtMs: number }>();
+    const templates = [{ name: "web-revamp", manifestPath: "config/projects/web-revamp.yml" }];
+    let seq = 0;
+    const srv = await startServer({
+      presetName: "p", model: { provider: "v" }, mounts: [], runner: async () => ({}),
+      ledger: openLedger(dbPath), port: 0, dbPath, staticDir: makeStaticDir(dir),
+      projectTemplates: () => templates,
+      projectInstances: {
+        list: () => [...instances.values()],
+        create: (template, title) => {
+          if (!templates.some((t) => t.name === template)) return null;
+          const row = { id: `i${++seq}`, template, title, createdAtMs: 1, updatedAtMs: 1 };
+          instances.set(row.id, row);
+          return row;
+        },
+        rename: (id, title) => {
+          const row = instances.get(id);
+          if (!row) return null;
+          const next = { ...row, title };
+          instances.set(id, next);
+          return next;
+        },
+        remove: (id) => instances.delete(id),
+      },
+      projectExport: (id) => {
+        const instance = instances.get(id);
+        if (!instance) return undefined;
+        return { instance, template: templates[0], todos: [{ id: "t1" }], sessions: [{ id: "s1" }], runs: [{ id: "r1" }] };
+      },
+    });
+    servers.push(srv);
+    const id = ((await (await postJson(srv, "/api/project-instances", { template: "web-revamp", title: "Q2" })).json()) as { instance: { id: string } }).instance.id;
+
+    const jsonl = await api(srv, `/api/project-instances/${id}/export?format=jsonl`);
+    expect(jsonl.headers.get("content-disposition")).toContain(`agentos-project-${id}.jsonl`);
+    expect((await jsonl.text()).trim().split("\n")).toHaveLength(5); // instance+template+todo+session+run
+    expect(await (await api(srv, `/api/project-instances/${id}/export?format=md`)).text()).toContain("todos: 1");
+
+    // #397: delete the instance — templates keep existing and can re-instantiate
+    expect((await api(srv, `/api/project-instances/${id}`, { method: "DELETE" })).status).toBe(200);
+    expect(((await (await api(srv, "/api/project-templates")).json()) as { templates: unknown[] }).templates).toHaveLength(1);
+    expect((await postJson(srv, "/api/project-instances", { template: "web-revamp", title: "Q2 again" })).status).toBe(201);
+  });
+});

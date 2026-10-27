@@ -523,8 +523,8 @@
 - [x] 393 项目会话聚合
 - [x] 394 项目 workflow 聚合
 - [x] 395 项目仪表盘
-- [ ] 396 项目数据导出
-- [ ] 397 项目删除语义
+- [x] 396 项目数据导出
+- [x] 397 项目删除语义
 - [ ] 398 `GET /api/projects`（模板）+ `GET /api/project-instances`（实例）
 - [ ] 399 项目实例写端点
 - [ ] 400 ProjectsPanel 前端
@@ -587,6 +587,8 @@
 - [ ] 457 v4 首跑演示脚本
 
 ## v4 执行记录（2026-10-27 起）
+
+- 396/397 项目导出与删除：`GET /api/project-instances/:id/export?format=jsonl|md`（实例+模板+全量 todos/sessions/runs，下载头）；删除实例只删数据行，模板仍在且可再次实例化（conformance 断言）。
 
 - 395 项目仪表盘：`GET /api/project-instances/:id/dashboard` 聚合 实例/模板(agents,workflows)/待办四态计数/最近会话(5)/最近运行(5)；未知 404、未接线 501。serve 数据来自 ledger。
 

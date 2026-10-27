@@ -155,6 +155,8 @@ export interface StartServerOptions {
   };
   /** Project dashboard aggregate (#395). Absent = 501. */
   projectDashboard?: (instanceId: string) => unknown | Promise<unknown>;
+  /** Full project bundle for export (#396): instance + all todos/sessions/runs. */
+  projectExport?: (instanceId: string) => { instance: unknown; template: unknown; todos: unknown[]; sessions: unknown[]; runs: unknown[] } | undefined | Promise<{ instance: unknown; template: unknown; todos: unknown[]; sessions: unknown[]; runs: unknown[] } | undefined>;
   /** Notification feed (#386/#427): todo due, workflow done/error — metadata only. */
   notifications?: () => Array<{ kind: string; title: string; ref?: string; ts?: number }> | Promise<Array<{ kind: string; title: string; ref?: string; ts?: number }>>;
   /** Read-only workflow catalogue / runs (#372–#374). Absent = 501. */
@@ -1151,6 +1153,48 @@ export async function startServer(o: StartServerOptions): Promise<RunningServer>
       const created = await o.projectInstances.create(template, title.trim());
       if (created === null) return sendJson(res, 400, { error: `unknown project template: ${template}` });
       return sendJson(res, 201, { instance: created });
+    }
+    const projectExportMatch = /^\/api\/project-instances\/([^/]+)\/export$/.exec(path);
+    if (req.method === "GET" && projectExportMatch) {
+      if (!o.projectExport) return sendJson(res, 501, { error: "project export not wired by this deployment" });
+      let id: string;
+      try {
+        id = decodeURIComponent(projectExportMatch[1] ?? "");
+      } catch {
+        return sendJson(res, 400, { error: "undecodable id" });
+      }
+      const format = url.searchParams.get("format") ?? "jsonl";
+      if (format !== "jsonl" && format !== "md") return sendJson(res, 400, { error: "format must be jsonl or md" });
+      const bundle = await o.projectExport(id);
+      if (!bundle) return sendJson(res, 404, { error: "project instance not found" });
+      const body =
+        format === "jsonl"
+          ? [
+              JSON.stringify({ type: "instance", value: bundle.instance }),
+              JSON.stringify({ type: "template", value: bundle.template }),
+              ...bundle.todos.map((t) => JSON.stringify({ type: "todo", value: t })),
+              ...bundle.sessions.map((s) => JSON.stringify({ type: "session", value: s })),
+              ...bundle.runs.map((r) => JSON.stringify({ type: "run", value: r })),
+            ].join("\n") + "\n"
+          : [
+              `# Project export`,
+              "",
+              `- todos: ${bundle.todos.length}`,
+              `- sessions: ${bundle.sessions.length}`,
+              `- runs: ${bundle.runs.length}`,
+              "",
+              "```json",
+              JSON.stringify(bundle.instance, null, 2),
+              "```",
+              "",
+            ].join("\n");
+      res.writeHead(200, {
+        "content-type": format === "md" ? "text/markdown; charset=utf-8" : "application/x-ndjson; charset=utf-8",
+        "content-disposition": `attachment; filename="agentos-project-${id}.${format}"`,
+        "content-length": Buffer.byteLength(body),
+      });
+      res.end(body);
+      return;
     }
     const dashboardMatch = /^\/api\/project-instances\/([^/]+)\/dashboard$/.exec(path);
     if (req.method === "GET" && dashboardMatch) {

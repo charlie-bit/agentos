@@ -346,7 +346,7 @@ export function openLedger(dbPath: string = ledgerPathFromEnv()): Ledger {
       const limit = Math.min(200, Math.max(1, filter.limit ?? 20));
       const rows = db
         .prepare(`SELECT * FROM sessions${where.length ? ` WHERE ${where.join(" AND ")}` : ""} ORDER BY last_active_ms DESC LIMIT ?`)
-        .all(...params, limit) as DbRow[];
+        .all(...params, limit) as unknown as DbRow[];
       return rows.map(toRow);
     },
     getById(id: string) {
