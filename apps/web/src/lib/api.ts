@@ -181,6 +181,35 @@ export const commitKbDraft = (receiptId: string) =>
 export const discardKbDraft = (receiptId: string) =>
   jpost<{ ok: boolean }>(`/api/kb/drafts/${encodeURIComponent(receiptId)}/discard`, {});
 
+/** Workflow surfaces (spec #372–#381). */
+export interface WorkflowSummary {
+  name: string;
+  description?: string;
+  trigger: "manual" | "schedule" | "webhook";
+  stepCount: number;
+  steps?: string[];
+  manifestPath: string | null;
+  nextRun?: string | null;
+  missed?: number;
+}
+export interface WorkflowRun {
+  id: string;
+  workflow: string;
+  status: "pending" | "running" | "done" | "error" | "aborted";
+  trigger: string;
+  project?: string | null;
+  startedAtMs: number;
+  endedAtMs?: number | null;
+  resumeFrom?: number | null;
+  error?: string | null;
+}
+export const getWorkflows = () => jget<{ workflows: WorkflowSummary[] }>("/api/workflows");
+export const getWorkflowRuns = (name: string) => jget<{ runs: WorkflowRun[] }>(`/api/workflows/${encodeURIComponent(name)}/runs`);
+export const runWorkflow = (name: string, resumeFrom?: number) =>
+  jpost<{ ok: boolean; runId?: string; reason?: string }>(`/api/workflows/${encodeURIComponent(name)}/run`, {
+    ...(resumeFrom !== undefined ? { resumeFrom } : {}),
+  });
+
 /** Usage aggregate (spec #291/#349): metadata only, grouped per provider/model/agent. */
 export interface UsageRow { provider: string; model: string; agent?: string; turns: number; input: number; output: number; costUsd: number }
 export const getUsage = (sessionId?: string) =>

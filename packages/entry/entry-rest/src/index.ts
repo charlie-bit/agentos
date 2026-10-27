@@ -232,6 +232,8 @@ export interface WorkflowSummary {
   trigger: "manual" | "schedule" | "webhook";
   stepCount: number;
   manifestPath: string | null;
+  /** Step type sequence for the read-only flow view (#376). */
+  steps?: string[];
   /** Schedule only: next boundary and skipped windows (#380/#381). */
   nextRun?: string | null;
   missed?: number;
