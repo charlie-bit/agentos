@@ -181,6 +181,35 @@ export const commitKbDraft = (receiptId: string) =>
 export const discardKbDraft = (receiptId: string) =>
   jpost<{ ok: boolean }>(`/api/kb/drafts/${encodeURIComponent(receiptId)}/discard`, {});
 
+/** Todo data plane (spec #319/#320). */
+export interface Todo {
+  id: string;
+  project?: string;
+  title: string;
+  status: "todo" | "doing" | "blocked" | "done";
+  priority?: "P0" | "P1" | "P2";
+  dueAt?: number;
+  sourceKind: "chat" | "mcp" | "manual";
+  sourceRef?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+export const getTodos = (q?: { status?: string; q?: string }) => {
+  const p = new URLSearchParams();
+  if (q?.status) p.set("status", q.status);
+  if (q?.q) p.set("q", q.q);
+  const s = p.toString();
+  return jget<{ todos: Todo[]; count: number }>(`/api/todos${s ? `?${s}` : ""}`);
+};
+export const addTodo = (title: string) => jpost<{ todo: Todo }>("/api/todos", { title });
+export const patchTodo = (id: string, patch: Partial<Pick<Todo, "title" | "status" | "priority" | "dueAt" | "project">>) =>
+  jsonFetch<{ todo: Todo }>(`/api/todos/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: JSON.stringify(patch),
+    headers: { "content-type": "application/json" },
+  });
+export const deleteTodo = (id: string) => jsonFetch<{ ok: boolean }>(`/api/todos/${encodeURIComponent(id)}`, { method: "DELETE" });
+
 /** Operational log tail (spec #124/#292). */
 export interface LogFile { name: string; lines: string[] }
 export const getLogs = (lines = 100) => jget<{ files: LogFile[] }>(`/api/logs?lines=${lines}`);
