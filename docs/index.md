@@ -15,6 +15,7 @@ Start here, then follow the path that matches what you are doing.
 - [Onboarding](onboarding.md) — the four sockets + the conformance gate
 - [Contracts](contracts.md) — every interface and its one law
 - [Roles](agents.md) / [角色](agents.zh-CN.md) — the agent manifest, inheritance and fence
+- [Projects](projects.md) / [项目](projects.zh-CN.md) — templates (config) vs instances (data)
 - [Examples](../examples/README.md) — two complete, fictional presets
 
 ## Operating it

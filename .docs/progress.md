@@ -534,7 +534,7 @@
 - [x] 404 项目内触发 workflow
 - [x] 405 项目搜索
 - [x] 406 示例项目
-- [ ] 407 项目 docs
+- [x] 407 项目 docs
 - [ ] 408 外部 agent = tool manifest
 - [ ] 409 外部 agent manifest 规范
 - [ ] 410 agent 步骤调外部 agent
@@ -587,6 +587,8 @@
 - [ ] 457 v4 首跑演示脚本
 
 ## v4 执行记录（2026-10-27 起）
+
+- 407 Projects 文档：`docs/projects.md` + 中文版（配置 vs 数据分界 Q&A——为什么 web 不能改模板、围栏语义、生命周期），索引双语链接。
 
 - 406 示例项目：`examples/workbench/projects/workbench-demo.yml`（3 角色 + daily-brief + wb-kb），`projects validate` 10 manifests 全绿。
 
