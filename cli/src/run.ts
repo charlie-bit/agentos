@@ -6,7 +6,6 @@
 import { join } from "node:path";
 import { parseArgs } from "node:util";
 import { runPresetValidate, type CliResult } from "./preset-validate.js";
-import { runServe } from "./serve.js";
 import { runKbGate } from "./kb-gate.js";
 import { runKbLint } from "./kb-lint.js";
 import { runKbStale } from "./kb-stale.js";
@@ -90,6 +89,9 @@ export async function run(argv: readonly string[]): Promise<CliResult> {
       if (values.chat && values.web) {
         return { exitCode: 2, lines: ["✗ --chat and --web are mutually exclusive", ...USAGE.slice(2)] };
       }
+      // Lazily loaded (spec #299): the packed artifact must run preset validate
+      // / kb / data WITHOUT the kernel SDK present; only `serve` needs it.
+      const { runServe } = await import("./serve.js");
       const exitCode = await runServe({
         preset: values.preset ?? "config/presets/example.yml",
         session: values.session,

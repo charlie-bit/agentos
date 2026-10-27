@@ -311,10 +311,11 @@ npm i -g agentos              # global CLI
 npx agentos preset validate config/presets/example.yml
 ```
 
-> Packaging status (spec #299): `bin`, `files`, `engines` and a prepack build
-> are in place and `npm pack` produces an installable-shaped tarball. Full
-> `npm i -g` distribution still needs the workspace packages bundled into the
-> CLI artifact — that bundling step is the remaining blocker, tracked as #299.
+> Packaging (spec #145/#299): the CLI is bundled at build time — workspace
+> packages are inlined, `serve` is a lazy chunk, and the kernel SDK is the
+> single declared runtime dependency. `node scripts/pack-cli-check.mjs` packs,
+> extracts into a clean directory and runs `preset validate` without a
+> checkout (CI-friendly).
 
 ### Development
 

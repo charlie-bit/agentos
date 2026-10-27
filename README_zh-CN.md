@@ -297,7 +297,7 @@ npm i -g agentos              # 全局 CLI
 npx agentos preset validate config/presets/example.yml
 ```
 
-> 打包状态（spec #299）：`bin`、`files`、`engines` 与 prepack 构建已就位，`npm pack` 能产出可安装形态的 tarball。完整 `npm i -g` 分发仍需把 workspace 包打进 CLI 产物——该 bundling 步骤是剩余阻塞，记为 #299。
+> 打包（spec #145/#299）：CLI 在构建期打包——workspace 包内联，`serve` 为懒加载 chunk，内核 SDK 是唯一声明的运行时依赖。`node scripts/pack-cli-check.mjs` 会 pack、解包到干净目录并在无 checkout 的情况下运行 `preset validate`（可入 CI）。
 
 ### 开发
 
