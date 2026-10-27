@@ -1427,6 +1427,18 @@ describe("request-level model override (spec #115)", () => {
 const todoListSample = { id: "a", title: "Chase retry", status: "todo" as const, sourceKind: "mcp" as const, sourceRef: "triage", createdAt: 1, updatedAt: 1 };
 
 describe("todo data plane (spec #317–#320)", () => {
+  type Todo = {
+    id: string;
+    title: string;
+    status: "todo" | "doing" | "blocked" | "done";
+    sourceKind: "chat" | "mcp" | "manual";
+    project?: string;
+    priority?: "P0" | "P1" | "P2";
+    dueAt?: number;
+    sourceRef?: string;
+    createdAt: number;
+    updatedAt: number;
+  };
   async function wired(): Promise<{ srv: RunningServer; audit: string }> {
     const dir = mkdtempSync(join(tmpdir(), "agentos-todos-api-"));
     tempDirs.push(dir);
@@ -1443,12 +1455,12 @@ describe("todo data plane (spec #317–#320)", () => {
       staticDir: makeStaticDir(dir),
       auditPath: audit,
       todos: (() => {
-        const store = new Map<string, (typeof todoListSample)[number]>([
+        const store = new Map<string, Todo>([
           ["a", todoListSample],
         ]);
         return {
           list: () => [...store.values()],
-          write: (item: (typeof todoListSample)[number]) => {
+          write: (item: Todo) => {
             store.set(item.id, item);
             return item;
           },
