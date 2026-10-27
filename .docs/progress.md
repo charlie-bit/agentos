@@ -518,7 +518,7 @@
 - [x] 388 项目模板 yml
 - [x] 389 项目实例（数据面）
 - [x] 390 模板 vs 实例边界守护
-- [ ] 391 项目 validate + 脚手架
+- [x] 391 项目 validate + 脚手架
 - [ ] 392 项目范围角色/流程
 - [ ] 393 项目会话聚合
 - [ ] 394 项目 workflow 聚合
@@ -587,6 +587,8 @@
 - [ ] 457 v4 首跑演示脚本
 
 ## v4 执行记录（2026-10-27 起）
+
+- 391 项目配置面：`agentos projects validate`（复用数据型 runner）与 `projects scaffold`（模板骨架、kebab 校验、拒绝覆盖、写出即 validate）。
 
 - 389/390 数据面：`GET /api/project-templates`（只读）与 `GET/POST/PATCH/DELETE /api/project-instances`；创建需模板存在（400），PATCH 只接受 title，任何 template/agents/workflows/tools/knowledge/description 字段一律 400 并回显字段名（负向用例逐字段断言）。
 

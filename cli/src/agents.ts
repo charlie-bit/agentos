@@ -68,6 +68,33 @@ steps:
   return { exitCode: 0, lines: [`✓ wrote ${file}`, `  next: agentos workflows validate ${file}`] };
 }
 
+/** `agentos projects scaffold <name>` (spec #391): template skeleton. */
+export function runProjectsScaffold(argv: readonly string[]): CliResult {
+  const name = argv[0];
+  if (!name || name.startsWith("-")) return { exitCode: 2, lines: ["✗ projects scaffold requires <name>"] };
+  if (!SLUG.test(name)) return { exitCode: 2, lines: ["✗ name must be kebab-case (a-z, digits, dash; 2–41 chars)"] };
+  const dir = resolve("config", "projects");
+  const file = join(dir, `${name}.yml`);
+  if (existsSync(file)) return { exitCode: 1, lines: [`✗ ${file} already exists — edit it instead of scaffolding over it`] };
+  mkdirSync(dir, { recursive: true });
+  const body = `# Project TEMPLATE scaffold (spec #391). Configuration, git-owned.
+# Instances (title, todos, sessions, runs) live in .agentos and are writable
+# from the web; they can never change these fields (#390).
+kind: project
+version: "1"
+name: ${name}
+description: What this project is for, in one line.
+agents: []        # role names from config/agents
+workflows: []     # workflow names from config/workflows
+tools: []         # tool manifest names from config/tools
+knowledge: []     # knowledge manifest names from config/knowledge
+`;
+  writeFileSync(file, body, "utf8");
+  const checked = loadManifest(file);
+  if (!checked.ok) return { exitCode: 1, lines: ["✗ scaffold produced an invalid manifest (bug)", ...checked.errors.map((e) => `${e.path}: ${e.message}`)] };
+  return { exitCode: 0, lines: [`✓ wrote ${file}`, `  next: agentos projects validate ${file}`] };
+}
+
 export function runAgentsExport(argv: readonly string[]): CliResult {
   let name: string | undefined;
   let out: string | undefined;
