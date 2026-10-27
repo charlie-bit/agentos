@@ -493,7 +493,7 @@
 - [x] 363 幂等去重 — 客户端 runId 已存在时 409,绝不重跑;tool 步骤复用 #205 幂等执行器
 - [x] 364 workflow 状态机
 - [ ] 365 abort 联动
-- [ ] 366 并发上限
+- [x] 366 并发上限 — preset.maxConcurrentWorkflows FIFO 信号量(与 #164 同模式);契约校验 0/小数拒绝
 - [x] 367 调度窗检查
 - [x] 368 lastRun 持久
 - [x] 369 错过窗策略
@@ -587,6 +587,8 @@
 - [x] 457 演示脚本 — scripts/demo-workbench.mjs 五段离线演示(validate/kb lint/bench/跨运行时),一条命令全绿
 
 ## v4 执行记录（2026-10-27 起）
+
+- 366 并发上限：`preset.maxConcurrentWorkflows` + serve FIFO 信号量包裹 runWorkflow；契约测试覆盖非法值。
 
 - 315/344/363：待办来源回跳、Home 角色卡直达 AgentsPanel、runId 幂等(已存在 409)。
 

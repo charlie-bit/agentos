@@ -49,6 +49,8 @@ export const presetSchema = manifestEnvelopeSchema.extend({
    * running turns; further turns queue (FIFO) instead of failing.
    */
   maxConcurrentSessions: z.number().int().min(1).max(64).optional(),
+  /** Same resource-governance idea for workflow instances (#366): queue, never fail. */
+  maxConcurrentWorkflows: z.number().int().min(1).max(64).optional(),
   /**
    * Cross-endpoint fallback (spec #26): model manifest names tried IN ORDER
    * when every alias of the primary manifest is unhealthy. Alias-level

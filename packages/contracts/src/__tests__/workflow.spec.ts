@@ -31,3 +31,13 @@ describe("WorkflowManifest (#353)", () => {
     expect(workflowManifestSchema.safeParse(wf([{ type: "kb_search", query: "x" }], { type: "webhook", secret: "literal" })).success).toBe(false);
   });
 });
+
+describe("workflow concurrency declaration (#366)", () => {
+  it("preset accepts a bounded workflow concurrency and rejects nonsense", async () => {
+    const { presetSchema } = await import("../preset.js");
+    const base = { kind: "preset", version: "1", name: "p", knowledge: "k", model: "m", tools: [], entry: "cli" };
+    expect(presetSchema.safeParse({ ...base, maxConcurrentWorkflows: 2 }).success).toBe(true);
+    expect(presetSchema.safeParse({ ...base, maxConcurrentWorkflows: 0 }).success).toBe(false);
+    expect(presetSchema.safeParse({ ...base, maxConcurrentWorkflows: 1.5 }).success).toBe(false);
+  });
+});

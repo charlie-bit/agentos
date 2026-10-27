@@ -92,9 +92,10 @@ export interface Assembly {
   agentManifestPaths: Record<string, string>;
   /** channel -> entry adapter routes (spec #212), defaulting to entryName. */
   channelRoutes: Record<string, string>;
-  /** Preset-declared gates (spec #163/#164); absent = unlimited. */
+  /** Preset-declared gates (spec #163/#164/#366); absent = unlimited. */
   budgetUsd?: number;
   maxConcurrentSessions?: number;
+  maxConcurrentWorkflows?: number;
   /** Declared cross-endpoint fallback order (spec #26). */
   fallbackModels?: string[];
   repoRoot: string;
@@ -360,6 +361,7 @@ export function assemble(flags: ServeFlags): { ok: true; value: Assembly } | { o
       channelRoutes: preset.channels ?? {},
       ...(preset.budgetUsd !== undefined ? { budgetUsd: preset.budgetUsd } : {}),
       ...(preset.maxConcurrentSessions !== undefined ? { maxConcurrentSessions: preset.maxConcurrentSessions } : {}),
+      ...(preset.maxConcurrentWorkflows !== undefined ? { maxConcurrentWorkflows: preset.maxConcurrentWorkflows } : {}),
       ...(preset.fallbackModels ? { fallbackModels: preset.fallbackModels } : {}),
       repoRoot,
     },
@@ -787,6 +789,7 @@ export async function runServeWeb(flags: ServeFlags): Promise<number> {
   // Resource governance (spec #163/#164): the preset declares both; absent =
   // unlimited / no budget gate. Queueing is FIFO and never drops a turn.
   const turnSlots = new Semaphore(asm.value.maxConcurrentSessions ?? 64);
+  const workflowSlots = new Semaphore(asm.value.maxConcurrentWorkflows ?? 64);
   const budgetUsd = asm.value.budgetUsd;
   const server = await startServer({
     presetName,
@@ -916,7 +919,14 @@ export async function runServeWeb(flags: ServeFlags): Promise<number> {
         .map((r) => ({ kind: `workflow-${r.status}`, title: `${r.workflow} ${r.status}`, ref: r.id, ts: r.endedAtMs ?? r.startedAtMs }));
       return [...due, ...runs].sort((a, b) => (b.ts ?? 0) - (a.ts ?? 0)).slice(0, 50);
     },
-    runWorkflow: (name, trigger, opts) => wfRunner(name, trigger, opts),
+    runWorkflow: async (name, trigger, opts) => {
+      const release = await workflowSlots.acquire();
+      try {
+        return await wfRunner(name, trigger, opts);
+      } finally {
+        release();
+      }
+    },
     hookSecretFor: (name) => {
       const w = asm.value.workflows.get(name);
       if (!w || w.trigger?.type !== "webhook") return undefined;
