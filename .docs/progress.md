@@ -588,6 +588,8 @@
 
 ## v4 执行记录（2026-10-27 起）
 
+- 389 存储地基：`project_instances` 表(user_version 4) + create/list/get/rename/delete；行形状只有 template+title+时间戳，模板字段无法写入（#390 在数据层即成立）。
+
 - 388 项目模板契约：`kind: project`（description + agents/workflows/tools/knowledge 四个可选引用列表，strict）；loader 路由；validate 校验悬空与错 kind 引用。契约与 manifest 测试齐。
 
 - 387 会话回链：每次运行一个 `wf-<runId>` 会话（agent 标签 + sdk 指针），实例行记 `session_key`；API/面板暴露"session"跳转，复用既有 hydrate 回放。

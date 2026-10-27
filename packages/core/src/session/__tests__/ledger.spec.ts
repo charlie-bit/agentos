@@ -281,3 +281,26 @@ describe("scheduler lastRun persistence (spec #368)", () => {
     b.close();
   });
 });
+
+describe("project instances (spec #389/#390 storage law)", () => {
+  it("stores only template + title; rename and delete are truthful; survives reopen", () => {
+    const dir = mkdtempSync(join(tmpdir(), "agentos-proj-"));
+    tempDirs.push(dir);
+    const dbPath = join(dir, "sessions.db");
+    const a = openLedger(dbPath);
+    a.projectInstanceCreate({ id: "p1", template: "web-revamp", title: "Q2", createdAtMs: 1, updatedAtMs: 1 });
+    a.projectInstanceCreate({ id: "p2", template: "other", title: "X", createdAtMs: 2, updatedAtMs: 2 });
+    a.close();
+
+    const b = openLedger(dbPath);
+    expect(b.projectInstanceList().map((r) => r.id)).toEqual(["p2", "p1"]); // newest first
+    expect(b.projectInstanceList({ template: "web-revamp" }).map((r) => r.id)).toEqual(["p1"]);
+    expect(b.projectInstanceRename("p1", "Q3").title).toBe("Q3");
+    expect(() => b.projectInstanceRename("ghost", "x")).toThrow(/not found/);
+    expect(b.projectInstanceDelete("p2")).toBe(true);
+    expect(b.projectInstanceDelete("p2")).toBe(false);
+    // the stored row has no template-definition fields at all (#390 by construction)
+    expect(Object.keys(b.projectInstanceGet("p1")!).sort()).toEqual(["createdAtMs", "id", "template", "title", "updatedAtMs"]);
+    b.close();
+  });
+});

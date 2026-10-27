@@ -85,6 +85,12 @@ export interface Ledger {
   /** lastRun persistence (#368): a restart never re-fires an already-fired window. */
   schedulerGetLastRun(workflow: string): { lastRunMs: number; missed: number } | undefined;
   schedulerSetLastRun(workflow: string, lastRunMs: number, missed: number): void;
+  /** Project instance verbs (#389); template fields are NOT stored here (#390). */
+  projectInstanceCreate(row: ProjectInstanceRow): ProjectInstanceRow;
+  projectInstanceList(filter?: { template?: string }): ProjectInstanceRow[];
+  projectInstanceGet(id: string): ProjectInstanceRow | undefined;
+  projectInstanceRename(id: string, title: string): ProjectInstanceRow;
+  projectInstanceDelete(id: string): boolean;
   close(): void;
 }
 
@@ -104,6 +110,15 @@ export interface WorkflowRunRow {
   error: string | null;
   /** Session created by this run's agent steps (#387), for replay/backlink. */
   sessionKey: string | null;
+}
+
+/** Project INSTANCE (data plane, ruling A): template name + user title only. */
+export interface ProjectInstanceRow {
+  id: string;
+  template: string;
+  title: string;
+  createdAtMs: number;
+  updatedAtMs: number;
 }
 
 export interface TodoFilter {
@@ -128,6 +143,16 @@ interface DbRow {
   last_active_ms: number;
   title: string | null;
   agent: string | null;
+}
+
+function toProjectRow(r: Record<string, unknown>): ProjectInstanceRow {
+  return {
+    id: String(r.id),
+    template: String(r.template),
+    title: String(r.title),
+    createdAtMs: Number(r.created_at_ms),
+    updatedAtMs: Number(r.updated_at_ms),
+  };
 }
 
 function toRunRow(r: Record<string, unknown>): WorkflowRunRow {
@@ -248,6 +273,18 @@ export function openLedger(dbPath: string = ledgerPathFromEnv()): Ledger {
     db.exec(`ALTER TABLE workflow_runs ADD COLUMN session_key TEXT`);
   } catch {
     /* column already present */
+  }
+  if (schemaVersion < 4) {
+    db.exec(
+      `CREATE TABLE IF NOT EXISTS project_instances (
+        id TEXT PRIMARY KEY,
+        template TEXT NOT NULL,
+        title TEXT NOT NULL,
+        created_at_ms INTEGER NOT NULL,
+        updated_at_ms INTEGER NOT NULL
+      )`,
+    );
+    db.exec("PRAGMA user_version = 4");
   }
 
   const mustExist = (id: string, changes: number | bigint) => {
@@ -429,6 +466,32 @@ export function openLedger(dbPath: string = ledgerPathFromEnv()): Ledger {
         `INSERT INTO scheduler_state (workflow, last_run_ms, missed) VALUES (?, ?, ?)
          ON CONFLICT(workflow) DO UPDATE SET last_run_ms = excluded.last_run_ms, missed = excluded.missed`,
       ).run(workflow, lastRunMs, missed);
+    },
+    projectInstanceCreate(row) {
+      db.prepare(
+        `INSERT INTO project_instances (id, template, title, created_at_ms, updated_at_ms) VALUES (?, ?, ?, ?, ?)`,
+      ).run(row.id, row.template, row.title, row.createdAtMs, row.updatedAtMs);
+      return row;
+    },
+    projectInstanceList(filter = {}) {
+      const rows = db
+        .prepare(
+          `SELECT * FROM project_instances${filter.template ? " WHERE template = ?" : ""} ORDER BY updated_at_ms DESC`,
+        )
+        .all(...(filter.template ? [filter.template] : [])) as Array<Record<string, unknown>>;
+      return rows.map(toProjectRow);
+    },
+    projectInstanceGet(id) {
+      const r = db.prepare("SELECT * FROM project_instances WHERE id = ?").get(id) as Record<string, unknown> | undefined;
+      return r ? toProjectRow(r) : undefined;
+    },
+    projectInstanceRename(id, title) {
+      const changes = db.prepare("UPDATE project_instances SET title = ?, updated_at_ms = ? WHERE id = ?").run(title.slice(0, 300), Date.now(), id).changes;
+      if (Number(changes) === 0) throw new Error(`project instance not found: ${id}`);
+      return this.projectInstanceGet(id) as ProjectInstanceRow;
+    },
+    projectInstanceDelete(id) {
+      return Number(db.prepare("DELETE FROM project_instances WHERE id = ?").run(id).changes) > 0;
     },
     close() {
       db.close();
