@@ -12,7 +12,7 @@ model: deepseek                # model manifest name
 tools: [mcp-filesystem]        # tool manifest names, mount order
 entry: cli                     # code-registered entry adapter
 # Optional, all additive:
-channels: { web: rest }                 # channel -> entry adapter (#212)
+channels: { web: rest }                 # channel -> entry adapter (#212); absent = the serving mode's own adapter
 channelModels: { cli: deepseek }        # channel/tenant -> model (#208)
 budgetUsd: 5                            # ask a human past this spend (#163)
 maxConcurrentSessions: 2                # FIFO queue beyond this (#164)

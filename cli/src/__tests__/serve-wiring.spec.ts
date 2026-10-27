@@ -189,3 +189,23 @@ describe("preset validation path fence (spec #289)", () => {
     expect(runPresetValidate(target as string).exitCode).toBe(0);
   });
 });
+
+describe("preset.tools is the mount list (spec #5/#17)", () => {
+  it("only declared tools mount, in declared order", async () => {
+    const { assemble } = await import("../serve.js");
+    const dir = mkdtempSync(join(tmpdir(), "agentos-mountlist-"));
+    roots.push(dir);
+    for (const sub of ["presets", "knowledge", "models", "tools"]) mkdirSync(join(dir, sub), { recursive: true });
+    writeFileSync(join(dir, "presets", "p.yml"), ["kind: preset", 'version: "1"', "name: p", "knowledge: k", "model: m", "tools: [second]", "entry: cli", ""].join("\n"));
+    writeFileSync(join(dir, "knowledge", "k.yml"), ["kind: knowledge", 'version: "1"', "name: k", "provider: markdown", "mount: { type: path, path: ./kb }", ""].join("\n"));
+    writeFileSync(join(dir, "models", "m.yml"), ["kind: model", 'version: "1"', "name: m", "provider: v", "models: { a: real-a }", ""].join("\n"));
+    for (const name of ["first", "second"]) {
+      writeFileSync(join(dir, "tools", `${name}.yml`), ["kind: tool", 'version: "1"', `name: ${name}`, "transport: stdio", `command: npx -y ${name}-server`, "auth: { mode: none }", "schemaExchange: json-schema", ""].join("\n"));
+    }
+    const asm = assemble({ preset: join(dir, "presets", "p.yml") });
+    expect(asm.ok).toBe(true);
+    if (!asm.ok) return;
+    expect(asm.value.plans.map((p) => p.key)).toEqual(["second"]);
+    expect(asm.value.mounts.map((m) => m.key)).toEqual(["second"]);
+  });
+});

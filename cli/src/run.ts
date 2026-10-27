@@ -18,7 +18,7 @@ const USAGE = [
   "  agentos preset validate <file-or-dir>       load + reference-check manifests",
   "  agentos serve --chat [--preset <path>] [--session <key>] [--continue] [--verbose]",
   "                                              interactive REPL (needs a model channel env)",
-  "  agentos serve --web [--port 8787] [--preset <path>]",
+  "  agentos serve --web [--port 8787] [--host 0.0.0.0] [--preset <path>]",
   "                                              SSE server + web console on 127.0.0.1",
   "  both accept --model <alias|manifest-name> (request-level, beats preset slot)",
   "  agentos kb gate                             P7b trigger: escalations vs window",
@@ -75,6 +75,7 @@ export async function run(argv: readonly string[]): Promise<CliResult> {
           chat: { type: "boolean" },
           web: { type: "boolean" },
           port: { type: "string" },
+          host: { type: "string" },
           preset: { type: "string", default: "config/presets/example.yml" },
           session: { type: "string" },
           model: { type: "string" },
@@ -100,6 +101,7 @@ export async function run(argv: readonly string[]): Promise<CliResult> {
         verbose: values.verbose,
         web: values.web,
         port: values.port === undefined ? undefined : Number(values.port),
+        ...(values.host ? { host: values.host } : {}),
       });
       return { exitCode, lines: [] }; // already streamed by the composition root
     }

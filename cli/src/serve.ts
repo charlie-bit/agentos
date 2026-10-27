@@ -53,6 +53,8 @@ export interface ServeFlags {
   verbose?: boolean;
   web?: boolean;
   port?: number;
+  /** Bind interface for --web; default 127.0.0.1 (containers pass 0.0.0.0). */
+  host?: string;
   /** P6 request-level override: manifest name OR alias; beats the preset slot. */
   model?: string;
 }
@@ -210,7 +212,15 @@ export function assemble(flags: ServeFlags): { ok: true; value: Assembly } | { o
   // No credential sugar here (spec #227): a manifest whose lease cannot be
   // resolved must fail loudly at plan time. The doc placeholder mount is
   // declared with enabled:false instead of being propped up with a fake token.
-  const tools = manifests.filter((m): m is Extract<AnyManifest, { kind: "tool" }> => m.kind === "tool");
+  // preset.tools is the MOUNT LIST (#5/#17): only these manifest names mount,
+  // in the declared order. Planning every tool in config/ silently over-mounted.
+  const toolByName = new Map(
+    manifests.filter((m): m is Extract<AnyManifest, { kind: "tool" }> => m.kind === "tool").map((m) => [m.name, m]),
+  );
+  const tools = preset.tools.flatMap((name) => {
+    const m = toolByName.get(name);
+    return m ? [m] : [];
+  });
   const { plans, errors, warnings } = planTools(tools);
   // Failure isolation (spec #204): an ENVIRONMENT defect (missing var / lease)
   // removes ONE provider with a ⚠, it does not abort the boot. Config lies
@@ -603,7 +613,10 @@ export async function runServeWeb(flags: ServeFlags): Promise<number> {
   // Channel routing table (spec #212): the web channel must be served by the
   // REST adapter. A dangling route is a config lie and stops the boot here —
   // it can never silently serve the other kernel's channel.
-  const webEntry = asm.value.channelRoutes.web ?? asm.value.entryName;
+  // Absent route = this mode's own adapter serves the channel (the server
+  // knows what it mounts). Only an EXPLICIT route to a different kernel is a
+  // conflict — that is the anti-pattern ③ guard.
+  const webEntry = asm.value.channelRoutes.web ?? REST_ENTRY;
   if (webEntry !== REST_ENTRY) {
     write(`✗ channels.web routes to "${webEntry}", but serve --web mounts the "${REST_ENTRY}" adapter — fix the preset's channels table\n`);
     return 1;
@@ -708,6 +721,7 @@ export async function runServeWeb(flags: ServeFlags): Promise<number> {
     readTranscript: ({ sdkSessionId, externalKey }) =>
       readTranscript(sdkSessionId, join(repoRoot, ".agentos", "workspaces", externalKey)),
     port: flags.port ?? 8787,
+    ...(flags.host ? { host: flags.host } : {}),
     dbPath,
     staticDir,
     systemPrompt: BASE_SYSTEM_PROMPT,

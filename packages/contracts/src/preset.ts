@@ -32,8 +32,10 @@ export const presetSchema = manifestEnvelopeSchema.extend({
    * Channel → entry-adapter routing table (spec #212). A channel is an
    * inbound surface ("cli", "web"); the value names the code-registered
    * EntryAdapter that serves it, i.e. one channel belongs to exactly one
-   * kernel (anti-pattern ③). Absent = the preset's `entry` serves every
-   * channel. Adding a second route is a config edit, not a code path.
+   * kernel (anti-pattern ③). Absent = the serving mode's own adapter serves
+   * the channel (serve --chat → cli, serve --web → rest); an explicit route
+   * to a DIFFERENT adapter is refused at boot. Adding a second route is a
+   * config edit, not a code path.
    */
   channels: z.record(z.string().min(1), z.string().min(1)).optional(),
   /**

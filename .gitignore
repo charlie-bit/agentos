@@ -16,3 +16,6 @@ pm-skills-temp/
 knowledge-base/*
 !knowledge-base/README.md
 .claude/settings.local.json
+
+# docker demo data volume
+.agentos-docker/

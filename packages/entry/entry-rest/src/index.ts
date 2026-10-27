@@ -100,6 +100,8 @@ export interface StartServerOptions {
   ledger: Ledger;
   /** 0 = ephemeral port (tests). */
   port: number;
+  /** Bind interface; default 127.0.0.1 (local-only). Containers pass 0.0.0.0. */
+  host?: string;
   /** sqlite file backing /api/sessions (read-only mirror query). */
   dbPath: string;
   /** Built web console dir (apps/web/dist). Absent -> static routes 503. */
@@ -1161,7 +1163,8 @@ export async function startServer(o: StartServerOptions): Promise<RunningServer>
     return sendJson(res, 404, { error: "no such route" });
   }
 
-  await new Promise<void>((r) => server.listen(o.port, "127.0.0.1", r));
+  const bindHost = o.host ?? "127.0.0.1";
+  await new Promise<void>((r) => server.listen(o.port, bindHost, r));
   const listened = server.address();
   const port = typeof listened === "object" && listened !== null ? listened.port : o.port;
   return {

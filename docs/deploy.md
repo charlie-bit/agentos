@@ -18,19 +18,17 @@ only; every `/api/*` route requires the token (see `SECURITY.md`).
 
 ```bash
 docker build -t agentos .
-docker run --rm --network host \
-  -v "$PWD/.agentos:/data/.agentos" \
-  -e AGENTOS_DEEPSEEK_ANTHROPIC_BASE_URL \
-  -e AGENTOS_DEEPSEEK_API_KEY \
+docker run --rm -p 8787:8787 \
+  -v "$PWD/.agentos-docker:/app/.agentos" \
+  --env-file .env \
   agentos
 ```
 
-`--network host` (Linux) keeps the loopback-only posture: the server binds
-`127.0.0.1` *inside* the container's network namespace, which is the host's
-loopback. On Docker Desktop (macOS/Windows) host networking is unavailable —
-that deployment either accepts `127.0.0.1`-inside-the-VM reachability or puts
-its own proxy in front, which is the documented remote-deployment boundary
-(#173, `SECURITY.md`).
+The image starts `serve --web --host 0.0.0.0` so the published port works;
+that 0.0.0.0 is *inside the container's network namespace* and exists only
+because the operator published it. The token gate still applies to every
+`/api/*` route, and the console is not a team server (#173, `SECURITY.md`).
+Publish with `-p 127.0.0.1:8787:8787` to keep it loopback-only on the host.
 
 ## Data
 
