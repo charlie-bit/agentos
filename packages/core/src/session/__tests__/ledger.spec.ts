@@ -172,3 +172,52 @@ describe("boot sweep (spec #253)", () => {
     ledger.close();
   });
 });
+
+describe("todo verbs (spec #310)", () => {
+  const item = (over: Partial<import("@agentos/contracts").TodoItem> = {}) => ({
+    id: "t1",
+    title: "Chase retry storm",
+    status: "todo" as const,
+    sourceKind: "chat" as const,
+    createdAt: 1,
+    updatedAt: 1,
+    ...over,
+  });
+
+  it("persists across a close/reopen (DB state, not memory) and upserts in place", () => {
+    const dir = mkdtempSync(join(tmpdir(), "agentos-todo-"));
+    tempDirs.push(dir);
+    const dbPath = join(dir, "sessions.db");
+    const a = openLedger(dbPath);
+    a.todoWrite(item({ priority: "P0", dueAt: 100 }));
+    // upsert is a full replace: callers (todo_update) pass the merged item
+    a.todoWrite(item({ status: "doing", priority: "P0", dueAt: 100, updatedAt: 2 }));
+    expect(a.todoList()).toHaveLength(1);
+    a.close();
+
+    const b = openLedger(dbPath);
+    const rows = b.todoList();
+    expect(rows[0]).toMatchObject({ id: "t1", status: "doing", priority: "P0", dueAt: 100, updatedAt: 2 });
+    b.close();
+  });
+
+  it("filters by status/project/due window and orders doing > todo > blocked > done", () => {
+    const led = freshLedger();
+    led.todoWrite(item({ id: "a", status: "done" }));
+    led.todoWrite(item({ id: "b", status: "blocked" }));
+    led.todoWrite(item({ id: "c", status: "doing", project: "proj-1", dueAt: 50 }));
+    led.todoWrite(item({ id: "d", status: "todo", project: "proj-1", dueAt: 500 }));
+    expect(led.todoList().map((t) => t.id).slice(0, 2)).toEqual(["c", "d"]);
+    expect(led.todoList({ project: "proj-1" }).map((t) => t.id)).toEqual(["c", "d"]);
+    expect(led.todoList({ dueBefore: 100 }).map((t) => t.id)).toEqual(["c"]);
+    expect(led.todoList({ status: "blocked" }).map((t) => t.id)).toEqual(["b"]);
+  });
+
+  it("delete is truthful about what existed", () => {
+    const led = freshLedger();
+    led.todoWrite(item());
+    expect(led.todoDelete("t1")).toBe(true);
+    expect(led.todoDelete("t1")).toBe(false);
+    expect(led.todoList()).toEqual([]);
+  });
+});

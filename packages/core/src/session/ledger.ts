@@ -10,6 +10,7 @@
  * env (AGENTOS_SESSION_DB) so deployment decides persistence, not code.
  */
 import { randomUUID } from "node:crypto";
+import type { TodoItem, TodoStatus } from "@agentos/contracts";
 import { mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -63,7 +64,21 @@ export interface Ledger {
    * is untouched: deleting a session removes it from the sidebar/resume list,
    * it does not shred history). Unknown id fails loudly, same as every other verb. */
   deleteSession(id: string): void;
+  /**
+   * Todo verbs (spec #310, DB state not memory): upsert by id, list with
+   * filters, delete. The ledger owns storage; the domain vocabulary lives in
+   * contracts (#308) and the kernel parses nothing.
+   */
+  todoWrite(item: TodoItem): TodoItem;
+  todoList(filter?: { status?: TodoStatus; project?: string; dueBefore?: number }): TodoItem[];
+  todoDelete(id: string): boolean;
   close(): void;
+}
+
+export interface TodoFilter {
+  status?: TodoStatus;
+  project?: string;
+  dueBefore?: number;
 }
 
 /** Ledger DB location: AGENTOS_SESSION_DB, else .agentos/sessions.db (gitignored). */
@@ -119,6 +134,28 @@ export function openLedger(dbPath: string = ledgerPathFromEnv()): Ledger {
     db.exec(`ALTER TABLE sessions ADD COLUMN title TEXT`);
   } catch {
     /* column already present */
+  }
+
+  // Additive migration discipline (#444): new tables only, user_version gated.
+  const schemaVersion = Number(
+    (db.prepare("PRAGMA user_version").get() as { user_version?: number } | undefined)?.user_version ?? 0,
+  );
+  if (schemaVersion < 1) {
+    db.exec(
+      `CREATE TABLE IF NOT EXISTS todos (
+        id TEXT PRIMARY KEY,
+        project TEXT,
+        title TEXT NOT NULL,
+        status TEXT NOT NULL CHECK (status IN ('todo','doing','blocked','done')),
+        priority TEXT,
+        due_at_ms INTEGER,
+        source_kind TEXT NOT NULL,
+        source_ref TEXT,
+        created_at_ms INTEGER NOT NULL,
+        updated_at_ms INTEGER NOT NULL
+      )`,
+    );
+    db.exec("PRAGMA user_version = 1");
   }
 
   const mustExist = (id: string, changes: number | bigint) => {
@@ -179,6 +216,68 @@ export function openLedger(dbPath: string = ledgerPathFromEnv()): Ledger {
     },
     sweepRunning() {
       return Number(db.prepare("UPDATE sessions SET status = 'aborted' WHERE status = 'running'").run().changes);
+    },
+    todoWrite(item: TodoItem) {
+      db.prepare(
+        `INSERT INTO todos (id, project, title, status, priority, due_at_ms, source_kind, source_ref, created_at_ms, updated_at_ms)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET
+           project=excluded.project, title=excluded.title, status=excluded.status,
+           priority=excluded.priority, due_at_ms=excluded.due_at_ms,
+           source_kind=excluded.source_kind, source_ref=excluded.source_ref,
+           updated_at_ms=excluded.updated_at_ms`,
+      ).run(
+        item.id,
+        item.project ?? null,
+        item.title,
+        item.status,
+        item.priority ?? null,
+        item.dueAt ?? null,
+        item.sourceKind,
+        item.sourceRef ?? null,
+        item.createdAt,
+        item.updatedAt,
+      );
+      return item;
+    },
+    todoList(filter: TodoFilter = {}) {
+      const where: string[] = [];
+      const params: Array<string | number> = [];
+      if (filter.status !== undefined) {
+        where.push("status = ?");
+        params.push(filter.status);
+      }
+      if (filter.project !== undefined) {
+        where.push("project = ?");
+        params.push(filter.project);
+      }
+      if (filter.dueBefore !== undefined) {
+        where.push("due_at_ms IS NOT NULL AND due_at_ms <= ?");
+        params.push(filter.dueBefore);
+      }
+      const rows = db
+        .prepare(
+          `SELECT * FROM todos${where.length ? ` WHERE ${where.join(" AND ")}` : ""} ORDER BY
+             CASE status WHEN 'doing' THEN 0 WHEN 'todo' THEN 1 WHEN 'blocked' THEN 2 ELSE 3 END,
+             CASE priority WHEN 'P0' THEN 0 WHEN 'P1' THEN 1 WHEN 'P2' THEN 2 ELSE 3 END,
+             updated_at_ms DESC`,
+        )
+        .all(...params) as Array<Record<string, unknown>>;
+      return rows.map((r) => ({
+        id: String(r.id),
+        ...(r.project !== null ? { project: String(r.project) } : {}),
+        title: String(r.title),
+        status: String(r.status) as TodoItem["status"],
+        ...(r.priority !== null ? { priority: String(r.priority) as NonNullable<TodoItem["priority"]> } : {}),
+        ...(r.due_at_ms !== null ? { dueAt: Number(r.due_at_ms) } : {}),
+        sourceKind: String(r.source_kind) as TodoItem["sourceKind"],
+        ...(r.source_ref !== null ? { sourceRef: String(r.source_ref) } : {}),
+        createdAt: Number(r.created_at_ms),
+        updatedAt: Number(r.updated_at_ms),
+      }));
+    },
+    todoDelete(id: string) {
+      return Number(db.prepare("DELETE FROM todos WHERE id = ?").run(id).changes) > 0;
     },
     deleteSession(id: string) {
       mustExist(id, db.prepare("DELETE FROM sessions WHERE id = ?").run(id).changes);
