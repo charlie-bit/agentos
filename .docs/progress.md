@@ -475,7 +475,7 @@
 - [ ] 345 agents validate 触发
 - [x] 346 角色脚手架
 - [x] 347 角色导出
-- [ ] 348 五角色示例包
+- [x] 348 五角色示例包
 - [ ] 349 角色使用统计
 - [ ] 350 角色与会话列表关联
 - [ ] 351 角色删除边界
@@ -587,6 +587,8 @@
 - [ ] 457 v4 首跑演示脚本
 
 ## v4 执行记录（2026-10-27 起）
+
+- 348 五角色示例：`examples/workbench`（presets/models/knowledge/agents；triage-analyst / docs-writer(base=kb-curator) / kb-curator / daily-standup / inbox-triage(base=triage-analyst)），`preset validate` 8 manifests 全绿、kb lint 绿。语义校正：agent.tools 是运行时工具名(#336)而非 manifest 引用，validate 不再误判；knowledge/model/baseAgent 仍静态校验。
 
 - 346/347 角色配置面：`agentos agents scaffold <name>`（kebab 校验、拒绝覆盖、写出即 validate）与 `agents export <name> [--out]`（逐字导出、可重挂载）；测试覆盖两者与拒绝路径。
 

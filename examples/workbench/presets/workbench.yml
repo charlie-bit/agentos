@@ -1,0 +1,15 @@
+# FICTIONAL workbench preset (spec #348/#449): five roles, one knowledge book,
+# zero external tools. Roles are config; switching one is editing an agent yml.
+kind: preset
+version: "1"
+name: workbench
+knowledge: wb-kb
+model: demo-model
+tools: []
+entry: cli
+agents:
+  - triage-analyst
+  - docs-writer
+  - kb-curator
+  - daily-standup
+  - inbox-triage

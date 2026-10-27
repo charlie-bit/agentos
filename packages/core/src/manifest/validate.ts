@@ -100,10 +100,10 @@ export function validatePresetRefs(
     };
     check("knowledge");
     check("model");
-    if (manifest.tools !== undefined) for (const t of manifest.tools) {
-      const found = byName.get(t);
-      if (!found) errors.push({ source, category: REF, path: "tools", message: `references ${JSON.stringify(t)}, which no manifest declares` });
-    }
+    // agent.tools are BARE TOOL NAMES inside mounted providers (#336, e.g.
+    // kb_search / todo_add) — runtime fence entries, not manifest references,
+    // so they are not statically resolvable here. knowledge/model/baseAgent
+    // remain manifest references and are checked above.
   }
 
   const entryNames = new Set(opts.entryNames ?? []);

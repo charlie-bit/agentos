@@ -59,12 +59,12 @@ describe("agent reference laws (#330/#331/#333)", () => {
   it("dangling baseAgent/tools/knowledge/model and preset agents are all rejected", () => {
     const dir = book({
       ...flat(base, {
-        "a.yml": agent("a", "baseAgent: ghost\ntools: [ghost-tool]\nknowledge: ghost-kb\nmodel: ghost-model"),
+        "a.yml": agent("a", "baseAgent: ghost\nknowledge: ghost-kb\nmodel: ghost-model"),
         "p.yml": preset("ghost-agent"),
       }),
     });
     const errors = validatePresetRefs(dirFiles(dir).loaded, { entryNames: ["cli"] });
-    expect(errors.map((e) => e.path)).toEqual(expect.arrayContaining(["baseAgent", "tools", "knowledge", "model", "agents.0"]));
+    expect(errors.map((e) => e.path)).toEqual(expect.arrayContaining(["baseAgent", "knowledge", "model", "agents.0"]));
   });
 
   it("baseAgent cannot point at a tool manifest (#418 groundwork)", () => {
