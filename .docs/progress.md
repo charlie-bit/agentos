@@ -464,7 +464,7 @@
 - [x] 334 `agentos agents validate`
 - [x] 335 角色会话启动
 - [x] 336 工具围栏
-- [ ] 337 knowledge 范围
+- [x] 337 knowledge 范围
 - [x] 338 角色归因
 - [x] 339 "自己"语义
 - [ ] 340 角色 hydrate
@@ -587,6 +587,8 @@
 - [ ] 457 v4 首跑演示脚本
 
 ## v4 执行记录（2026-10-27 起）
+
+- 337 知识范围：角色 `knowledge` 声明作为 kb_search 的 scope 子树过滤（KbToolContext.searchScope → provider.search），serve 以角色解析结果注入；测试断言 scope 传递与"无声明不设限"。
 
 - 351 删除边界：conformance 证明角色卸载（yml 删除 + 重启、无 catalogue）后旧会话仍可列出/回放且 agent 标签保留；旧数据不随配置消失。
 

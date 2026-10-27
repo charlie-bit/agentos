@@ -422,6 +422,8 @@ export async function wireKnowledge(
   workspaceDir: string,
   /** The mounted entry adapter's own capabilities.confirm — never assumed. */
   confirmCapable: boolean,
+  /** Role knowledge fence (#337): restricts kb_search to this scope subtree. */
+  searchScope?: string,
 ): Promise<KbWiring | null> {
   const km = asm.knowledge;
   if (!km) return null;
@@ -444,6 +446,7 @@ export async function wireKnowledge(
     receiptsLog,
     workspaceOverviewFile: overviewFile,
     confirm,
+    ...(searchScope !== undefined ? { searchScope } : {}),
     tenant: { tenantId: asm.presetName },
   });
   // factory name == manifest name == mount key: one identity, "kb".
@@ -722,7 +725,7 @@ export async function runServeWeb(flags: ServeFlags): Promise<number> {
       // Hotfix clean-room: per-browser-session workspace (externalKey keyed).
       const workspaceDir = join(asm.value.repoRoot, ".agentos", "workspaces", ctx.externalKey);
       mkdirSync(workspaceDir, { recursive: true });
-      const kb = await wireKnowledge(asm.value, ctx.confirm, workspaceDir, REST_CAPABILITIES.confirm);
+      const kb = await wireKnowledge(asm.value, ctx.confirm, workspaceDir, REST_CAPABILITIES.confirm, role?.knowledge);
       // Request-level override (#115): re-resolve through the same three-layer
       // routing; an unknown name fails the turn rather than silently ignoring.
       const effective = ctx.modelOverride

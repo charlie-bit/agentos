@@ -19,6 +19,8 @@ export interface KbToolContext {
   receiptsLog: string;
   /** Where the rendered bootstrap guide is (re)written by kb_overview. */
   workspaceOverviewFile: string;
+  /** Role knowledge fence (#337): search is restricted to this scope subtree. */
+  searchScope?: string;
   /** Out-of-band human gate (chat: readline; web: SSE modal). */
   confirm: (req: { prompt: string; subject: Record<string, unknown> }) => Promise<ConfirmResult>;
   tenant: { tenantId: string };
@@ -50,7 +52,10 @@ export function buildKbTools(ctx: KbToolContext): NeutralTool[] {
       description: "Lexical search over the knowledge base. Empty list means no hits, not failure.",
       inputSchema: { type: "object", properties: { q: str, limit: num }, required: ["q"] },
       handler: async (input) => ({
-        hits: await ctx.provider.search(String(input.q ?? ""), input.limit === undefined ? undefined : { limit: Number(input.limit) }),
+        hits: await ctx.provider.search(String(input.q ?? ""), {
+          ...(input.limit === undefined ? {} : { limit: Number(input.limit) }),
+          ...(ctx.searchScope !== undefined ? { scope: ctx.searchScope } : {}),
+        }),
       }),
     },
     {
