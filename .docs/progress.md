@@ -480,10 +480,10 @@
 - [x] 350 角色与会话列表关联
 - [x] 351 角色删除边界
 - [x] 352 角色 docs
-- [ ] 353 WorkflowManifest 契约
-- [ ] 354 步骤五型
+- [x] 353 WorkflowManifest 契约
+- [x] 354 步骤五型
 - [ ] 355 顺序执行
-- [ ] 356 trigger 三型
+- [x] 356 trigger 三型
 - [ ] 357 cron 解析（零依赖）
 - [ ] 358 workflow validate
 - [ ] 359 顺序执行器
@@ -587,6 +587,8 @@
 - [ ] 457 v4 首跑演示脚本
 
 ## v4 执行记录（2026-10-27 起）
+
+- 353/354/356 WorkflowManifest：五步骤型(agent/tool/skill/kb_search/human)与三触发器(manual/schedule/webhook)封闭 union，strict 拒绝未知型与多余字段；webhook 只接受 env 名。
 
 - 349 角色用量视图：UsagePanel 消费 `/api/usage` 的 agent 行（self 与各角色分行，turns/in/out/cost），数据面来自 #338。
 
