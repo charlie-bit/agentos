@@ -27,6 +27,7 @@ import {
   formatAttributionLine,
   usageLogPath,
   buildKbTools,
+  buildTodoTools,
   isIdempotent,
   kbPointerLine,
   type Attribution,
@@ -91,6 +92,36 @@ export interface KbWiring {
   plan: ReturnType<typeof planTools>["plans"][number];
   sdkServers: Record<string, unknown>;
   pointer: string[];
+}
+
+/**
+ * Todo tool family mount (spec #309): registered at startup through the same
+ * plan machinery as every other provider. `todo_list` is retry-safe; the three
+ * write verbs are not (spec #312) — the executor branches on this declaration.
+ */
+export function wireTodo(ledger: import("@agentos/core").Ledger, workspaceDir?: string): { plan: ReturnType<typeof planTools>["plans"][number]; sdkServers: Record<string, unknown> } | null {
+  const tools = buildTodoTools({ ledger });
+  const manifest = toolProviderManifestSchema.parse({
+    kind: "tool",
+    version: "1",
+    name: "todo",
+    transport: "sdk",
+    auth: { mode: "none" },
+    allowedTools: tools.map((t: NeutralTool) => t.name),
+    idempotent: { default: false, overrides: { todo_list: true } },
+    schemaExchange: "json-schema",
+  }) as ToolProviderManifest;
+  const { plans, errors } = planTools([manifest], { sdkFactories: { todo: {} } });
+  const plan = plans[0];
+  if (errors.length > 0 || plan === undefined) {
+    write(`⚠ todo tools failed to plan — session runs without them: ${errors.map((e) => e.message).join("; ")}\n`);
+    return null;
+  }
+  const server = createInProcessServer(tools, "todo", {
+    retry: { idempotentFor: (name) => isIdempotent(plan, name) },
+    ...(workspaceDir ? { workspaceDir } : {}),
+  });
+  return { plan, sdkServers: { todo: server.instance } };
 }
 
 /** Routed turn-model: what runTurn needs + who to attribute the turn to. */
@@ -538,7 +569,9 @@ export async function runServe(flags: ServeFlags): Promise<number> {
   const workspaceDir = join(asm.value.repoRoot, ".agentos", "workspaces", externalKey);
   mkdirSync(workspaceDir, { recursive: true });
   const kb = await wireKnowledge(asm.value, chatConfirm, workspaceDir, entry.capabilities.confirm);
-  const allPlans = kb ? [...plans, kb.plan] : plans;
+  const todo = wireTodo(ledger, workspaceDir);
+  const allPlans = [...plans, ...(kb ? [kb.plan] : []), ...(todo ? [todo.plan] : [])];
+  const sdkServers = { ...(kb?.sdkServers ?? {}), ...(todo?.sdkServers ?? {}) };
 
   for (;;) {
     const raw = await ask();
@@ -555,7 +588,7 @@ export async function runServe(flags: ServeFlags): Promise<number> {
         model: modelLease,
         prompt: line,
         toolMounts: allPlans,
-        sdkServers: kb?.sdkServers,
+        sdkServers,
         systemPromptAdditions: kb?.pointer,
         workspaceDir,
         resumeSdkSessionId: currentSdk,
@@ -643,6 +676,7 @@ export async function runServeWeb(flags: ServeFlags): Promise<number> {
   // Active-turn registry for SIGTERM drainage (spec #293): a shutdown waits
   // for in-flight turns (bounded), then the sweep settles any row they left.
   const activeTurns = new Set<Promise<unknown>>();
+  const todoMount = wireTodo(ledger);
   // Resource governance (spec #163/#164): the preset declares both; absent =
   // unlimited / no budget gate. Queueing is FIFO and never drops a turn.
   const turnSlots = new Semaphore(asm.value.maxConcurrentSessions ?? 64);
@@ -679,8 +713,8 @@ export async function runServeWeb(flags: ServeFlags): Promise<number> {
         model: effective.value.lease,
         prompt: ctx.prompt,
         signal: ctx.signal,
-        toolMounts: kb ? [...plans, kb.plan] : plans,
-        sdkServers: kb?.sdkServers,
+        toolMounts: [...plans, ...(kb ? [kb.plan] : []), ...(todoMount ? [todoMount.plan] : [])],
+        sdkServers: { ...(kb?.sdkServers ?? {}), ...(todoMount?.sdkServers ?? {}) },
         systemPromptAdditions: kb?.pointer,
         workspaceDir,
         resumeSdkSessionId: ctx.resumeSdkSessionId,

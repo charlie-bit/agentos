@@ -15,6 +15,7 @@ export {
   type OffloadPointer,
 } from "./offload.js";
 export { buildKbTools, KB_POINTER_LINE, kbPointerLine, type KbToolContext } from "./tools.js";
+export { buildTodoTools, type TodoToolContext } from "./todo-tools.js";
 export {
   splitFrontmatter,
   validatePageFrontmatter,

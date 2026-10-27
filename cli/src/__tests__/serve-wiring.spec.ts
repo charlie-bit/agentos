@@ -209,3 +209,24 @@ describe("preset.tools is the mount list (spec #5/#17)", () => {
     expect(asm.value.mounts.map((m) => m.key)).toEqual(["second"]);
   });
 });
+
+describe("todo tool mount + retry split (spec #309/#312)", () => {
+  it("mounts the four todo tools; only todo_list is retry-safe", async () => {
+    const { wireTodo } = await import("../serve.js");
+    const { isIdempotent } = await import("@agentos/core");
+    const { openLedger } = await import("@agentos/core");
+    const dir = mkdtempSync(join(tmpdir(), "agentos-todomount-"));
+    roots.push(dir);
+    const led = openLedger(join(dir, "sessions.db"));
+    const wired = wireTodo(led);
+    expect(wired).not.toBeNull();
+    const plan = wired!.plan;
+    expect(plan.key).toBe("todo");
+    expect(plan.allowedTools).toEqual(["todo_list", "todo_add", "todo_update", "todo_remove"]);
+    expect(isIdempotent(plan, "todo_list")).toBe(true);
+    for (const write of ["todo_add", "todo_update", "todo_remove"]) {
+      expect(isIdempotent(plan, write), write).toBe(false); // never auto-retried (#312)
+    }
+    led.close();
+  });
+});
