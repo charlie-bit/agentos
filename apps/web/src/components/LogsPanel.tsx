@@ -12,7 +12,7 @@ export function LogsPanel({ onClose }: { onClose: () => void }) {
       .catch((err) => setError(err instanceof Error ? err.message : "logs unavailable"));
   }, []);
   return (
-    <aside className="flex w-96 shrink-0 flex-col gap-1 border-l border-border p-2 text-xs" aria-label="server logs">
+    <aside className="flex w-full shrink-0 flex-col gap-1 border-l border-border p-2 text-xs md:w-96" aria-label="server logs">
       <div className="flex items-center justify-between px-1 pb-1">
         <span className="text-[11px] uppercase tracking-wide text-muted-foreground">server logs (metadata only)</span>
         <button onClick={onClose} className="rounded p-0.5 text-muted-foreground hover:text-foreground">×</button>

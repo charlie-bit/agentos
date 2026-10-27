@@ -177,12 +177,14 @@ export default function App() {
             clearNonce={clearNonce}
           />
             </div>
+            <div className="fixed inset-y-12 right-0 z-30 flex max-w-full md:static md:inset-auto md:max-w-none">
             {showFiles && <FilePanel sessionId={sessionId} onClose={() => setShowFiles(false)} />}
             {showDrafts && <DraftInbox sessionId={sessionId} onClose={() => setShowDrafts(false)} />}
             {showLogs && <LogsPanel onClose={() => setShowLogs(false)} />}
             {showTools && <ToolsPanel onClose={() => setShowTools(false)} />}
             {showEscalations && <EscalationsPanel onClose={() => setShowEscalations(false)} />}
             {showTimeline && <TimelinePanel state={state} onClose={() => setShowTimeline(false)} />}
+            </div>
             {showTodos && <TodoPanel onClose={() => setShowTodos(false)} />}
             {showAgents && <AgentsPanel onClose={() => setShowAgents(false)} />}
             {showUsagePanel && <UsagePanel onClose={() => setShowUsagePanel(false)} />}

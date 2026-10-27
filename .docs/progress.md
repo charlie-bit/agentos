@@ -556,7 +556,7 @@
 - [x] 426 ⌘K 命令面板 — 五类目录客户端过滤,Enter 跳转(会话/角色/面板)
 - [ ] 427 通知中心
 - [x] 428 调度心跳 — /api/status.scheduler {alive, activeRuns} + 状态条徽章
-- [ ] 429 移动端适配扩展
+- [x] 429 移动端扩展 — 面板 <md 全宽浮层(固定 inset),md+ 恢复侧栏宽;状态条换行(375px 可用)
 - [ ] 430 键盘路径扩展
 - [x] 431 通知轮询基建 — `/api/notifications` + 铃铛 30s 轮询(零 WebSocket)
 - [ ] 432 面板组件统一
@@ -587,6 +587,8 @@
 - [x] 457 演示脚本 — scripts/demo-workbench.mjs 五段离线演示(validate/kb lint/bench/跨运行时),一条命令全绿
 
 ## v4 执行记录（2026-10-27 起）
+
+- 429 移动端：所有面板 w-full(<md) + md:w-80/96，统一由固定浮层容器承载；与既有侧栏抽屉、状态条换行叠加，375px 不再横向溢出。
 
 - 426 ⌘K：命令面板打开时并发拉五类目录(会话/角色/workflows/projects/todos)，纯前端过滤，Enter 选择——会话切会话、角色设 scope、其余打开对应面板。
 

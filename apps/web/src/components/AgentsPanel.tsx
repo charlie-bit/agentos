@@ -13,7 +13,7 @@ export function AgentsPanel({ onClose, onStartRole }: { onClose: () => void; onS
       .catch((err) => setError(err instanceof Error ? err.message : "roles unavailable"));
   }, []);
   return (
-    <aside className="flex w-80 shrink-0 flex-col gap-1 border-l border-border p-2 text-xs" aria-label="agent roles">
+    <aside className="flex w-full shrink-0 flex-col gap-1 border-l border-border p-2 text-xs md:w-80" aria-label="agent roles">
       <div className="flex items-center justify-between px-1 pb-1">
         <span className="text-[11px] uppercase tracking-wide text-muted-foreground">roles ({agents.length})</span>
         <button onClick={onClose} className="rounded p-0.5 text-muted-foreground hover:text-foreground">×</button>

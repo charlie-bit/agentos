@@ -45,7 +45,7 @@ export function FilePanel({ sessionId, onClose }: { sessionId: string; onClose: 
   };
 
   return (
-    <aside className="flex w-72 shrink-0 flex-col gap-1 border-l border-border p-2 text-xs" aria-label="workspace files">
+    <aside className="flex w-full shrink-0 flex-col gap-1 border-l border-border p-2 text-xs md:w-72" aria-label="workspace files">
       <div className="flex items-center justify-between px-1 pb-1">
         <span className="text-[11px] uppercase tracking-wide text-muted-foreground">workspace</span>
         <div className="flex items-center gap-1">
