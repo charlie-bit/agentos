@@ -522,7 +522,7 @@
 - [x] 392 项目范围角色/流程
 - [x] 393 项目会话聚合
 - [x] 394 项目 workflow 聚合
-- [ ] 395 项目仪表盘
+- [x] 395 项目仪表盘
 - [ ] 396 项目数据导出
 - [ ] 397 项目删除语义
 - [ ] 398 `GET /api/projects`（模板）+ `GET /api/project-instances`（实例）
@@ -587,6 +587,8 @@
 - [ ] 457 v4 首跑演示脚本
 
 ## v4 执行记录（2026-10-27 起）
+
+- 395 项目仪表盘：`GET /api/project-instances/:id/dashboard` 聚合 实例/模板(agents,workflows)/待办四态计数/最近会话(5)/最近运行(5)；未知 404、未接线 501。serve 数据来自 ledger。
 
 - 393/394 项目聚合：sessions 增 `project` 列(additive)+ `setProject`；带 project 的 turn 自动打标，`/api/sessions?project=` 过滤；workflow 实例本就带 project 标签（触发时传入），`workflowRunList({project})` 已验证。
 

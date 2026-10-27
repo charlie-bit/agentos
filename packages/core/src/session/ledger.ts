@@ -50,6 +50,8 @@ export interface Ledger {
   getByExternalKey(externalKey: string): SessionRow | undefined;
   /** Lookup by row id (routes that address a session by ledger id). */
   getById(id: string): SessionRow | undefined;
+  /** Recent sessions, optionally narrowed by agent/project (#393/#395). */
+  sessionList(filter?: { agent?: string; project?: string; limit?: number }): SessionRow[];
   /** Status transition; unknown ids and values are rejected. */
   markStatus(id: string, status: SessionStatus): void;
   setSdkSessionId(id: string, sdkSessionId: string): void;
@@ -335,6 +337,17 @@ export function openLedger(dbPath: string = ledgerPathFromEnv()): Ledger {
     getByExternalKey(externalKey: string) {
       const r = db.prepare("SELECT * FROM sessions WHERE external_key = ?").get(externalKey) as DbRow | undefined;
       return r ? toRow(r) : undefined;
+    },
+    sessionList(filter = {}) {
+      const where: string[] = [];
+      const params: Array<string | number> = [];
+      if (filter.agent) { where.push("agent = ?"); params.push(filter.agent); }
+      if (filter.project) { where.push("project = ?"); params.push(filter.project); }
+      const limit = Math.min(200, Math.max(1, filter.limit ?? 20));
+      const rows = db
+        .prepare(`SELECT * FROM sessions${where.length ? ` WHERE ${where.join(" AND ")}` : ""} ORDER BY last_active_ms DESC LIMIT ?`)
+        .all(...params, limit) as DbRow[];
+      return rows.map(toRow);
     },
     getById(id: string) {
       const r = db.prepare("SELECT * FROM sessions WHERE id = ?").get(id) as DbRow | undefined;

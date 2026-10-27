@@ -1858,3 +1858,38 @@ describe("project aggregation (spec #393/#394)", () => {
     expect(all.sessions.find((s) => s.project === null)).toBeDefined();
   });
 });
+
+describe("project dashboard (spec #395)", () => {
+  it("aggregates todo counts, recent sessions and runs; unknown is 404", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "agentos-projdash-"));
+    tempDirs.push(dir);
+    const dbPath = join(dir, "sessions.db");
+    const srv = await startServer({
+      presetName: "p", model: { provider: "v" }, mounts: [], runner: async () => ({}),
+      ledger: openLedger(dbPath), port: 0, dbPath, staticDir: makeStaticDir(dir),
+      projectDashboard: (id) =>
+        id === "p1"
+          ? {
+              instance: { id: "p1", template: "web-revamp", title: "Q2", createdAtMs: 1, updatedAtMs: 1 },
+              template: { name: "web-revamp", agents: ["analyst"], workflows: ["daily"] },
+              todos: { total: 3, todo: 1, doing: 1, blocked: 1, done: 0 },
+              sessions: [{ id: "s1", externalKey: "wf-1", agent: "analyst", status: "idle", lastActiveMs: 2, title: null }],
+              runs: [{ id: "r1", workflow: "daily", status: "done", startedAtMs: 1, endedAtMs: 2 }],
+            }
+          : undefined,
+    });
+    servers.push(srv);
+    const body = (await (await api(srv, "/api/project-instances/p1/dashboard")).json()) as {
+      todos: { total: number };
+      sessions: unknown[];
+      runs: unknown[];
+      template: { agents: string[] };
+    };
+    expect(body).toMatchObject({ todos: { total: 3 }, template: { agents: ["analyst"] } });
+    expect(body.sessions).toHaveLength(1);
+    expect(body.runs).toHaveLength(1);
+    expect((await api(srv, "/api/project-instances/ghost/dashboard")).status).toBe(404);
+    const unwired = await boot(async () => ({}));
+    expect((await api(unwired.srv, "/api/project-instances/x/dashboard")).status).toBe(501);
+  });
+});

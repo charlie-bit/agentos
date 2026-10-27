@@ -153,6 +153,8 @@ export interface StartServerOptions {
     rename: (id: string, title: string) => ProjectInstanceSummary | null | Promise<ProjectInstanceSummary | null>;
     remove: (id: string) => boolean | Promise<boolean>;
   };
+  /** Project dashboard aggregate (#395). Absent = 501. */
+  projectDashboard?: (instanceId: string) => unknown | Promise<unknown>;
   /** Notification feed (#386/#427): todo due, workflow done/error — metadata only. */
   notifications?: () => Array<{ kind: string; title: string; ref?: string; ts?: number }> | Promise<Array<{ kind: string; title: string; ref?: string; ts?: number }>>;
   /** Read-only workflow catalogue / runs (#372–#374). Absent = 501. */
@@ -1149,6 +1151,19 @@ export async function startServer(o: StartServerOptions): Promise<RunningServer>
       const created = await o.projectInstances.create(template, title.trim());
       if (created === null) return sendJson(res, 400, { error: `unknown project template: ${template}` });
       return sendJson(res, 201, { instance: created });
+    }
+    const dashboardMatch = /^\/api\/project-instances\/([^/]+)\/dashboard$/.exec(path);
+    if (req.method === "GET" && dashboardMatch) {
+      if (!o.projectDashboard) return sendJson(res, 501, { error: "project dashboard not wired by this deployment" });
+      let id: string;
+      try {
+        id = decodeURIComponent(dashboardMatch[1] ?? "");
+      } catch {
+        return sendJson(res, 400, { error: "undecodable id" });
+      }
+      const dashboard = await o.projectDashboard(id);
+      if (!dashboard) return sendJson(res, 404, { error: "project instance not found" });
+      return sendJson(res, 200, dashboard);
     }
     const instanceMatch = /^\/api\/project-instances\/([^/]+)$/.exec(path);
     if (instanceMatch && (req.method === "PATCH" || req.method === "DELETE")) {
