@@ -1511,3 +1511,45 @@ describe("todo data plane (spec #317–#320)", () => {
     expect((await api(srv, "/api/todos")).status).toBe(501);
   });
 });
+
+describe("todo.changed over SSE (spec #323)", () => {
+  it("a mutation broadcasts to every live stream, not only the writer", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "agentos-todo-sse-"));
+    tempDirs.push(dir);
+    const dbPath = join(dir, "sessions.db");
+    const srv = await startServer({
+      presetName: "p",
+      model: { provider: "v" },
+      mounts: [],
+      runner: async (ctx) => {
+        ctx.emit({ type: "assistant.text", payload: { text: "holding" }, timestampMs: 1 });
+        await new Promise<void>((resolve) => {
+          if (ctx.signal?.aborted) resolve();
+          else ctx.signal?.addEventListener("abort", () => resolve(), { once: true });
+        });
+        return {};
+      },
+      ledger: openLedger(dbPath),
+      port: 0,
+      dbPath,
+      staticDir: makeStaticDir(dir),
+      todos: { list: () => [], write: (item) => item, remove: () => true },
+    });
+    servers.push(srv);
+
+    const res = await postJson(srv, "/api/chat", { sessionId: "tab-a", message: "hold" });
+    const reading = readFrames(res);
+    await new Promise((r) => setTimeout(r, 40));
+
+    const created = await postJson(srv, "/api/todos", { title: "broadcast me" });
+    expect(created.status).toBe(201);
+    await new Promise((r) => setTimeout(r, 40));
+    await postJson(srv, "/api/sessions/tab-a/abort", {});
+
+    const frames = await reading;
+    const changed = frames.filter((f) => f.type === "todo.changed");
+    expect(changed).toHaveLength(1);
+    expect((changed[0]?.payload as { action: string }).action).toBe("add");
+    expect(frames.some((f) => f.type === "assistant.text")).toBe(true); // partial kept
+  });
+});

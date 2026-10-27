@@ -39,7 +39,9 @@ export function runDataExport(argv: readonly string[]): CliResult {
   const out = argv[0];
   if (!out || out.startsWith("-")) return { exitCode: 2, lines: ["✗ data export requires <file.json>"] };
   const root = resolve(".");
-  const ledger = openLedger(ledgerPathFromEnv());
+  // Root-derived path, not the env lease: gc must clean the directory it was
+  // told about, and the bundle's data commands do not read AGENTOS_SESSION_DB.
+  const ledger = openLedger(join(root, AGENTOS, "sessions.db"));
   let sessions: DataBundle["sessions"] = [];
   try {
     // The public ledger surface has no "all rows" verb by design; export reads
@@ -173,6 +175,21 @@ export function runDataGc(argv: readonly string[], now: () => number = Date.now)
 
   // Committed drafts are already consumed by #214; anything left in kb-drafts
   // older than the window is an abandoned draft. Workspaces and logs age out.
+  // Completed todos older than the window are swept by the SAME command
+  // (spec #327); open/parked todos are never touched by gc.
+  // Root-derived path: gc cleans the directory it was run in, not an env lease.
+  const ledger = openLedger(join(root, AGENTOS, "sessions.db"));
+  try {
+    for (const todo of ledger.todoList({ status: "done" })) {
+      if (todo.updatedAt < cutoff) {
+        ledger.todoDelete(todo.id);
+        removed.push(`todo:${todo.id}`);
+      }
+    }
+  } finally {
+    ledger.close();
+  }
+
   sweepDir(join(root, AGENTOS, "kb-drafts"));
   sweepDir(join(root, AGENTOS, "logs"));
   sweepDir(join(root, AGENTOS, "workspaces"), true);
@@ -184,7 +201,7 @@ export function runDataGc(argv: readonly string[], now: () => number = Date.now)
         ? `○ gc: nothing older than ${keepDays}d`
         : `${dryRun ? "○ would remove" : "✓ removed"} ${removed.length} path(s) older than ${keepDays}d:`,
       ...removed.map((p) => `  · ${p.replace(root + "/", "")}`),
-      `  (policy: kb-drafts / logs / workspaces older than ${keepDays}d; sessions.db and receipts are never deleted)`,
+      `  (policy: done todos / kb-drafts / logs / workspaces older than ${keepDays}d; open todos, sessions.db and receipts are never deleted)`,
     ],
   };
 }

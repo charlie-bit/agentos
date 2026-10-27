@@ -384,6 +384,24 @@ export class EntryRest implements EntryAdapter {
     };
   }
 
+  /**
+   * Push one neutral event to EVERY live SSE stream (spec #323): todo changes
+   * are user data, not session-private, so a second tab sees them at once.
+   * Malformed/dead sockets are skipped; this never throws.
+   */
+  broadcast(event: RenderEvent): void {
+    const frame = `data: ${JSON.stringify(event)}\n\n`;
+    for (const sockets of this.streams.values()) {
+      for (const res of sockets) {
+        try {
+          res.write(frame);
+        } catch {
+          /* dead socket: cleaned up on close */
+        }
+      }
+    }
+  }
+
   /** Register a turn's cancellation handle; returns the unregister. */
   registerTurn(externalKey: string, controller: AbortController): () => void {
     const set = this.running.get(externalKey) ?? new Set<AbortController>();
@@ -1051,6 +1069,7 @@ export async function startServer(o: StartServerOptions): Promise<RunningServer>
       if (!checked.success) return sendJson(res, 400, { error: "invalid todo", issues: checked.error.issues.map((i) => i.message) });
       const saved = await o.todos.write(checked.data);
       auditTodo(o, "todo.add", saved.id);
+      entry.broadcast({ type: "todo.changed", payload: { action: "add", id: saved.id }, timestampMs: Date.now() });
       return sendJson(res, 201, { todo: saved });
     }
     const todoOne = /^\/api\/todos\/([^/]+)$/.exec(path);
@@ -1065,7 +1084,10 @@ export async function startServer(o: StartServerOptions): Promise<RunningServer>
       if (id.length === 0 || id.length > 200) return sendJson(res, 400, { error: "invalid id" });
       if (req.method === "DELETE") {
         const removed = await o.todos.remove(id);
-        if (removed) auditTodo(o, "todo.remove", id);
+        if (removed) {
+          auditTodo(o, "todo.remove", id);
+          entry.broadcast({ type: "todo.changed", payload: { action: "remove", id }, timestampMs: Date.now() });
+        }
         return sendJson(res, removed ? 200 : 404, { ok: removed });
       }
       const existing = (await o.todos.list({})).find((t) => t.id === id);
@@ -1085,6 +1107,7 @@ export async function startServer(o: StartServerOptions): Promise<RunningServer>
       if (!checked.success) return sendJson(res, 400, { error: "invalid todo", issues: checked.error.issues.map((i) => i.message) });
       const saved = await o.todos.write(checked.data);
       auditTodo(o, "todo.update", saved.id);
+      entry.broadcast({ type: "todo.changed", payload: { action: "update", id: saved.id }, timestampMs: Date.now() });
       return sendJson(res, 200, { todo: saved });
     }
     if (req.method === "GET" && path === "/api/kb/drafts") {

@@ -440,21 +440,21 @@
 - [x] 310 todo 存储动词
 - [x] 311 todo 待办视图（transcript）
 - [x] 312 待办门禁对齐
-- [ ] 313 todo_extractor 系统提示段
+- [x] 313 todo_extractor 系统提示段
 - [ ] 314 总结待办场景模板
 - [ ] 315 sourceRef 回链
-- [ ] 316 MCP 源标注
+- [x] 316 MCP 源标注
 - [x] 317 todo 导出
 - [x] 318 todo 搜索
 - [x] 319 todo list 端点
 - [x] 320 todo 写端点
 - [x] 321 TodoPanel 前端
 - [x] 322 今日聚焦视图
-- [ ] 323 todo.changed 实时推送
+- [x] 323 todo.changed 实时推送
 - [ ] 324 通知中心——todo 到期
 - [ ] 325 todo 与项目联动
 - [x] 326 todo 变更审计
-- [ ] 327 todo gc
+- [x] 327 todo gc
 - [ ] 328 AgentManifest 契约
 - [ ] 329 baseAgent 基座引用
 - [ ] 330 循环引用拒绝
@@ -587,6 +587,11 @@
 - [ ] 457 v4 首跑演示脚本
 
 ## v4 执行记录（2026-10-27 起）
+
+- 313 提示段：BASE_SYSTEM_PROMPT 增 todo 捕获段（四个动词 + sourceKind），/api/status 既有披露覆盖；测试断言动词存在。
+- 316 来源标注：面板显示 sourceKind（chat/mcp/manual）+ `/api/todos?source=` 服务端过滤；todo_add 接受 sourceKind/sourceRef。
+- 323 实时推送：EntryRest.broadcast 向全部活跃 SSE 流推 `todo.changed`（add/update/remove），conformance 以长流验证。
+- 327 gc：`agentos data gc` 只清 done 且超期 todo；open/blocked 与 sessions/receipts 不动（测试）。
 
 - 308 契约落地：`packages/contracts/src/todo.ts`（zod + 同构 JSON Schema + 9 例测试）。
 - 310 存储落地：ledger `todoWrite/todoList/todoDelete` + additive `PRAGMA user_version` 迁移 + 持久化/过滤/排序测试。

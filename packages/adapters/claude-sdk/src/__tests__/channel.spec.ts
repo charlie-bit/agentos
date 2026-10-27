@@ -489,3 +489,13 @@ describe("withToolRetry — injected failing server (spec #205)", () => {
     expect(calls).toBe(1);
   });
 });
+
+describe("todo capture prompt segment (spec #313)", () => {
+  it("names the four verbs without inventing domain behaviour", async () => {
+    const { BASE_SYSTEM_PROMPT } = await import("../index.js");
+    for (const verb of ["todo_add", "todo_list", "todo_update", "todo_remove"]) {
+      expect(BASE_SYSTEM_PROMPT).toContain(verb);
+    }
+    expect(BASE_SYSTEM_PROMPT).toContain("sourceKind");
+  });
+});

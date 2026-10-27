@@ -85,3 +85,24 @@ describe("data gc (#162)", () => {
     expect(readFileSync(fresh, "utf8")).toBe("y"); // fresh draft survives
   });
 });
+
+describe("gc sweeps completed todos only (spec #327)", () => {
+  it("deletes done todos older than the window, keeps open ones", async () => {
+    const dir = sandbox();
+    const ledger = openLedger(join(dir, ".agentos", "sessions.db"));
+    const old = Date.now() - 90 * 86_400_000;
+    ledger.todoWrite({ id: "done-old", title: "old done", status: "done", sourceKind: "manual", createdAt: old, updatedAt: old });
+    ledger.todoWrite({ id: "done-new", title: "new done", status: "done", sourceKind: "manual", createdAt: Date.now(), updatedAt: Date.now() });
+    ledger.todoWrite({ id: "open-old", title: "open old", status: "todo", sourceKind: "manual", createdAt: old, updatedAt: old });
+    ledger.close();
+
+    const check = openLedger(join(dir, ".agentos", "sessions.db"));
+    expect(check.todoList({ status: "done" }).map((t) => t.id).sort()).toEqual(["done-new", "done-old"]);
+    check.close();
+
+    expect(runDataGc(["--keep-days", "30"]).lines.join("\n")).toContain("todo:done-old");
+    const after = openLedger(join(dir, ".agentos", "sessions.db"));
+    expect(after.todoList().map((t) => t.id).sort()).toEqual(["done-new", "open-old"]);
+    after.close();
+  });
+});
