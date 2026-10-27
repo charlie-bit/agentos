@@ -141,10 +141,15 @@ export const getMessages = (sessionId: string) =>
   jget<{ entries: HistoryItem[] }>(`/api/sessions/${encodeURIComponent(sessionId)}/messages`);
 
 /** One chat turn: consume the SSE response frame by frame. */
-export async function chat(sessionId: string, message: string, onFrame: (frame: Frame) => void): Promise<void> {
+export async function chat(
+  sessionId: string,
+  message: string,
+  onFrame: (frame: Frame) => void,
+  opts?: { agent?: string; project?: string },
+): Promise<void> {
   const res = await fetch("/api/chat", {
     method: "POST",
-    body: JSON.stringify({ sessionId, message }),
+    body: JSON.stringify({ sessionId, message, ...(opts ?? {}) }),
     headers: authHeaders({ "content-type": "application/json" }),
   });
   if (!res.ok) throw new HttpError("/api/chat", res.status, (await res.text()).slice(0, 500));

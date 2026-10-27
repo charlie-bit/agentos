@@ -11,6 +11,8 @@ import { withRetry } from "./retry";
 export function useAgentChat() {
   const [state, dispatch] = useReducer(reduce, initialState);
   const [sessionId, setSessionId] = useState<string>(initialSessionId());
+  /** Scope picked in a project/role panel; applies to the next turn (#403). */
+  const [scope, setScope] = useState<{ agent?: string; project?: string }>({});
   const busy = useRef(false);
 
   /**
@@ -51,7 +53,7 @@ export function useAgentChat() {
       try {
         // Retry only when the stream died before delivering anything (#282):
         // a half-consumed stream is replayed from history, never re-sent.
-        await withRetry(() => chat(sessionId, text, onFrame), received ? [] : undefined);
+        await withRetry(() => chat(sessionId, text, onFrame, scope), received ? [] : undefined);
       } catch {
         onFrame({ type: "result", payload: { subtype: "network", isError: true, message: "stream interrupted" } });
         try {
@@ -66,7 +68,7 @@ export function useAgentChat() {
       }
       return true;
     },
-    [sessionId],
+    [sessionId, scope],
   );
 
   /**
@@ -96,6 +98,8 @@ export function useAgentChat() {
   return {
     state,
     send,
+    scope,
+    setScope,
     sessionId,
     pickSession,
     newSession,

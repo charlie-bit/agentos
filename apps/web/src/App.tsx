@@ -29,7 +29,7 @@ import { UsageBar } from "./components/UsageBar";
 const SESSIONS_POLL_MS = 4000;
 
 export default function App() {
-  const { state, send, stop, sessionId, pickSession, newSession, resolveConfirm } = useAgentChat();
+  const { state, send, stop, sessionId, pickSession, newSession, resolveConfirm, setScope } = useAgentChat();
   const [status, setStatus] = useState<StatusResponse | null>(null);
   const [sessions, setSessions] = useState<SessionRow[]>([]);
   const [escalations, setEscalations] = useState(0);
@@ -180,7 +180,16 @@ export default function App() {
             {showTodos && <TodoPanel onClose={() => setShowTodos(false)} />}
             {showAgents && <AgentsPanel onClose={() => setShowAgents(false)} />}
             {showUsagePanel && <UsagePanel onClose={() => setShowUsagePanel(false)} />}
-            {showProjects && <ProjectsPanel onClose={() => setShowProjects(false)} />}
+            {showProjects && (
+              <ProjectsPanel
+                onClose={() => setShowProjects(false)}
+                onStartRole={(agent, project) => {
+                  // Scope rides the next turn; the server fences it (#392/#403).
+                  setScope({ agent, project });
+                  setShowProjects(false);
+                }}
+              />
+            )}
             {showWorkflows && (
               <WorkflowsPanel onClose={() => setShowWorkflows(false)} onOpenSession={(key) => pickSession(key)} />
             )}

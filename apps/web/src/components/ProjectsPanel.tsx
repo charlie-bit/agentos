@@ -16,7 +16,14 @@ import { ScrollArea } from "./ui/scroll-area";
 import { cn } from "../lib/utils";
 
 /** Templates (config) beside instances (data) — the ruling-A split made visible (#400). */
-export function ProjectsPanel({ onClose }: { onClose: () => void }) {
+export function ProjectsPanel({
+  onClose,
+  onStartRole,
+}: {
+  onClose: () => void;
+  /** Pick a template-declared role: the next turn runs scoped to it (#403). */
+  onStartRole?: (agent: string, project: string) => void;
+}) {
   const [templates, setTemplates] = useState<ProjectTemplate[]>([]);
   const [instances, setInstances] = useState<ProjectInstance[]>([]);
   const [draft, setDraft] = useState<{ template: string; title: string }>({ template: "", title: "" });
@@ -144,7 +151,20 @@ export function ProjectsPanel({ onClose }: { onClose: () => void }) {
                   </ul>
                   {dashboard.template && (
                     <div className="mt-1 space-y-0.5 text-muted-foreground">
-                      <div>fence: agents [{dashboard.template.agents.join(", ") || "—"}]</div>
+                      <div className="flex flex-wrap items-center gap-1">
+                        agents:
+                        {dashboard.template.agents.length === 0 && <span>—</span>}
+                        {dashboard.template.agents.map((a) => (
+                          <button
+                            key={a}
+                            className="rounded border border-border px-1 hover:bg-card"
+                            title={`talk to ${a} in this project`}
+                            onClick={() => onStartRole?.(a, i.id)}
+                          >
+                            {a}
+                          </button>
+                        ))}
+                      </div>
                       <div className="flex flex-wrap items-center gap-1">
                         workflows:
                         {dashboard.template.workflows.length === 0 && <span>—</span>}
