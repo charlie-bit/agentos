@@ -218,7 +218,13 @@ const dialects = { "anthropic-compat": compatDialect, bedrock: bedrockDialect, "
  */
 export function resolvePresetTarget(repoRoot: string, requested: string): string | null {
   if (requested.includes("\0")) return null;
-  const allowedRoots = [join(repoRoot, "config", "presets"), join(repoRoot, "examples")];
+  const allowedRoots = [
+    join(repoRoot, "config", "presets"),
+    join(repoRoot, "config", "agents"),
+    join(repoRoot, "config", "workflows"),
+    join(repoRoot, "config", "projects"),
+    join(repoRoot, "examples"),
+  ];
   const byName = join(repoRoot, "config", "presets", `${requested.replace(/\.ya?ml$/i, "")}.yml`);
   const candidates = requested.includes("/") || requested.includes("\\") ? [resolve(repoRoot, requested), byName] : [byName];
   for (const candidate of candidates) {
@@ -894,6 +900,10 @@ export async function runServeWeb(flags: ServeFlags): Promise<number> {
     knowledge: asm.value.knowledgeInfo ?? undefined,
     entry: { name: asm.value.entryName, confirm: REST_CAPABILITIES.confirm },
     dialect: selectDialect(modelLease),
+    schedulerStatus: () => ({
+      alive: schedulerAlive,
+      activeRuns: ledger.workflowRunList({ status: "running" }).length,
+    }),
     notifications: () => {
       const nowMs = Date.now();
       const due = ledger
@@ -1072,6 +1082,7 @@ export async function runServeWeb(flags: ServeFlags): Promise<number> {
   });
   // Schedule loop (spec #367–#369): one minute window, lastRun persisted
   // BEFORE firing so a crash between the two can never double-fire.
+  let schedulerAlive = true;
   const scheduler = setInterval(() => {
     for (const w of asm.value.workflows.values()) {
       if (w.trigger?.type !== "schedule") continue;

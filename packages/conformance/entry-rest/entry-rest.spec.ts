@@ -1987,3 +1987,26 @@ describe("notification centre includes pending gates (spec #427)", () => {
     release?.();
   });
 });
+
+describe("workflow instance dedupe (spec #363)", () => {
+  it("a caller-supplied runId that already exists answers 409; a fresh one runs", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "agentos-wfdedupe-"));
+    tempDirs.push(dir);
+    const dbPath = join(dir, "sessions.db");
+    const seen: string[] = [];
+    const srv = await startServer({
+      presetName: "p", model: { provider: "v" }, mounts: [], runner: async () => ({}),
+      ledger: openLedger(dbPath), port: 0, dbPath, staticDir: makeStaticDir(dir),
+      runWorkflow: async (_name, _trigger, opts) => {
+        seen.push(opts?.runId ?? "auto");
+        if (opts?.runId === "taken") return { ok: false, reason: "workflow instance already exists: taken" };
+        return { ok: true, runId: opts?.runId ?? "auto-1" };
+      },
+    });
+    servers.push(srv);
+    expect((await postJson(srv, "/api/workflows/daily/run", { runId: "fresh" })).status).toBe(200);
+    const dup = await postJson(srv, "/api/workflows/daily/run", { runId: "taken" });
+    expect(dup.status).toBe(409);
+    expect(seen).toEqual(["fresh", "taken"]);
+  });
+});

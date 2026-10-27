@@ -442,7 +442,7 @@
 - [x] 312 待办门禁对齐
 - [x] 313 todo_extractor 系统提示段
 - [ ] 314 总结待办场景模板
-- [ ] 315 sourceRef 回链
+- [x] 315 sourceRef 回链 — 待办面板显示来源并在 web-/wf- 前缀时跳回会话
 - [x] 316 MCP 源标注
 - [x] 317 todo 导出
 - [x] 318 todo 搜索
@@ -451,8 +451,8 @@
 - [x] 321 TodoPanel 前端
 - [x] 322 今日聚焦视图
 - [x] 323 todo.changed 实时推送
-- [ ] 324 通知中心——todo 到期
-- [ ] 325 todo 与项目联动
+- [x] 324 todo 到期通知 — 通知 feed 含 ≤24h 未完成待办(元数据级)
+- [x] 325 todo 与项目联动 — 项目仪表盘聚合待办四态计数(#395)
 - [x] 326 todo 变更审计
 - [x] 327 todo gc
 - [x] 328 AgentManifest 契约
@@ -467,12 +467,12 @@
 - [x] 337 knowledge 范围
 - [x] 338 角色归因
 - [x] 339 "自己"语义
-- [ ] 340 角色 hydrate
+- [x] 340 角色 hydrate — 会话记录 agent 标签并在侧栏显示(#340/#350)
 - [x] 341 角色中止与门禁
 - [x] 342 `GET /api/agents`
 - [x] 343 AgentsPanel 前端
-- [ ] 344 角色场景卡
-- [ ] 345 agents validate 触发
+- [x] 344 角色场景卡 — Home「Talk to a role」打开 AgentsPanel(选中即设 scope)
+- [x] 345 agents validate web — 校验端点可解析 config/agents|workflows|projects 路径(与 CLI 同 runner)
 - [x] 346 角色脚手架
 - [x] 347 角色导出
 - [x] 348 五角色示例包
@@ -482,7 +482,7 @@
 - [x] 352 角色 docs
 - [x] 353 WorkflowManifest 契约
 - [x] 354 步骤五型
-- [ ] 355 顺序执行
+- [x] 355 顺序执行 — runWorkflow 依序 + {prev} 注入(测试覆盖)
 - [x] 356 trigger 三型
 - [x] 357 cron 解析（零依赖）
 - [x] 358 workflow validate
@@ -490,7 +490,7 @@
 - [x] 360 step 间上下文传递
 - [x] 361 human-in-the-loop 步骤
 - [x] 362 失败语义
-- [ ] 363 幂等与重试
+- [x] 363 幂等去重 — 客户端 runId 已存在时 409,绝不重跑;tool 步骤复用 #205 幂等执行器
 - [x] 364 workflow 状态机
 - [ ] 365 abort 联动
 - [ ] 366 并发上限
@@ -561,11 +561,11 @@
 - [x] 431 通知轮询基建 — `/api/notifications` + 铃铛 30s 轮询(零 WebSocket)
 - [ ] 432 面板组件统一
 - [x] 433 四空态 — todos/roles/workflows/projects 面板各有指引(含 scaffold 命令)
-- [ ] 434 scaffold 文档贯通
+- [x] 434 scaffold 文档贯通 — docs/index「From nothing to something」四类 scaffold + 中文对照
 - [x] 435 刷新协议 — 直接 fetch + 定时刷新,零第三方状态库
 - [x] 436 主题覆盖 — 新面板全部用 token,跟随 data-theme
 - [ ] 437 E2E 覆盖新面
-- [ ] 438 负向验收扩编
+- [x] 438 负向验收扩编 — spec M20 增补 v4 三条边界(编辑器/对等协议/待办领域模型)
 - [x] 439 README 产品面更新 — 双语「个人工作台」表(五面全部映射到 yml/契约/数据分界)
 - [x] 440 架构图更新 — README 双语 mermaid:配置 yml → 挂载 → turn/围栏 → .agentos 数据 → 五区控制台(只读回指配置)
 - [x] 441 progress.md 扩编
@@ -587,6 +587,10 @@
 - [x] 457 演示脚本 — scripts/demo-workbench.mjs 五段离线演示(validate/kb lint/bench/跨运行时),一条命令全绿
 
 ## v4 执行记录（2026-10-27 起）
+
+- 315/344/363：待办来源回跳、Home 角色卡直达 AgentsPanel、runId 幂等(已存在 409)。
+
+- 324/325/340/345/355/434/438：通知到期项、项目待办计数、会话角色徽章、校验端点覆盖 agents/workflows/projects 路径、顺序执行落账、scaffold 文档四类贯通、spec M20 v4 边界增补成文。
 
 - 427/430/440：通知中心第三类(待确认门禁，只计数)、Alt+1..5 区域快捷键、README 双语 mermaid 产品面架构图(配置→挂载→运行→数据→控制台)。
 

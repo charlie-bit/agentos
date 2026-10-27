@@ -62,6 +62,7 @@ function SessionItem({
       ) : (
         <>
           <span className="min-w-0 flex-1 truncate font-mono">{label}</span>
+          {row.agent && <span className="shrink-0 rounded bg-secondary px-1 text-[9px] text-muted-foreground">{row.agent}</span>}
           <button
             type="button"
             title="rename"

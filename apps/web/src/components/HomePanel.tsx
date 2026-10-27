@@ -15,9 +15,15 @@ const SCENARIOS = [
 export function HomePanel({
   onZone,
   onPickSession,
+  onOpenAgents,
+  onAsk,
 }: {
   onZone: (zone: "chats" | "todos" | "workflows" | "projects") => void;
   onPickSession: (browserId: string) => void;
+  /** Role card (#344): chooses a role from the mounted catalogue. */
+  onOpenAgents?: () => void;
+  /** Scenario prompt templates (#314): one click sends a prepared request. */
+  onAsk?: (prompt: string) => void;
 }) {
   const [todos, setTodos] = useState<Todo[]>([]);
   const [sessions, setSessions] = useState<SessionRow[]>([]);
@@ -33,7 +39,21 @@ export function HomePanel({
       <div className="mx-auto flex max-w-3xl flex-col gap-4 px-4 py-6 text-sm">
         <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
           {SCENARIOS.map(({ key, label, hint, Icon, zone }) => (
-            <button key={key} onClick={() => onZone(zone)} className="rounded-lg border border-border p-3 text-left hover:border-primary">
+            <button
+              key={key}
+              onClick={() => {
+                if (key === "summarise" && onAsk) {
+                  onAsk("Review my open todos, remove anything stale, and propose today's focus. Add any missing follow-ups with todo_add.");
+                  return;
+                }
+                if (key === "role" && onOpenAgents) {
+                  onOpenAgents();
+                  return;
+                }
+                onZone(zone);
+              }}
+              className="rounded-lg border border-border p-3 text-left hover:border-primary"
+            >
               <Icon className="mb-1 h-4 w-4 text-primary" />
               <div className="font-medium">{label}</div>
               <div className="text-[11px] text-muted-foreground">{hint}</div>

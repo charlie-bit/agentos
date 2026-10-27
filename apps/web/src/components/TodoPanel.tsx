@@ -21,7 +21,14 @@ export function isTodayFocus(t: Todo, now = Date.now()): boolean {
 }
 
 /** Four-column board (#321) with a today focus toggle (#322), 5s polling. */
-export function TodoPanel({ onClose }: { onClose: () => void }) {
+export function TodoPanel({
+  onClose,
+  onOpenSession,
+}: {
+  onClose: () => void;
+  /** Jump to the session a todo came from (#315). */
+  onOpenSession?: (sessionKey: string) => void;
+}) {
   const [todos, setTodos] = useState<Todo[]>([]);
   const [query, setQuery] = useState("");
   const [todayOnly, setTodayOnly] = useState(false);
@@ -114,6 +121,15 @@ export function TodoPanel({ onClose }: { onClose: () => void }) {
                       <div className="mt-0.5 flex items-center gap-1 text-[10px] text-muted-foreground">
                         {t.priority && <span className={cn("rounded px-1", t.priority === "P0" ? "bg-err/20 text-err" : t.priority === "P1" ? "bg-warn/20 text-warn" : "")}>{t.priority}</span>}
                         <span>{t.sourceKind}</span>
+                        {t.sourceRef && /^(web-|wf-)/.test(t.sourceRef) && onOpenSession && (
+                          <button
+                            className="text-primary underline decoration-dotted"
+                            title="open the session this todo came from"
+                            onClick={() => onOpenSession(t.sourceRef as string)}
+                          >
+                            source
+                          </button>
+                        )}
                         {t.dueAt && <span>due {new Date(t.dueAt).toISOString().slice(5, 10)}</span>}
                         <span className="flex-1" />
                         <button

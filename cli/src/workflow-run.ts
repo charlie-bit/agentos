@@ -45,11 +45,16 @@ export function createWorkflowRunner(cfg: WorkflowRunnerConfig) {
   return async function run(
     name: string,
     trigger: "manual" | "webhook" | "schedule",
-    opts: { project?: string; resumeFrom?: number } = {},
+    opts: { project?: string; resumeFrom?: number; runId?: string } = {},
   ): Promise<TriggerResult> {
     const manifest = cfg.workflows.get(name);
     if (!manifest) return { ok: false, reason: `unknown workflow: ${name}` };
-    const runId = randomUUID();
+    // Idempotency by instance id (#363): a caller-supplied runId that already
+    // exists is refused, never silently re-run.
+    if (opts.runId && cfg.ledger.workflowRunGet(opts.runId)) {
+      return { ok: false, reason: `workflow instance already exists: ${opts.runId}` };
+    }
+    const runId = opts.runId ?? randomUUID();
     const workspace = cfg.workspaceFor(runId);
     const started = now();
 

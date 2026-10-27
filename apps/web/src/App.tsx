@@ -193,6 +193,11 @@ export default function App() {
                 if (z === "projects") setShowProjects(true);
               }}
               onPickSession={pickSession}
+              onOpenAgents={() => setShowAgents(true)}
+              onAsk={(prompt) => {
+                setZone("chats");
+                void send(prompt);
+              }}
             />
           ) : (
           <ChatStream
@@ -226,7 +231,7 @@ export default function App() {
             {showTools && <ToolsPanel onClose={() => setShowTools(false)} />}
             {showEscalations && <EscalationsPanel onClose={() => setShowEscalations(false)} />}
             {showTimeline && <TimelinePanel state={state} onClose={() => setShowTimeline(false)} />}
-            {showTodos && <TodoPanel onClose={() => setShowTodos(false)} />}
+            {showTodos && <TodoPanel onClose={() => setShowTodos(false)} onOpenSession={(key) => pickSession(key)} />}
             {showAgents && <AgentsPanel onClose={() => setShowAgents(false)} />}
             {showUsagePanel && <UsagePanel onClose={() => setShowUsagePanel(false)} />}
             </div>

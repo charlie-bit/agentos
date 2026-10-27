@@ -1362,11 +1362,13 @@ export async function startServer(o: StartServerOptions): Promise<RunningServer>
         resumeFrom = body.resumeFrom;
       }
       try {
+        const runId = typeof body?.runId === "string" && body.runId.length > 0 && body.runId.length <= 120 ? body.runId : undefined;
         const result = await o.runWorkflow(name, "manual", {
           ...(typeof body?.project === "string" ? { project: body.project } : {}),
           ...(resumeFrom !== undefined ? { resumeFrom } : {}),
+          ...(runId ? { runId } : {}),
         });
-        if (!result.ok) return sendJson(res, 404, result);
+        if (!result.ok) return sendJson(res, /already exists/.test(result.reason ?? "") ? 409 : 404, result);
         return sendJson(res, 200, result);
       } catch {
         return sendJson(res, 500, { ok: false, reason: "engine failure" });
