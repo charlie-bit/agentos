@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Bot, CalendarClock, CirclePlay, CircleStop, CircleCheck, CircleAlert, Play, Search, Webhook, Wrench } from "lucide-react";
-import { getWorkflowRuns, getWorkflows, runWorkflow, type WorkflowRun, type WorkflowSummary } from "../lib/api";
+import { getWorkflowRun, getWorkflowRuns, getWorkflows, runWorkflow, type WorkflowRun, type WorkflowStepOutcome, type WorkflowSummary } from "../lib/api";
 import { ScrollArea } from "./ui/scroll-area";
 import { Button } from "./ui/button";
 import { cn } from "../lib/utils";
@@ -14,6 +14,7 @@ export function WorkflowsPanel({ onClose }: { onClose: () => void }) {
   const [workflows, setWorkflows] = useState<WorkflowSummary[]>([]);
   const [open, setOpen] = useState<string | null>(null);
   const [runs, setRuns] = useState<WorkflowRun[]>([]);
+  const [detail, setDetail] = useState<{ id: string; steps: WorkflowStepOutcome[]; run: WorkflowRun } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = async () => {
@@ -82,10 +83,19 @@ export function WorkflowsPanel({ onClose }: { onClose: () => void }) {
                         {runs.slice(0, 5).map((r) => {
                           const S = STATUS_ICON[r.status];
                           return (
-                            <li key={r.id} className="flex items-center gap-1 text-[10px]">
-                              <S className={cn("h-3 w-3", r.status === "error" ? "text-err" : r.status === "done" ? "text-ok" : "text-muted-foreground")} />
-                              <span className="font-mono text-muted-foreground">{new Date(r.startedAtMs).toLocaleString()}</span>
-                              <span className="text-muted-foreground">{r.status}</span>
+                            <li key={r.id}>
+                              <button
+                                className="flex w-full items-center gap-1 text-[10px]"
+                                onClick={() =>
+                                  void getWorkflowRun(r.id)
+                                    .then((d) => setDetail({ id: r.id, steps: d.steps, run: d.run }))
+                                    .catch(() => setDetail(null))
+                                }
+                              >
+                                <S className={cn("h-3 w-3", r.status === "error" ? "text-err" : r.status === "done" ? "text-ok" : "text-muted-foreground")} />
+                                <span className="font-mono text-muted-foreground">{new Date(r.startedAtMs).toLocaleString()}</span>
+                                <span className="text-muted-foreground">{r.status}</span>
+                              </button>
                             </li>
                           );
                         })}
@@ -94,6 +104,31 @@ export function WorkflowsPanel({ onClose }: { onClose: () => void }) {
                     <Button size="sm" variant="outline" className="mt-1" onClick={() => void runWorkflow(w.name).then(refresh)}>
                       run now
                     </Button>
+                    {detail && (
+                      <div className="mt-1 rounded border border-border p-1">
+                        <div className="mb-1 text-[10px] text-muted-foreground">instance {detail.id.slice(0, 8)} · {detail.run.status}</div>
+                        <ol className="space-y-0.5">
+                          {detail.steps.map((st) => (
+                            <li key={st.index} className="flex items-center gap-1 text-[10px]">
+                              <span className={cn("w-1.5 h-1.5 rounded-full", st.status === "ok" ? "bg-ok" : st.status === "error" ? "bg-err" : st.status === "denied" ? "bg-warn" : "bg-muted")} />
+                              <span className="font-mono">{st.index + 1}. {st.type}</span>
+                              <span className="text-muted-foreground">{st.status} · {st.durationMs}ms</span>
+                              {st.error && <span className="truncate text-err" title={st.error}>{st.error.slice(0, 40)}</span>}
+                            </li>
+                          ))}
+                        </ol>
+                        {detail.run.resumeFrom !== null && detail.run.resumeFrom !== undefined && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="mt-1"
+                            onClick={() => void runWorkflow(w.name, detail.run.resumeFrom as number).then(refresh)}
+                          >
+                            resume from step {(detail.run.resumeFrom as number) + 1}
+                          </Button>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
               </li>

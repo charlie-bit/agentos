@@ -505,8 +505,8 @@
 - [x] 375 WorkflowsPanel 前端
 - [x] 376 workflow 只读图
 - [ ] 377 运行按钮 + 实例化
-- [ ] 378 实例时间线
-- [ ] 379 失败步骤重续 UI
+- [x] 378 实例时间线
+- [x] 379 失败步骤重续 UI
 - [ ] 380 schedule 下一跑时间显示
 - [ ] 381 错过窗可见性
 - [x] 382 workflow 脚手架
@@ -587,6 +587,8 @@
 - [ ] 457 v4 首跑演示脚本
 
 ## v4 执行记录（2026-10-27 起）
+
+- 378/379 实例时间线与重续：面板可点开单个实例，按步显示 状态/耗时/错误（复用时间线语义）；error 实例展示"从第 N 步重续"并调用 `resumeFrom`。数据来自 `/api/workflows/runs/:id`。
 
 - 引擎接线（#370/#371 真实化 + #383 可执行）：`cli/src/workflow-run.ts` 将执行器做成可注入 runner（agent=真实 turn、kb=provider、tool=进程内 todo_*、human 无通道即拒、MCP 工具明确报错不伪造）；serve 提供 runWorkflow/hookSecret + 60s 调度循环（先持久 lastRun 再触发，崩溃不双发）。离线测试覆盖 done/拒绝/未知/MCP 拒绝四条路径。
 

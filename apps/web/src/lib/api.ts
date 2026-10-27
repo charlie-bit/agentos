@@ -205,6 +205,9 @@ export interface WorkflowRun {
 }
 export const getWorkflows = () => jget<{ workflows: WorkflowSummary[] }>("/api/workflows");
 export const getWorkflowRuns = (name: string) => jget<{ runs: WorkflowRun[] }>(`/api/workflows/${encodeURIComponent(name)}/runs`);
+export interface WorkflowStepOutcome { index: number; type: string; status: "ok" | "error" | "denied" | "skipped"; durationMs: number; error?: string }
+export const getWorkflowRun = (id: string) =>
+  jget<{ run: WorkflowRun; steps: WorkflowStepOutcome[] }>(`/api/workflows/runs/${encodeURIComponent(id)}`);
 export const runWorkflow = (name: string, resumeFrom?: number) =>
   jpost<{ ok: boolean; runId?: string; reason?: string }>(`/api/workflows/${encodeURIComponent(name)}/run`, {
     ...(resumeFrom !== undefined ? { resumeFrom } : {}),
