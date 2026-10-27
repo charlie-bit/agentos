@@ -84,3 +84,32 @@ function flat(base: Record<string, string>, extra: Record<string, string>): Reco
 function dirFiles(dir: string) {
   return loadManifestDir(dir);
 }
+
+describe("project template references (spec #388)", () => {
+  const preset = ["kind: preset", 'version: "1"', "name: p", "knowledge: k", "model: m", "tools: []", "entry: cli", ""].join("\n");
+  const base = {
+    "k.yml": ["kind: knowledge", 'version: "1"', "name: k", "provider: markdown", "mount: { type: path, path: ./kb }", ""].join("\n"),
+    "m.yml": ["kind: model", 'version: "1"', "name: m", "provider: v", "models: { a: real }", ""].join("\n"),
+    "p.yml": preset,
+    "a.yml": agent("a"),
+  };
+
+  it("a project naming local roles/workflows/tools/knowledge passes", () => {
+    const dir = book({
+      ...base,
+      "w.yml": ["kind: workflow", 'version: "1"', "name: w", "steps: [{ type: kb_search, query: x }]", ""].join("\n"),
+      "t.yml": ["kind: tool", 'version: "1"', "name: t", "transport: sdk", "auth: { mode: none }", "schemaExchange: json-schema", ""].join("\n"),
+      "proj.yml": ["kind: project", 'version: "1"', "name: proj", "agents: [a]", "workflows: [w]", "tools: [t]", "knowledge: [k]", ""].join("\n"),
+    });
+    expect(validatePresetRefs(dirFiles(dir).loaded, { entryNames: ["cli"] })).toEqual([]);
+  });
+
+  it("dangling and wrong-kind project references are rejected", () => {
+    const dir = book({
+      ...base,
+      "proj.yml": ["kind: project", 'version: "1"', "name: proj", "agents: [k]", "workflows: [ghost]", ""].join("\n"),
+    });
+    const errors = validatePresetRefs(dirFiles(dir).loaded, { entryNames: ["cli"] });
+    expect(errors.map((e) => e.path)).toEqual(expect.arrayContaining(["agents.0", "workflows.0"]));
+  });
+});

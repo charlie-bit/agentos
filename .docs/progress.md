@@ -515,7 +515,7 @@
 - [x] 385 workflow 审计
 - [x] 386 workflow 通知
 - [x] 387 workflow 会话回链
-- [ ] 388 项目模板 yml
+- [x] 388 项目模板 yml
 - [ ] 389 项目实例（数据面）
 - [ ] 390 模板 vs 实例边界守护
 - [ ] 391 项目 validate + 脚手架
@@ -587,6 +587,8 @@
 - [ ] 457 v4 首跑演示脚本
 
 ## v4 执行记录（2026-10-27 起）
+
+- 388 项目模板契约：`kind: project`（description + agents/workflows/tools/knowledge 四个可选引用列表，strict）；loader 路由；validate 校验悬空与错 kind 引用。契约与 manifest 测试齐。
 
 - 387 会话回链：每次运行一个 `wf-<runId>` 会话（agent 标签 + sdk 指针），实例行记 `session_key`；API/面板暴露"session"跳转，复用既有 hydrate 回放。
 

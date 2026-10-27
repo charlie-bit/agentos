@@ -115,6 +115,23 @@ export function validatePresetRefs(
     });
   }
 
+  for (const { source, manifest } of loaded) {
+    if (manifest.kind !== "project") continue;
+    const checks: Array<["agents" | "workflows" | "tools" | "knowledge", string]> = [
+      ["agents", "agent"],
+      ["workflows", "workflow"],
+      ["tools", "tool"],
+      ["knowledge", "knowledge"],
+    ];
+    for (const [slot, kind] of checks) {
+      (manifest[slot] ?? []).forEach((ref, i) => {
+        const found = byName.get(ref);
+        if (!found) errors.push({ source, category: REF, path: `${slot}.${i}`, message: `references ${JSON.stringify(ref)}, which no manifest declares` });
+        else if (found.kind !== kind) errors.push({ source, category: REF, path: `${slot}.${i}`, message: `references ${JSON.stringify(ref)} as a ${kind}, but it is a ${JSON.stringify(found.kind)} manifest` });
+      });
+    }
+  }
+
   const entryNames = new Set(opts.entryNames ?? []);
   for (const { source, manifest } of loaded) {
     if (manifest.kind !== "preset") continue;
