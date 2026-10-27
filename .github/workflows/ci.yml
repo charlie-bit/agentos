@@ -56,5 +56,13 @@ jobs:
         if: vars.AGENTOS_EXTERNAL_SMOKE == 'on'
         run: node scripts/fixtures/echo-mcp-server.mjs < /dev/null > /dev/null
 
+      # spec #452: heavy example checks stay opt-in so PRs stay fast.
+      - name: Workbench smoke (opt-in)
+        if: vars.AGENTOS_WORKBENCH_SMOKE == 'on'
+        run: |
+          node cli/main.mjs preset validate examples/workbench/presets/workbench.yml
+          node cli/main.mjs projects validate examples/workbench/projects/workbench-demo.yml
+          node cli/main.mjs kb lint examples/workbench/knowledge/book --strict
+
       - name: KB lint (book socket)
         run: node cli/main.mjs kb lint knowledge-base --strict

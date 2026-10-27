@@ -576,17 +576,19 @@
 - [ ] 446 围栏矩阵测试
 - [ ] 447 并发与恢复
 - [x] 448 性能预算扩展 — docs/performance.md 增调度窗/围栏两行 + `scripts/bench-workflow.mjs` 基准(实测 ~0.001ms/call)
-- [ ] 449 examples/workbench 完整示例
+- [x] 449 examples/workbench 聚合示例 — 5 角色 + daily-brief + workbench-demo 模板 + 知识库(外部 agent 见 fixtures);validate 10 manifests 绿
 - [ ] 450 examples 脚本化冒烟
-- [ ] 451 examples README
-- [ ] 452 CI 扩展
+- [x] 451 examples README — 双语五件套逐段「是什么/为什么是 yml」
+- [x] 452 CI opt-in — Workbench smoke job(vars.AGENTOS_WORKBENCH_SMOKE=on)跑 preset/projects validate + kb lint
 - [ ] 453 M20 边界复审
-- [ ] 454 v2.0 判据
+- [x] 454 v2.0 判据 — roadmap 写死:1–457 全绿(v1.0 维持 1–307),同一台账计数
 - [ ] 455 隐私复审
 - [ ] 456 文档站扩编
 - [ ] 457 v4 首跑演示脚本
 
 ## v4 执行记录（2026-10-27 起）
+
+- M37 收尾：#449 聚合示例、#451 examples 双语 README、#452 CI opt-in、#454 v2.0 判据落文。仍开放：#446 围栏矩阵、#447 崩溃恢复 e2e、#450 workbench-smoke 脚本、#453/#455 复审记录、#456 五指南(现为 contracts/presets/agents/projects/external-agents 五份,需在 index 收拢)、#457 演示脚本。
 
 - M37 基建：#443/#444/#445/#448 落账(四类契约测试、additive migration、假时钟调度测试、基准脚本 + 预算表两行)。仍开放：#446 围栏矩阵(组合 conformance)、#447 崩溃恢复 e2e、#449 workbench 聚合示例补齐、#450 smoke 脚本、#451 examples README 五段、#452 CI opt-in、#453/#455 复审记录、#454 v2.0 判据、#456 五指南、#457 演示脚本。
 

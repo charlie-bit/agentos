@@ -8,6 +8,13 @@ v3 to the full 307-point list):
 3. cross-runtime acceptance (#144/#298) passes: one preset, two runtimes,
    inject → retrieve → writeback.
 
+## v2.0 criteria (spec #454)
+
+v2.0 = **1–457 all green** (v1.0 keeps its own 1–307 gate, #170). The product
+surface (308–457) is what turns the framework into the personal workbench; it
+does not relax any v1.0 criterion. Both gates are counted from the same ledger,
+so a point cannot be green for one release and red for the other.
+
 ## Current state — auto-generated from `.docs/progress.md`
 
 | Status | Count |
