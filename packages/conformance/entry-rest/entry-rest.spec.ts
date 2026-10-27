@@ -1943,3 +1943,21 @@ describe("project export + delete semantics (spec #396/#397)", () => {
     expect((await postJson(srv, "/api/project-instances", { template: "web-revamp", title: "Q2 again" })).status).toBe(201);
   });
 });
+
+describe("scheduler heartbeat on status (spec #428)", () => {
+  it("is omitted when unwired and reports alive/activeRuns when supplied", async () => {
+    const { srv } = await boot(async () => ({}));
+    expect(((await (await api(srv, "/api/status")).json()) as { scheduler: unknown }).scheduler).toBeNull();
+
+    const dir = mkdtempSync(join(tmpdir(), "agentos-sched-"));
+    tempDirs.push(dir);
+    const dbPath = join(dir, "sessions.db");
+    const wired = await startServer({
+      presetName: "p", model: { provider: "v" }, mounts: [], runner: async () => ({}),
+      ledger: openLedger(dbPath), port: 0, dbPath, staticDir: makeStaticDir(dir),
+      schedulerStatus: () => ({ alive: true, activeRuns: 2 }),
+    });
+    servers.push(wired);
+    expect(((await (await api(wired, "/api/status")).json()) as { scheduler: unknown }).scheduler).toEqual({ alive: true, activeRuns: 2 });
+  });
+});

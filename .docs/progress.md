@@ -555,7 +555,7 @@
 - [ ] 425 五区导航
 - [ ] 426 ⌘K 快捷启动
 - [ ] 427 通知中心
-- [ ] 428 全局状态条扩展
+- [x] 428 调度心跳 — /api/status.scheduler {alive, activeRuns} + 状态条徽章
 - [ ] 429 移动端适配扩展
 - [ ] 430 键盘路径扩展
 - [x] 431 通知轮询基建 — `/api/notifications` + 铃铛 30s 轮询(零 WebSocket)
@@ -587,6 +587,8 @@
 - [x] 457 演示脚本 — scripts/demo-workbench.mjs 五段离线演示(validate/kb lint/bench/跨运行时),一条命令全绿
 
 ## v4 执行记录（2026-10-27 起）
+
+- 428 调度心跳：status 增 `scheduler {alive, activeRuns}`（serve 从调度循环与 ledger running 实例计算），状态条显示 sched alive/dead 徽章；conformance 覆盖未接线 null 与接线值。
 
 - 450 workbench-smoke：`scripts/workbench-smoke.mjs` 用真实 ledger/模板/围栏/runner/HTTP 导出跑五段(模型 turn 在注入点打桩),离线 exit 0;加入 opt-in CI workbench job。
 

@@ -101,6 +101,8 @@ export interface StartServerOptions {
   entry?: { name: string; confirm: boolean };
   /** Runtime dialect of the active model channel (spec #213). */
   dialect?: string;
+  /** Scheduler liveness + active instances (spec #428). */
+  scheduler?: { alive: boolean; activeRuns: number };
   runner: TurnRunner;
   ledger: Ledger;
   /** 0 = ephemeral port (tests). */
@@ -145,6 +147,8 @@ export interface StartServerOptions {
    * The engine is injected; this package only routes and authenticates.
    */
   runWorkflow?: (name: string, trigger: "manual" | "webhook", opts?: { project?: string; resumeFrom?: number }) => Promise<{ ok: boolean; runId?: string; reason?: string }>;
+  /** Scheduler heartbeat supplier (#428); absent = field omitted. */
+  schedulerStatus?: () => { alive: boolean; activeRuns: number } | Promise<{ alive: boolean; activeRuns: number }>;
   /** Project templates (config, read-only) and instances (data, writable) — #389/#390. */
   projectTemplates?: () => ProjectTemplateSummary[] | Promise<ProjectTemplateSummary[]>;
   projectInstances?: {
@@ -789,6 +793,7 @@ export async function startServer(o: StartServerOptions): Promise<RunningServer>
         knowledge: o.knowledge ?? null,
         entry: o.entry ?? null,
         dialect: o.dialect ?? null,
+        scheduler: o.schedulerStatus ? await o.schedulerStatus() : null,
         systemPrompt: o.systemPrompt ?? null,
         ...entry.statusSnapshot(
           url.searchParams.get("session") === null ? undefined : webExternalKey(url.searchParams.get("session") as string),

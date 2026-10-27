@@ -118,6 +118,15 @@ export function StatusStrip({
       <NotificationsBell />
       <ThemeToggle />
       <span className="flex-1" />
+      {status.scheduler && (
+        <Badge
+          className={status.scheduler.alive ? "border-ok/40 text-ok" : "border-err/40 text-err"}
+          title="workflow scheduler heartbeat (60s window)"
+        >
+          sched {status.scheduler.alive ? "alive" : "dead"}
+          {status.scheduler.activeRuns > 0 ? ` · ${status.scheduler.activeRuns} run` : ""}
+        </Badge>
+      )}
       {driftCount > 0 ? (
         <Badge className="border-warn text-warn" title={JSON.stringify(status.lastDrift)}>
           <TriangleAlert className="h-3 w-3" /> drift {driftCount}

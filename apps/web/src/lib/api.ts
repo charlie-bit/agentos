@@ -84,6 +84,7 @@ export interface StatusResponse {
   knowledge?: { name: string; manifestPath?: string | null; mountType?: string | null } | null;
   entry?: { name: string; confirm: boolean } | null;
   dialect?: string | null;
+  scheduler?: { alive: boolean; activeRuns: number } | null;
   lastDrift: { missing: string[]; undeclared: string[] } | null;
   waitingConfirms: number;
   systemPrompt: string | null;
