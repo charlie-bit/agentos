@@ -32,6 +32,8 @@ export interface SessionRow {
   title: string | null;
   /** Role that last ran this session (spec #340); null = the preset's own kernel. */
   agent: string | null;
+  /** Project instance this session belongs to (#393); null = unfiled. */
+  project: string | null;
 }
 
 export interface NewSession {
@@ -57,6 +59,7 @@ export interface Ledger {
   setTitle(id: string, title: string | null): string | null;
   /** Record the role tag for hydrate/filter (#340); null clears it. */
   setAgent(id: string, agent: string | null): void;
+  setProject(id: string, project: string | null): void;
   /** Refresh last_active_ms to now. */
   touch(id: string): void;
   /**
@@ -189,6 +192,7 @@ function toRow(r: DbRow): SessionRow {
     lastActiveMs: r.last_active_ms,
     title: r.title,
     agent: (r as { agent?: string | null }).agent ?? null,
+    project: (r as { project?: string | null }).project ?? null,
   };
 }
 
@@ -217,6 +221,11 @@ export function openLedger(dbPath: string = ledgerPathFromEnv()): Ledger {
   }
   try {
     db.exec(`ALTER TABLE sessions ADD COLUMN agent TEXT`);
+  } catch {
+    /* column already present */
+  }
+  try {
+    db.exec(`ALTER TABLE sessions ADD COLUMN project TEXT`);
   } catch {
     /* column already present */
   }
@@ -305,6 +314,7 @@ export function openLedger(dbPath: string = ledgerPathFromEnv()): Ledger {
         lastActiveMs: now,
         title: null,
         agent: s.agent ?? null,
+        project: (s as { project?: string | null }).project ?? null,
       };
       db.prepare(
         `INSERT INTO sessions (id, entry, external_key, status, sdk_session_id, preset, created_at_ms, last_active_ms, agent)
@@ -336,6 +346,9 @@ export function openLedger(dbPath: string = ledgerPathFromEnv()): Ledger {
     },
     setSdkSessionId(id: string, sdkSessionId: string) {
       mustExist(id, db.prepare("UPDATE sessions SET sdk_session_id = ? WHERE id = ?").run(sdkSessionId, id).changes);
+    },
+    setProject(id: string, project: string | null) {
+      mustExist(id, db.prepare("UPDATE sessions SET project = ? WHERE id = ?").run(project, id).changes);
     },
     setAgent(id: string, agent: string | null) {
       mustExist(id, db.prepare("UPDATE sessions SET agent = ? WHERE id = ?").run(agent, id).changes);

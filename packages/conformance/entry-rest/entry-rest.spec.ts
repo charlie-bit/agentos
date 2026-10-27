@@ -1845,3 +1845,16 @@ describe("project templates + instances (spec #389/#390)", () => {
     }
   });
 });
+
+describe("project aggregation (spec #393/#394)", () => {
+  it("a turn with a project tags its session; the list filters by project", async () => {
+    const { srv } = await boot(async () => ({}));
+    await (await postJson(srv, "/api/chat", { sessionId: "p-a", message: "hi", project: "inst-1" })).text();
+    await (await postJson(srv, "/api/chat", { sessionId: "p-b", message: "hi" })).text();
+    const rows = (await (await api(srv, "/api/sessions?project=inst-1")).json()) as { sessions: Array<{ external_key: string; project: string | null }> };
+    expect(rows.sessions.map((s) => s.external_key)).toEqual(["web-p-a"]);
+    expect(rows.sessions[0]?.project).toBe("inst-1");
+    const all = (await (await api(srv, "/api/sessions")).json()) as { sessions: Array<{ project: string | null }> };
+    expect(all.sessions.find((s) => s.project === null)).toBeDefined();
+  });
+});

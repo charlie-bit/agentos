@@ -805,6 +805,7 @@ export async function startServer(o: StartServerOptions): Promise<RunningServer>
       // Server-side search (spec #267): a bounded substring match over the
       // user-visible labels only (title / external key) — never transcripts.
       const agentFilter = url.searchParams.get("agent");
+      const projectFilter = url.searchParams.get("project");
       if (agentFilter !== null && agentFilter.length > 120) return sendJson(res, 400, { error: "agent must be at most 120 chars" });
       const rawQ = url.searchParams.get("q");
       if (rawQ !== null && rawQ.length > 200) return sendJson(res, 400, { error: "q must be at most 200 chars" });
@@ -823,11 +824,15 @@ export async function startServer(o: StartServerOptions): Promise<RunningServer>
           clauses.push("agent = ?");
           filters.push(agentFilter);
         }
+        if (projectFilter !== null && projectFilter.length > 0) {
+          clauses.push("project = ?");
+          filters.push(projectFilter);
+        }
         const where = clauses.length > 0 ? ` WHERE ${clauses.join(" AND ")}` : "";
         const params = [...filters, limit, offset];
         const rows = db
           .prepare(
-            `SELECT id, external_key, status, preset, last_active_ms, title, agent FROM sessions${where} ORDER BY last_active_ms DESC, id DESC LIMIT ? OFFSET ?`,
+            `SELECT id, external_key, status, preset, last_active_ms, title, agent, project FROM sessions${where} ORDER BY last_active_ms DESC, id DESC LIMIT ? OFFSET ?`,
           )
           .all(...params) as Array<Record<string, unknown>>;
         const countRow = db
@@ -1545,6 +1550,13 @@ export async function startServer(o: StartServerOptions): Promise<RunningServer>
       // flip it back on — otherwise the row shows idle while work is happening.
       if (row) {
         o.ledger.markStatus(row.id, "running");
+        if (project) {
+          try {
+            o.ledger.setProject(row.id, project);
+          } catch {
+            /* concurrent delete: the turn still runs */
+          }
+        }
         o.ledger.touch(row.id);
         // Role tag is session state (#340): hydrate and filtering both read it.
         if (agent) {
