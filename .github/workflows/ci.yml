@@ -63,6 +63,7 @@ jobs:
           node cli/main.mjs preset validate examples/workbench/presets/workbench.yml
           node cli/main.mjs projects validate examples/workbench/projects/workbench-demo.yml
           node cli/main.mjs kb lint examples/workbench/knowledge/book --strict
+          node scripts/workbench-smoke.mjs
 
       - name: KB lint (book socket)
         run: node cli/main.mjs kb lint knowledge-base --strict

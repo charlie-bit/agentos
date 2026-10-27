@@ -577,7 +577,7 @@
 - [x] 447 崩溃恢复 — 同库新 runner 从 `resumeFrom` 续跑至 done(跳步标记+待办落库),模拟进程重启
 - [x] 448 性能预算扩展 — docs/performance.md 增调度窗/围栏两行 + `scripts/bench-workflow.mjs` 基准(实测 ~0.001ms/call)
 - [x] 449 examples/workbench 聚合示例 — 5 角色 + daily-brief + workbench-demo 模板 + 知识库(外部 agent 见 fixtures);validate 10 manifests 绿
-- [ ] 450 examples 脚本化冒烟
+- [x] 450 workbench-smoke — scripts/workbench-smoke.mjs:挂载→实例→todo→workflow(人类门禁停在 step2 可续)→导出,离线全绿;进 opt-in CI
 - [x] 451 examples README — 双语五件套逐段「是什么/为什么是 yml」
 - [x] 452 CI opt-in — Workbench smoke job(vars.AGENTOS_WORKBENCH_SMOKE=on)跑 preset/projects validate + kb lint
 - [x] 453 M20 边界复审 — .docs/review-m20.md(八条逐一复核,零新增违规)
@@ -587,6 +587,8 @@
 - [x] 457 演示脚本 — scripts/demo-workbench.mjs 五段离线演示(validate/kb lint/bench/跨运行时),一条命令全绿
 
 ## v4 执行记录（2026-10-27 起）
+
+- 450 workbench-smoke：`scripts/workbench-smoke.mjs` 用真实 ledger/模板/围栏/runner/HTTP 导出跑五段(模型 turn 在注入点打桩),离线 exit 0;加入 opt-in CI workbench job。
 
 - 446/447 守护测试：围栏矩阵(角色工具 × 项目模板取交集)与崩溃恢复(新 runner 同库 resumeFrom 续跑至 done、前步标 skipped、待办落库)。
 
