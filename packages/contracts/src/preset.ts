@@ -56,6 +56,8 @@ export const presetSchema = manifestEnvelopeSchema.extend({
    * explicit, declared escape across endpoints — never an implicit one.
    */
   fallbackModels: z.array(z.string().min(1)).optional(),
+  /** Fifth reference layer (spec #333): agent roles this business may run. */
+  agents: z.array(z.string().min(1)).optional(),
 });
 
 export type Preset = z.infer<typeof presetSchema>;

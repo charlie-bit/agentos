@@ -67,6 +67,45 @@ export function validatePresetRefs(
   }
 
   // 3. Preset four slots must resolve to declared, kind-matching manifests.
+  const agentByName = new Map<string, { baseAgent?: string; source: string }>();
+  for (const { source, manifest } of loaded) {
+    if (manifest.kind === "agent") agentByName.set(manifest.name, { ...(manifest.baseAgent ? { baseAgent: manifest.baseAgent } : {}), source });
+  }
+  for (const { source, manifest } of loaded) {
+    if (manifest.kind !== "agent") continue;
+    if (manifest.baseAgent !== undefined) {
+      if (!agentByName.has(manifest.baseAgent)) {
+        errors.push({ source, category: REF, path: "baseAgent", message: `references agent ${JSON.stringify(manifest.baseAgent)}, which no config/agents manifest declares`, hint: "external agents are MCP tools (#418); baseAgent only names a local role" });
+      } else {
+        // cycle detection: walk the base chain from this agent
+        const seen = new Set<string>([manifest.name]);
+        let cursor: string | undefined = manifest.baseAgent;
+        while (cursor !== undefined) {
+          if (seen.has(cursor)) {
+            errors.push({ source, category: REF, path: "baseAgent", message: `baseAgent chain forms a cycle (${[...seen, cursor].join(" → ")})` });
+            break;
+          }
+          seen.add(cursor);
+          cursor = agentByName.get(cursor)?.baseAgent;
+        }
+      }
+    }
+    const check = (slot: "knowledge" | "model") => {
+      const ref = manifest[slot];
+      if (ref === undefined) return;
+      const kind = slot;
+      const found = byName.get(ref);
+      if (!found) errors.push({ source, category: REF, path: slot, message: `references ${JSON.stringify(ref)}, which no manifest declares` });
+      else if (found.kind !== kind) errors.push({ source, category: REF, path: slot, message: `references ${JSON.stringify(ref)} as a ${kind}, but it is a ${JSON.stringify(found.kind)} manifest` });
+    };
+    check("knowledge");
+    check("model");
+    if (manifest.tools !== undefined) for (const t of manifest.tools) {
+      const found = byName.get(t);
+      if (!found) errors.push({ source, category: REF, path: "tools", message: `references ${JSON.stringify(t)}, which no manifest declares` });
+    }
+  }
+
   const entryNames = new Set(opts.entryNames ?? []);
   for (const { source, manifest } of loaded) {
     if (manifest.kind !== "preset") continue;
@@ -112,6 +151,12 @@ export function validatePresetRefs(
           message: `references ${JSON.stringify(ref)} as a tool, but that name is a ${JSON.stringify(found.kind)} manifest`,
         });
       }
+    });
+
+    (manifest.agents ?? []).forEach((ref, i) => {
+      const found = byName.get(ref);
+      if (!found) errors.push({ source, category: REF, path: `agents.${i}`, message: `references agent ${JSON.stringify(ref)}, which no config/agents manifest declares` });
+      else if (found.kind !== "agent") errors.push({ source, category: REF, path: `agents.${i}`, message: `references ${JSON.stringify(ref)} as an agent, but it is a ${JSON.stringify(found.kind)} manifest` });
     });
 
     (manifest.fallbackModels ?? []).forEach((ref, i) => {

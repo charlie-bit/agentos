@@ -1,3 +1,4 @@
-kind: agent
+# `persona` is deliberately not a manifest kind (agent now IS one)
+kind: persona
 version: "1"
 name: whatever

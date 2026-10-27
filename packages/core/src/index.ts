@@ -5,3 +5,4 @@ export * from "./session/index.js";
 export * from "./loader/index.js";
 export * from "./routing/index.js";
 export * from "./governance/index.js";
+export * from "./agents/index.js";

@@ -24,6 +24,7 @@ const USAGE = [
   "  agentos kb gate                             P7b trigger: escalations vs window",
   "  agentos kb lint <dir> [--json] [--strict]  frontmatter conformance (exit 1 = errors)",
   "  agentos kb stale [<dir>]                    re-verification queue (most overdue first)",
+  "  agentos agents validate <file-or-dir>         load + reference-check agent roles",
   "  agentos data export <file.json>             bundle sessions + logs + drafts (no transcripts)",
   "  agentos data import <file.json>             restore a bundle (idempotent by external key)",
   "  agentos data gc [--keep-days N] [--dry-run] age out drafts/logs/workspaces",
@@ -60,6 +61,15 @@ export async function run(argv: readonly string[]): Promise<CliResult> {
       if (sub === "lint") return runKbLint(args);
       if (sub === "stale") return runKbStale(args);
       return { exitCode: 2, lines: ["✗ unknown kb subcommand (try: kb gate | kb lint | kb stale)", ...USAGE.slice(2)] };
+    }
+    case "agents": {
+      const [sub, ...args] = rest;
+      if (sub === "validate") {
+        const target = args[0];
+        if (!target || target.startsWith("-")) return { exitCode: 2, lines: ["✗ agents validate requires <file-or-dir>"] };
+        return runPresetValidate(target); // same loader path: agent kind is routed (#332)
+      }
+      return { exitCode: 2, lines: ["✗ unknown agents subcommand (try: agents validate)"] };
     }
     case "data": {
       const [sub, ...args] = rest;

@@ -455,13 +455,13 @@
 - [ ] 325 todo 与项目联动
 - [x] 326 todo 变更审计
 - [x] 327 todo gc
-- [ ] 328 AgentManifest 契约
-- [ ] 329 baseAgent 基座引用
-- [ ] 330 循环引用拒绝
-- [ ] 331 悬空引用拒绝
-- [ ] 332 agent manifest kind 分发
-- [ ] 333 preset×agent 关系
-- [ ] 334 `agentos agents validate`
+- [x] 328 AgentManifest 契约
+- [x] 329 baseAgent 基座引用
+- [x] 330 循环引用拒绝
+- [x] 331 悬空引用拒绝
+- [x] 332 agent manifest kind 分发
+- [x] 333 preset×agent 关系
+- [x] 334 `agentos agents validate`
 - [ ] 335 角色会话启动
 - [ ] 336 工具围栏
 - [ ] 337 knowledge 范围
@@ -587,6 +587,8 @@
 - [ ] 457 v4 首跑演示脚本
 
 ## v4 执行记录（2026-10-27 起）
+
+- M32 契约面：AgentManifest 进 contracts/loader（kind: agent）；validate 拒悬空 baseAgent/tools/knowledge/model、拒环、拒 baseAgent 指向 tool（#418 地基）；preset.agents 第五层引用；`resolveAgent` 实现拼接/并集/子覆盖；`agentos agents validate` 复制数据型 runner。
 
 - 313 提示段：BASE_SYSTEM_PROMPT 增 todo 捕获段（四个动词 + sourceKind），/api/status 既有披露覆盖；测试断言动词存在。
 - 316 来源标注：面板显示 sourceKind（chat/mcp/manual）+ `/api/todos?source=` 服务端过滤；todo_add 接受 sourceKind/sourceRef。
