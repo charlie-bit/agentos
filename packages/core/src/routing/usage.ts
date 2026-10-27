@@ -11,6 +11,8 @@ import { readFileSync } from "node:fs";
 
 export interface UsageAggregateRow {
   provider: string;
+  /** Role label when the turn ran under an agent (spec #338/#349). */
+  agent?: string;
   /** Model identity as logged: modelId, else alias, else the manifest name. */
   model: string;
   turns: number;
@@ -67,8 +69,9 @@ export function aggregateUsage(logPath: string, query: UsageQuery = {}): UsageAg
       (typeof rec.alias === "string" && rec.alias) ||
       (typeof rec.manifest === "string" && rec.manifest) ||
       "unknown";
-    const key = `${provider}\u0000${model}`;
-    const row = groups.get(key) ?? { provider, model, ...emptyTotals() };
+    const agent = typeof rec.agent === "string" && rec.agent.length > 0 ? rec.agent : undefined;
+    const key = `${provider}\u0000${model}\u0000${agent ?? ""}`;
+    const row = groups.get(key) ?? { provider, model, ...(agent ? { agent } : {}), ...emptyTotals() };
     const usage = (rec.usage ?? {}) as { input?: unknown; output?: unknown; cacheRead?: unknown; cacheWrite?: unknown };
     const num = (v: unknown): number => (typeof v === "number" && Number.isFinite(v) ? v : 0);
 

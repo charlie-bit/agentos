@@ -67,3 +67,17 @@ describe("aggregateUsage (#291)", () => {
     expect(JSON.stringify(aggregateUsage(path))).not.toContain("SECRET");
   });
 });
+
+describe("usage rolls up per agent (spec #338/#349)", () => {
+  it("rows carry the agent label and split totals by role", () => {
+    const path = log([
+      { tsMs: 1, provider: "p", modelId: "m", agent: "analyst", usage: { input: 10 }, costUsd: 0.01 },
+      { tsMs: 2, provider: "p", modelId: "m", agent: "analyst", usage: { input: 5 }, costUsd: 0.01 },
+      { tsMs: 3, provider: "p", modelId: "m", agent: "writer", usage: { input: 7 }, costUsd: 0.02 },
+    ]);
+    const agg = aggregateUsage(path);
+    expect(agg.rows).toHaveLength(2);
+    expect(agg.rows.find((r) => r.agent === "analyst")).toMatchObject({ turns: 2, input: 15 });
+    expect(agg.rows.find((r) => r.agent === "writer")).toMatchObject({ turns: 1, input: 7 });
+  });
+});

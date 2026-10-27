@@ -499,3 +499,22 @@ describe("todo capture prompt segment (spec #313)", () => {
     expect(BASE_SYSTEM_PROMPT).toContain("sourceKind");
   });
 });
+
+describe("role tool fence (spec #336)", () => {
+  const plans = [{ key: "fs", transport: "stdio" as const, stdio: { command: "x" }, allowedTools: ["read_file", "write_file"] }];
+
+  it("outside-fence MCP calls are denied; Read always survives", async () => {
+    const { canUseToolFromPlans } = await import("../index.js");
+    const gate = canUseToolFromPlans(plans, ["read_file"]);
+    expect(gate("Read")).toBe(true);
+    expect(gate("mcp__fs__read_file")).toBe(true);
+    expect(gate("mcp__fs__write_file")).toBe(false);
+    expect(gate("mcp__other__anything")).toBe(false);
+  });
+
+  it("the pre-approval list is intersected with the fence", async () => {
+    const { allowedToolsFromPlans } = await import("../index.js");
+    expect(allowedToolsFromPlans(plans, ["read_file"])).toEqual(["mcp__fs__read_file"]);
+    expect(allowedToolsFromPlans(plans)).toEqual(["mcp__fs__read_file", "mcp__fs__write_file"]);
+  });
+});

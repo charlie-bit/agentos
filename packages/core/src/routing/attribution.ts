@@ -28,6 +28,8 @@ export interface Attribution {
    * makes cost/quota roll-ups possible per deployment tenant.
    */
   tenant?: string;
+  /** Role that ran the turn (spec #338); absent = the preset's own kernel. */
+  agent?: string;
   manifest: string;
   provider: string;
   alias?: string;

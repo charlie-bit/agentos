@@ -1553,3 +1553,28 @@ describe("todo.changed over SSE (spec #323)", () => {
     expect(frames.some((f) => f.type === "assistant.text")).toBe(true); // partial kept
   });
 });
+
+describe("role turn plumbing (spec #335/#341)", () => {
+  it("forwards the agent name to the runner and keeps abort working on role turns", async () => {
+    const seen: Array<string | undefined> = [];
+    const { srv } = await boot(async (ctx) => {
+      seen.push(ctx.agent);
+      if (ctx.agent === "slow") {
+        await new Promise<void>((resolve) => {
+          if (ctx.signal?.aborted) resolve();
+          else ctx.signal?.addEventListener("abort", () => resolve(), { once: true });
+        });
+      }
+      return {};
+    });
+    await (await postJson(srv, "/api/chat", { sessionId: "r1", message: "hi", agent: "analyst" })).text();
+    expect(seen).toEqual(["analyst"]);
+
+    const stream = await postJson(srv, "/api/chat", { sessionId: "r2", message: "hi", agent: "slow" });
+    const reading = readFrames(stream);
+    await new Promise((r) => setTimeout(r, 20));
+    expect((await postJson(srv, "/api/sessions/r2/abort", {})).status).toBe(200);
+    const frames = await reading; // terminates; abort path reused unchanged
+    expect(frames.some((f) => f.type === "session.meta")).toBe(true);
+  });
+});

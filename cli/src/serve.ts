@@ -30,12 +30,13 @@ import {
   buildTodoTools,
   isIdempotent,
   kbPointerLine,
+  resolveAgent,
   type Attribution,
   type AnyManifest,
 } from "@agentos/core";
 import { createMarkdownProvider } from "@agentos/knowledge-markdown";
 import { ENTRY_ADAPTER_NAMES, toolProviderManifestSchema } from "@agentos/contracts";
-import type { ConfirmRequest, ConfirmResult, KnowledgeManifest, ModelProviderManifest, NeutralTool, ToolProviderManifest } from "@agentos/contracts";
+import type { AgentManifest, ConfirmRequest, ConfirmResult, KnowledgeManifest, ModelProviderManifest, NeutralTool, ToolProviderManifest } from "@agentos/contracts";
 import { dialect as compatDialect } from "@agentos/model-anthropic-compat";
 import { dialect as bedrockDialect } from "@agentos/model-bedrock";
 import { dialect as openaiDialect } from "@agentos/model-openai-compat";
@@ -77,6 +78,8 @@ export interface Assembly {
   knowledgeInfo?: { name: string; manifestPath: string | null; mountType: string | null };
   /** Preset's entry slot name (spec #262). */
   entryName: string;
+  /** Mounted role manifests by name (spec #328; preset.agents = the advertised subset). */
+  agents: Map<string, AgentManifest>;
   /** channel -> entry adapter routes (spec #212), defaulting to entryName. */
   channelRoutes: Record<string, string>;
   /** Preset-declared gates (spec #163/#164); absent = unlimited. */
@@ -126,6 +129,7 @@ export function wireTodo(ledger: import("@agentos/core").Ledger, workspaceDir?: 
 
 /** Routed turn-model: what runTurn needs + who to attribute the turn to. */
 interface RoutedModel {
+  agent?: string;
   lease: ModelLease;
   manifestName: string;
   provider: string;
@@ -160,6 +164,7 @@ function attributionFor(
     // Attribution is the only place tenancy exists (#209/#187): no kernel
     // multi-tenancy, just labels that make usage roll-ups possible.
     tenant: presetName,
+    ...(routed.agent ? { agent: routed.agent } : {}),
     manifest: routed.manifestName,
     provider: routed.provider,
     alias: routed.alias,
@@ -305,6 +310,12 @@ export function assemble(flags: ServeFlags): { ok: true; value: Assembly } | { o
       toolManifestPaths,
       ...(knowledgeInfo ? { knowledgeInfo } : {}),
       entryName: preset.entry,
+      agents: new Map<string, AgentManifest>(
+        manifests
+          .filter((m): m is AgentManifest => m.kind === "agent")
+          .filter((m) => (preset.agents ?? []).includes(m.name))
+          .map((m) => [m.name, m] as const),
+      ),
       channelRoutes: preset.channels ?? {},
       ...(preset.budgetUsd !== undefined ? { budgetUsd: preset.budgetUsd } : {}),
       ...(preset.maxConcurrentSessions !== undefined ? { maxConcurrentSessions: preset.maxConcurrentSessions } : {}),
@@ -686,6 +697,10 @@ export async function runServeWeb(flags: ServeFlags): Promise<number> {
     model: { provider: modelLease.provider, baseUrlEnv: modelLease.baseUrlEnv, credentialsEnv: modelLease.credentialsEnv },
     mounts,
     runner: async (ctx) => {
+      // Role turn (spec #335/#336): resolve the chain once; unknown role fails
+      // the turn loudly instead of silently running as the preset.
+      const role = ctx.agent ? resolveAgent(ctx.agent, asm.value.agents) : undefined;
+      if (ctx.agent && !role) throw new Error(`unknown agent role: ${ctx.agent}`);
       const releaseSlot = await turnSlots.acquire();
       const turn = (async () => {
       if (budgetExceeded(aggregateUsage(usageLogPath()).totals.costUsd, budgetUsd)) {
@@ -715,7 +730,8 @@ export async function runServeWeb(flags: ServeFlags): Promise<number> {
         signal: ctx.signal,
         toolMounts: [...plans, ...(kb ? [kb.plan] : []), ...(todoMount ? [todoMount.plan] : [])],
         sdkServers: { ...(kb?.sdkServers ?? {}), ...(todoMount?.sdkServers ?? {}) },
-        systemPromptAdditions: kb?.pointer,
+        systemPromptAdditions: [...(role ? [role.systemPrompt] : []), ...(kb?.pointer ?? [])],
+        ...(role && role.tools.length > 0 ? { toolAllowlist: role.tools } : {}),
         workspaceDir,
         resumeSdkSessionId: ctx.resumeSdkSessionId,
         onEvent: ctx.emit,
@@ -723,7 +739,7 @@ export async function runServeWeb(flags: ServeFlags): Promise<number> {
       });
       // server-side attribution: stdout line + usage.log. The web UI is frozen
       // for P5.1 visual review — attribution display there waits for that verdict.
-      const attr = attributionFor(out, effective.value, presetName, ctx.externalKey);
+      const attr = attributionFor(out, { ...effective.value, ...(role ? { agent: role.name } : {}) }, presetName, ctx.externalKey);
       write(`${formatAttributionLine(attr)}\n`);
       appendAttribution(attr);
       // Operational log (spec #124/#292): metadata only — session key, model

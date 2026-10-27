@@ -462,13 +462,13 @@
 - [x] 332 agent manifest kind 分发
 - [x] 333 preset×agent 关系
 - [x] 334 `agentos agents validate`
-- [ ] 335 角色会话启动
-- [ ] 336 工具围栏
+- [x] 335 角色会话启动
+- [x] 336 工具围栏
 - [ ] 337 knowledge 范围
-- [ ] 338 角色归因
-- [ ] 339 "自己"语义
+- [x] 338 角色归因
+- [x] 339 "自己"语义
 - [ ] 340 角色 hydrate
-- [ ] 341 角色中止与门禁
+- [x] 341 角色中止与门禁
 - [ ] 342 `GET /api/agents`
 - [ ] 343 AgentsPanel 前端
 - [ ] 344 角色场景卡
@@ -587,6 +587,8 @@
 - [ ] 457 v4 首跑演示脚本
 
 ## v4 执行记录（2026-10-27 起）
+
+- M32 运行时：`/api/chat` 接受 `agent`（请求级），serve 解析角色链 → 拼接 systemPrompt + `toolAllowlist` 围栏（canUseTool + 预批准列表双消费）；usage attribution/`/api/usage` 增 agent 维度；无角色路径零改动（现有套件回归）；角色 turn 的 abort/confirm 复用既有基建。
 
 - M32 契约面：AgentManifest 进 contracts/loader（kind: agent）；validate 拒悬空 baseAgent/tools/knowledge/model、拒环、拒 baseAgent 指向 tool（#418 地基）；preset.agents 第五层引用；`resolveAgent` 实现拼接/并集/子覆盖；`agentos agents validate` 复制数据型 runner。
 

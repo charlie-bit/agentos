@@ -51,6 +51,8 @@ export const CAPABILITIES: EntryAdapter["capabilities"] = { confirm: true };
 
 export interface ChatTurnContext {
   prompt: string;
+  /** Role name for this turn (spec #335); absent = the preset's own kernel. */
+  agent?: string;
   /** Cancellation for THIS turn (spec #254): abort => the runner stops; partial output already delivered stays. */
   signal?: AbortSignal;
   /** Ledger externalKey for this browser session ("web-<id>"). */
@@ -1215,6 +1217,7 @@ export async function startServer(o: StartServerOptions): Promise<RunningServer>
       }
       const externalKey = webExternalKey(sessionId);
       const modelOverride = typeof body?.model === "string" && body.model.length > 0 && body.model.length <= 120 ? body.model : undefined;
+      const agent = typeof body?.agent === "string" && body.agent.length > 0 && body.agent.length <= 120 ? body.agent : undefined;
       const binding = await entry.sessionFor(externalKey);
       const controller = new AbortController();
       const unregister = entry.registerTurn(externalKey, controller);
@@ -1256,6 +1259,7 @@ export async function startServer(o: StartServerOptions): Promise<RunningServer>
           prompt: message,
           signal: controller.signal,
           ...(modelOverride ? { modelOverride } : {}),
+          ...(agent ? { agent } : {}),
           externalKey,
           resumeSdkSessionId: row?.sdkSessionId ?? undefined,
           emit: (ev) => entry.renderFor(externalKey, [ev]),

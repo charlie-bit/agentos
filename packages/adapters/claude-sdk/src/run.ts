@@ -109,8 +109,12 @@ export function plansToMcpServers(
  * name. Plans without an allowlist contribute nothing here — their tools
  * fall to runtime permission behavior (P5 governance tightens this).
  */
-export function allowedToolsFromPlans(plans: readonly ToolMountPlan[]): string[] {
-  return plans.flatMap((p) => (p.allowedTools ?? []).map((t) => `mcp__${p.key}__${t}`));
+export function allowedToolsFromPlans(
+  plans: readonly ToolMountPlan[],
+  allowlist?: readonly string[],
+): string[] {
+  const fence = allowlist === undefined ? undefined : new Set(allowlist);
+  return plans.flatMap((p) => (p.allowedTools ?? []).filter((t) => fence === undefined || fence.has(t)).map((t) => `mcp__${p.key}__${t}`));
 }
 
 /**
@@ -168,12 +172,20 @@ export function sandboxUnverified(plans: readonly ToolMountPlan[]): string[] {
  * a structured DENY (never a throw — the turn survives, the lie surfaces as
  * a `tool.denied` RenderEvent so the user SEES the refusal, not a hang).
  */
-export function canUseToolFromPlans(plans: readonly ToolMountPlan[]): (toolName: string) => boolean {
+export function canUseToolFromPlans(
+  plans: readonly ToolMountPlan[],
+  /** Role fence (spec #336): bare tool names allowed for this turn. */
+  allowlist?: readonly string[],
+): (toolName: string) => boolean {
   const mountKeys = new Set(plans.map((p) => p.key));
+  const fence = allowlist === undefined ? undefined : new Set(allowlist);
   return (toolName: string): boolean => {
     if (toolName === "Read") return true;
     const m = /^mcp__([^_].*?)__/.exec(toolName);
-    return m?.[1] !== undefined && mountKeys.has(m[1]);
+    if (m?.[1] === undefined || !mountKeys.has(m[1])) return false;
+    if (fence === undefined) return true;
+    const bare = toolName.slice(`mcp__${m[1]}__`.length);
+    return fence.has(bare);
   };
 }
 
@@ -218,6 +230,8 @@ export interface TurnInput {
   prompt: string;
   /** SDK session id to continue; absent = fresh conversation. */
   resumeSdkSessionId?: string;
+  /** Role tool fence (spec #336): bare tool names allowed this turn; absent = full mount surface. */
+  toolAllowlist?: string[];
   /** Cancellation (spec #254): aborting stops the kernel turn; partial output stays where the consumer put it. */
   signal?: AbortSignal;
   /** Neutral mount plans from core/loader — the ONLY way tools reach the kernel now. */
@@ -567,7 +581,7 @@ export function buildQueryOptions(
     if (input.signal.aborted) abortController.abort();
     else input.signal.addEventListener("abort", () => abortController?.abort(), { once: true });
   }
-  const derived = input.allowedTools ?? allowedToolsFromPlans(input.toolMounts);
+  const derived = input.allowedTools ?? allowedToolsFromPlans(input.toolMounts, input.toolAllowlist);
   const fsRoots = fsRootsFromPlans(input.toolMounts, input.workspaceDir);
   return {
     systemPrompt:
@@ -601,7 +615,7 @@ export function buildQueryOptions(
 
 export async function runTurn(input: TurnInput): Promise<TurnOutput> {
   const opts = buildQueryOptions(input);
-  const gate = canUseToolFromPlans(input.toolMounts);
+  const gate = canUseToolFromPlans(input.toolMounts, input.toolAllowlist);
   // Execution-side hard gate (④a, see canUseToolFromPlans): a call outside
   // the menu mirror gets a structured deny — never a throw. Each denial also
   // lands one JSONL line in .agentos/audit.jsonl (usage.log's sibling dir):
