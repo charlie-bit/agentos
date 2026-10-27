@@ -215,3 +215,27 @@ describe("readTranscript: lookup and safety", () => {
     expect(out[0]?.text.length).toBe(50);
   });
 });
+
+describe("todo.changed replay marker (spec #311)", () => {
+  it("todo_* tool calls replay with the additive event; ordinary tools do not", () => {
+    const dir = mkdtempSync(join(tmpdir(), "agentos-tr-todo-"));
+    const home = join(dir, ".claude");
+    const cwd = "/w";
+    mkdirSync(join(home, "projects", projectDirName(cwd)), { recursive: true });
+    const file = join(home, "projects", projectDirName(cwd), "s-todo.jsonl");
+    writeFileSync(
+      file,
+      [
+        JSON.stringify({ type: "assistant", message: { content: [{ type: "tool_use", id: "a", name: "todo_add", input: { title: "x" } }] }, timestamp: "2026-01-01T00:00:00Z" }),
+        JSON.stringify({ type: "assistant", message: { content: [{ type: "tool_use", id: "b", name: "kb_search", input: { q: "y" } }] }, timestamp: "2026-01-01T00:00:01Z" }),
+        JSON.stringify({ type: "user", message: { content: [{ type: "tool_result", tool_use_id: "a", is_error: false }] } }),
+      ].join("\n"),
+    );
+    const entries = readTranscript("s-todo", cwd, { env: {}, homeDir: dir });
+    const todo = entries.find((e) => e.toolName === "todo_add");
+    const kb = entries.find((e) => e.toolName === "kb_search");
+    expect(todo?.event).toBe("todo.changed");
+    expect(kb?.event).toBeUndefined();
+    rmSync(dir, { recursive: true, force: true });
+  });
+});

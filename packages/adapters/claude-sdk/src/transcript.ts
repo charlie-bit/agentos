@@ -227,10 +227,14 @@ export function readTranscript(
         push({ role, text: block.text, ...stamp });
       } else if (block.type === "tool_use" && typeof block.name === "string") {
         const failed = typeof block.id === "string" ? outcomes.get(block.id) : undefined;
+        // Todo mutations replay as neutral change markers (spec #311): the
+        // fact that a todo moved is history; the todo itself lives in the DB.
+        const isTodoChange = /(^|__)todo_(add|update|remove)$/.test(block.name);
         push({
           role: "tool",
           text: JSON.stringify(block.input ?? null).slice(0, maxInput),
           toolName: block.name,
+          ...(isTodoChange ? { event: "todo.changed" as const } : {}),
           ...(failed === undefined ? {} : { isError: failed }),
           ...stamp,
         });

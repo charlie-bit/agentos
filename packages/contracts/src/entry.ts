@@ -43,6 +43,13 @@ export interface TranscriptEntry {
   readonly isError?: boolean;
   /** Unix epoch ms from the stored history; absent when the record carried none. */
   readonly timestampMs?: number;
+  /**
+   * Additive neutral marker (spec #311): a known change event this entry
+   * represents. Today only "todo.changed" exists — a todo_* tool call replayed
+   * from history. Absent for ordinary entries; consumers that do not know the
+   * value must render the entry exactly as before.
+   */
+  readonly event?: "todo.changed";
 }
 
 /**

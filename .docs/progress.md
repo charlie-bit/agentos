@@ -438,7 +438,7 @@
 - [x] 308 todo_item 契约
 - [x] 309 todo 工具族注册
 - [x] 310 todo 存储动词
-- [ ] 311 todo 待办视图（transcript）
+- [x] 311 todo 待办视图（transcript）
 - [x] 312 待办门禁对齐
 - [ ] 313 todo_extractor 系统提示段
 - [ ] 314 总结待办场景模板
@@ -590,5 +590,6 @@
 
 - [x] 308 契约落地：`packages/contracts/src/todo.ts`（zod + 同构 JSON Schema + 9 例测试）。
 - [x] 310 存储落地：ledger `todoWrite/todoList/todoDelete` + additive `PRAGMA user_version` 迁移 + 持久化/过滤/排序测试。
+- [x] 311 回放标记：TranscriptEntry 增 `event: "todo.changed"`（契约 additive），transcript reader 对 todo_* 工具调用打标；普通工具不受影响（测试）。
 - [x] 309/312 工具族：`governance/todo-tools.ts` 四工具（todo.changed 信封）+ serve 启动期挂载；幂等切分 todo_list=true、写三件=false（分支依据 plan，复用 #205 执行器/门禁）。
 - 待办工具族（309–312）→ AgentManifest（328+）→ 引擎（353+）依次推进。
