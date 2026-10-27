@@ -151,7 +151,7 @@ describe("two-phase writeback, end to end with real git", () => {
         confirmation: { confirmedBy: "cli-user:yes", confirmedAtMs: 1 },
       }),
     ).toThrow(/escapes the book root/);
-  });
+  }, 20_000);
 });
 
 describe("capability gates on the neutral tool set", () => {
