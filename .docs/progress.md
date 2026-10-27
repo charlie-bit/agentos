@@ -533,7 +533,7 @@
 - [x] 403 项目内新建角色会话
 - [x] 404 项目内触发 workflow
 - [x] 405 项目搜索
-- [ ] 406 示例项目
+- [x] 406 示例项目
 - [ ] 407 项目 docs
 - [ ] 408 外部 agent = tool manifest
 - [ ] 409 外部 agent manifest 规范
@@ -587,6 +587,8 @@
 - [ ] 457 v4 首跑演示脚本
 
 ## v4 执行记录（2026-10-27 起）
+
+- 406 示例项目：`examples/workbench/projects/workbench-demo.yml`（3 角色 + daily-brief + wb-kb），`projects validate` 10 manifests 全绿。
 
 - 403 项目内开角色会话：详情只显示模板声明的 agents，点击后把 (agent, project) 作为下一轮 scope（请求级转发，服务端围栏校验）；围栏外角色在 UI 与 API 都不可达。
 
