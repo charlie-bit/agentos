@@ -181,6 +181,13 @@ export const commitKbDraft = (receiptId: string) =>
 export const discardKbDraft = (receiptId: string) =>
   jpost<{ ok: boolean }>(`/api/kb/drafts/${encodeURIComponent(receiptId)}/discard`, {});
 
+/** Usage aggregate (spec #291/#349): metadata only, grouped per provider/model/agent. */
+export interface UsageRow { provider: string; model: string; agent?: string; turns: number; input: number; output: number; costUsd: number }
+export const getUsage = (sessionId?: string) =>
+  jget<{ rows: UsageRow[]; totals: { turns: number; input: number; output: number; costUsd: number } }>(
+    `/api/usage${sessionId ? `?session=${encodeURIComponent(sessionId)}` : ""}`,
+  );
+
 /** Role catalogue (spec #342/#343). */
 export interface AgentInfo {
   name: string;

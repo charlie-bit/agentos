@@ -18,6 +18,7 @@ import { EscalationsPanel } from "./components/EscalationsPanel";
 import { TimelinePanel } from "./components/TimelinePanel";
 import { TodoPanel } from "./components/TodoPanel";
 import { AgentsPanel } from "./components/AgentsPanel";
+import { UsagePanel } from "./components/UsagePanel";
 import { UsageBar } from "./components/UsageBar";
 
 /** Sidebar polling cadence — a session running from another tab/device must
@@ -41,6 +42,7 @@ export default function App() {
   const [showTimeline, setShowTimeline] = useState(false);
   const [showTodos, setShowTodos] = useState(false);
   const [showAgents, setShowAgents] = useState(false);
+  const [showUsagePanel, setShowUsagePanel] = useState(false);
   const [clearNonce, setClearNonce] = useState(0);
 
   const refresh = useCallback(async () => {
@@ -117,6 +119,7 @@ export default function App() {
         onToggleTimeline={() => setShowTimeline((v) => !v)}
         onToggleTodos={() => setShowTodos((v) => !v)}
         onToggleAgents={() => setShowAgents((v) => !v)}
+        onToggleUsage={() => setShowUsagePanel((v) => !v)}
       />
       <div className="flex min-h-0 flex-1">
         <button
@@ -170,6 +173,7 @@ export default function App() {
             {showTimeline && <TimelinePanel state={state} onClose={() => setShowTimeline(false)} />}
             {showTodos && <TodoPanel onClose={() => setShowTodos(false)} />}
             {showAgents && <AgentsPanel onClose={() => setShowAgents(false)} />}
+            {showUsagePanel && <UsagePanel onClose={() => setShowUsagePanel(false)} />}
           </div>
         </div>
       </div>

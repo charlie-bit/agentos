@@ -476,7 +476,7 @@
 - [x] 346 角色脚手架
 - [x] 347 角色导出
 - [x] 348 五角色示例包
-- [ ] 349 角色使用统计
+- [x] 349 角色使用统计
 - [x] 350 角色与会话列表关联
 - [x] 351 角色删除边界
 - [x] 352 角色 docs
@@ -587,6 +587,8 @@
 - [ ] 457 v4 首跑演示脚本
 
 ## v4 执行记录（2026-10-27 起）
+
+- 349 角色用量视图：UsagePanel 消费 `/api/usage` 的 agent 行（self 与各角色分行，turns/in/out/cost），数据面来自 #338。
 
 - 337 知识范围：角色 `knowledge` 声明作为 kb_search 的 scope 子树过滤（KbToolContext.searchScope → provider.search），serve 以角色解析结果注入；测试断言 scope 传递与"无声明不设限"。
 
