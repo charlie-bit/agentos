@@ -100,7 +100,7 @@ export function createWorkflowRunner(cfg: WorkflowRunnerConfig) {
       },
       signal: undefined,
       now,
-    });
+    }, opts.resumeFrom !== undefined ? { resumeFrom: opts.resumeFrom } : {});
 
     const steps = result.steps as StepOutcome[];
     cfg.ledger.workflowRunUpdate(runId, {

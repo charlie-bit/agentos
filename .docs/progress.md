@@ -573,8 +573,8 @@
 - [x] 443 四类 manifest 契约测试 — todo/agent/workflow/project 四套件在 contracts + core 均有覆盖
 - [x] 444 DB migration 纪律 — 全部新表以 `PRAGMA user_version` 增量建表;旧库升级零损(ledger 重开测试)
 - [x] 445 调度器单测 — cron 解析/窗判定/错过策略全假时钟,套件 <5s
-- [ ] 446 围栏矩阵测试
-- [ ] 447 并发与恢复
+- [x] 446 围栏矩阵 — 角色工具 × 项目模板的交集测试(最严交集胜出)
+- [x] 447 崩溃恢复 — 同库新 runner 从 `resumeFrom` 续跑至 done(跳步标记+待办落库),模拟进程重启
 - [x] 448 性能预算扩展 — docs/performance.md 增调度窗/围栏两行 + `scripts/bench-workflow.mjs` 基准(实测 ~0.001ms/call)
 - [x] 449 examples/workbench 聚合示例 — 5 角色 + daily-brief + workbench-demo 模板 + 知识库(外部 agent 见 fixtures);validate 10 manifests 绿
 - [ ] 450 examples 脚本化冒烟
@@ -587,6 +587,8 @@
 - [x] 457 演示脚本 — scripts/demo-workbench.mjs 五段离线演示(validate/kb lint/bench/跨运行时),一条命令全绿
 
 ## v4 执行记录（2026-10-27 起）
+
+- 446/447 守护测试：围栏矩阵(角色工具 × 项目模板取交集)与崩溃恢复(新 runner 同库 resumeFrom 续跑至 done、前步标 skipped、待办落库)。
 
 - M37 复审与演示：#453 边界复审、#455 隐私复审落 .docs；#456 docs/index 收拢五指南；#457 demo-workbench.mjs 五段离线演示。剩余开放：#446 围栏矩阵、#447 崩溃恢复 e2e、#450 workbench-smoke 脚本；M36 的 #423–#430/#432/#437/#440 与 M35 的 #410/#414/#415/#416/#422 保留(真实阶段/未建面)。
 

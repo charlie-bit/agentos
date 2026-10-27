@@ -21,3 +21,19 @@ describe("project fence (#392)", () => {
     expect(fenceError("agents", "writer", "web-revamp").message).toContain('project "web-revamp" does not allow agent "writer"');
   });
 });
+
+describe("fence matrix (spec #446): role tools × project template", () => {
+  it("the strictest intersection wins across agent/tool/project layers", () => {
+    // role fence = declared bare tools; project fence = template lists.
+    const roleTools = ["kb_search", "todo_add"];
+    const template = { kind: "project", version: "1", name: "p", agents: ["analyst"], tools: [], knowledge: [] } as ProjectManifest;
+    // role tools are intersected with what the project template permits; an
+    // empty project tools list permits nothing, so the effective set is empty.
+    const effective = fenceIntersect(template, "tools", roleTools);
+    expect(effective).toEqual([]);
+    const generous = { ...template, tools: ["kb_search"] } as ProjectManifest;
+    expect(fenceIntersect(generous, "tools", roleTools)).toEqual(["kb_search"]);
+    expect(projectAllows(template, "agents", "analyst")).toBe(true);
+    expect(projectAllows(template, "agents", "outsider")).toBe(false);
+  });
+});
