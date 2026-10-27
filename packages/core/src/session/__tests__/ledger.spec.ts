@@ -265,3 +265,19 @@ describe("workflow instance state (spec #364)", () => {
     led.close();
   });
 });
+
+describe("scheduler lastRun persistence (spec #368)", () => {
+  it("survives reopen so an already-fired window is not re-fired", () => {
+    const dir = mkdtempSync(join(tmpdir(), "agentos-lastrun-"));
+    tempDirs.push(dir);
+    const dbPath = join(dir, "sessions.db");
+    const a = openLedger(dbPath);
+    expect(a.schedulerGetLastRun("daily")).toBeUndefined();
+    a.schedulerSetLastRun("daily", 1_000, 0);
+    a.schedulerSetLastRun("daily", 2_000, 2); // upsert
+    a.close();
+    const b = openLedger(dbPath);
+    expect(b.schedulerGetLastRun("daily")).toEqual({ lastRunMs: 2_000, missed: 2 });
+    b.close();
+  });
+});

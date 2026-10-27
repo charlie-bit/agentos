@@ -82,6 +82,9 @@ export interface Ledger {
   workflowRunUpdate(id: string, patch: Partial<Pick<WorkflowRunRow, "status" | "endedAtMs" | "steps" | "resumeFrom" | "error">>): WorkflowRunRow;
   workflowRunGet(id: string): WorkflowRunRow | undefined;
   workflowRunList(filter?: { workflow?: string; project?: string; status?: WorkflowRunStatus }): WorkflowRunRow[];
+  /** lastRun persistence (#368): a restart never re-fires an already-fired window. */
+  schedulerGetLastRun(workflow: string): { lastRunMs: number; missed: number } | undefined;
+  schedulerSetLastRun(workflow: string, lastRunMs: number, missed: number): void;
   close(): void;
 }
 
@@ -227,6 +230,16 @@ export function openLedger(dbPath: string = ledgerPathFromEnv()): Ledger {
       )`,
     );
     db.exec("PRAGMA user_version = 2");
+  }
+  if (schemaVersion < 3) {
+    db.exec(
+      `CREATE TABLE IF NOT EXISTS scheduler_state (
+        workflow TEXT PRIMARY KEY,
+        last_run_ms INTEGER NOT NULL,
+        missed INTEGER NOT NULL DEFAULT 0
+      )`,
+    );
+    db.exec("PRAGMA user_version = 3");
   }
 
   const mustExist = (id: string, changes: number | bigint) => {
@@ -395,6 +408,18 @@ export function openLedger(dbPath: string = ledgerPathFromEnv()): Ledger {
         .prepare(`SELECT * FROM workflow_runs${where.length ? ` WHERE ${where.join(" AND ")}` : ""} ORDER BY started_at_ms DESC`)
         .all(...params) as Array<Record<string, unknown>>;
       return rows.map(toRunRow);
+    },
+    schedulerGetLastRun(workflow) {
+      const r = db.prepare("SELECT last_run_ms, missed FROM scheduler_state WHERE workflow = ?").get(workflow) as
+        | { last_run_ms: number; missed: number }
+        | undefined;
+      return r ? { lastRunMs: Number(r.last_run_ms), missed: Number(r.missed) } : undefined;
+    },
+    schedulerSetLastRun(workflow, lastRunMs, missed) {
+      db.prepare(
+        `INSERT INTO scheduler_state (workflow, last_run_ms, missed) VALUES (?, ?, ?)
+         ON CONFLICT(workflow) DO UPDATE SET last_run_ms = excluded.last_run_ms, missed = excluded.missed`,
+      ).run(workflow, lastRunMs, missed);
     },
     close() {
       db.close();
