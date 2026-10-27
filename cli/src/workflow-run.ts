@@ -26,6 +26,8 @@ export interface WorkflowRunnerConfig {
   kbProvider(): KnowledgeProvider | null;
   /** In-process tools available for `tool` steps (todo_* today). */
   tools: readonly NeutralTool[];
+  /** Audit sink (#385): instance/step ids + status + duration, never prompts. */
+  audit?(record: Record<string, unknown>): void;
   now?: () => number;
 }
 
@@ -105,6 +107,20 @@ export function createWorkflowRunner(cfg: WorkflowRunnerConfig) {
       resumeFrom: result.status === "error" ? (resumeIndex(result) ?? null) : null,
       error: result.status === "done" ? null : (steps.find((s) => s.status === "error" || s.status === "denied")?.error ?? result.status),
     });
+    // Metadata-only audit (#385, R2/R9): ids, statuses, durations — no prompt
+    // or step output text ever reaches this record.
+    try {
+      cfg.audit?.({
+        event: "workflow.run",
+        runId,
+        workflow: name,
+        trigger,
+        status: result.status,
+        steps: steps.map((s) => ({ index: s.index, type: s.type, status: s.status, durationMs: s.durationMs })),
+      });
+    } catch {
+      /* audit must never kill a run */
+    }
     return { ok: result.status === "done", runId };
   };
 }

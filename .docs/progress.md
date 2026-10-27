@@ -512,7 +512,7 @@
 - [x] 382 workflow 脚手架
 - [x] 383 每日简报示例 workflow
 - [x] 384 工作流导出
-- [ ] 385 workflow 审计
+- [x] 385 workflow 审计
 - [ ] 386 workflow 通知
 - [ ] 387 workflow 会话回链
 - [ ] 388 项目模板 yml
@@ -587,6 +587,8 @@
 - [ ] 457 v4 首跑演示脚本
 
 ## v4 执行记录（2026-10-27 起）
+
+- 385 实例审计：runner 完成后写 `workflow.run` 审计（runId/流程/触发器/状态/每步 index,type,status,durationMs），**绝不落 prompt 或步骤输出**（测试断言）；审计失败不杀 run。
 
 - 380/381 展示收尾：卡片显示 nextRun（cron 计算）、missed 徽章 + 面板内一句"停机跳过不回放"的说明。
 - 384 实例导出：`GET /api/workflows/runs/:id/export?format=jsonl|md`（下载头、run+steps 两格式），面板行内 ⤓。

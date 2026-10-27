@@ -28,7 +28,9 @@ function setup(manifest: WorkflowManifest, agentReply = "summarised", confirmSte
     "---\nowner: t\nlast_verified: 2026-01-01\nstale_after: 2027-01-01\nstatus: published\n---\n# Retry policy\nbackoff capped\n",
   );
   const provider = createMarkdownProvider({ root: book, draftsDir: join(dir, "drafts"), receiptsLog: join(dir, "receipts.jsonl") });
+  const audit: Array<Record<string, unknown>> = [];
   const runner = createWorkflowRunner({
+    audit: (r) => audit.push(r),
     ledger,
     workflows: new Map([[manifest.name, manifest]]),
     workspaceFor: (id) => {
@@ -45,14 +47,14 @@ function setup(manifest: WorkflowManifest, agentReply = "summarised", confirmSte
     now: () => 1000,
   });
   void confirmSteps;
-  return { runner, ledger };
+  return { runner, ledger, audit };
 }
 
 const wf = (steps: WorkflowManifest["steps"]): WorkflowManifest => ({ kind: "workflow", version: "1", name: "daily", steps }) as WorkflowManifest;
 
 describe("headless workflow runner", () => {
   it("runs agent → kb_search → todo tool and persists a done instance", async () => {
-    const { runner, ledger } = setup(
+    const { runner, ledger, audit } = setup(
       wf([
         { type: "agent", agent: "analyst", prompt: "summarise context: {prev}" },
         { type: "kb_search", query: "backoff" },
@@ -65,6 +67,8 @@ describe("headless workflow runner", () => {
     expect(runs[0]?.status).toBe("done");
     expect((runs[0]?.steps as Array<{ status: string }>).map((s) => s.status)).toEqual(["ok", "ok", "ok"]);
     expect(ledger.todoList()).toHaveLength(1);
+    expect(audit[0]).toMatchObject({ event: "workflow.run", workflow: "daily", status: "done", trigger: "manual" });
+    expect(JSON.stringify(audit[0])).not.toContain("Review brief"); // prompt/step text never audited (R2)
     ledger.close();
   });
 

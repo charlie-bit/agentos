@@ -759,6 +759,7 @@ export async function runServeWeb(flags: ServeFlags): Promise<number> {
           })
         : null,
     tools: buildTodoTools({ ledger }),
+    audit: (record) => appendLog(repoRoot, "workflow-audit", record),
   });
   // Resource governance (spec #163/#164): the preset declares both; absent =
   // unlimited / no budget gate. Queueing is FIFO and never drops a turn.
