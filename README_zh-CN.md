@@ -33,6 +33,18 @@ AgentOS 是**可插拔的 Agent 执行框架**：一个 Harness 内核承载 age
 
 ---
 
+### 个人工作台
+
+五个面共用同一个内核,而且每一个都是配置或数据——没有任何一个需要改内核:
+
+| 面 | 所在 | web 可写? |
+|----|------|-----------|
+| 待办 | `.agentos/` 数据(+ 模型调用的 `todo_*` 工具) | 可写 |
+| 角色 | `config/agents/*.yml` | 不可——yml + git |
+| Workflow | `config/workflows/*.yml`(+ `config/projects` 模板) | 仅可触发 |
+| 项目 | 模板在 `config/projects/*.yml`,实例在 `.agentos/` | 实例:仅标题/数据 |
+| 外部 agent | `config/tools/*.yml`(MCP 是唯一路径) | 不可 |
+
 ## 架构概览
 
 ![AgentOS 架构图](.docs/architecture-diagram.png)

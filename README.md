@@ -33,6 +33,19 @@ AgentOS is a **pluggable Agent execution framework**: one Harness kernel for the
 
 ---
 
+### The personal workbench
+
+Five surfaces sit on the same kernel, and every one of them is configuration
+or data — never new kernel code:
+
+| Surface | Lives in | Writable from the web? |
+|---------|----------|------------------------|
+| Todos | `.agentos/` data (+ `todo_*` tools the model calls) | yes |
+| Roles | `config/agents/*.yml` | no — yml + git |
+| Workflows | `config/workflows/*.yml` (+ `config/projects` templates) | run only |
+| Projects | templates in `config/projects/*.yml`, instances in `.agentos/` | instances: title/data only |
+| External agents | `config/tools/*.yml` (MCP is the only path) | no |
+
 ## Architecture Overview
 
 ![AgentOS Architecture Diagram](.docs/architecture-diagram.png)
