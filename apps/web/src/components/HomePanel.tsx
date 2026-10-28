@@ -1,11 +1,22 @@
 import { useEffect, useState } from "react";
-import { BookOpenText, Bot, FolderKanban, ListTodo, Workflow } from "lucide-react";
-import { getProjectInstances, getSessions, getTodos, type ProjectInstance, type SessionRow, type Todo } from "../lib/api";
+import { BookOpenText, Bot, CircleAlert, CircleCheck, CirclePlay, FolderKanban, ListTodo, Workflow } from "lucide-react";
+import {
+  getProjectInstances,
+  getSessions,
+  getTodos,
+  getWorkflowRuns,
+  getWorkflows,
+  type ProjectInstance,
+  type SessionRow,
+  type Todo,
+  type WorkflowRun,
+  type WorkflowSummary,
+} from "../lib/api";
 import { isTodayFocus } from "./TodoPanel";
 import { ScrollArea } from "./ui/scroll-area";
 
 const SCENARIOS = [
-  { key: "summarise", label: "Summarise my todos", hint: "today's focus first", Icon: ListTodo, zone: "todos" as const },
+  { key: "summarise", label: "Summarise my todos", hint: "today's focus first", Icon: ListTodo, zone: "chats" as const },
   { key: "role", label: "Talk to a role", hint: "pick a mounted agent", Icon: Bot, zone: "chats" as const },
   { key: "workflow", label: "Run a workflow", hint: "manual or scheduled", Icon: Workflow, zone: "workflows" as const },
   { key: "project", label: "Open a project", hint: "templates + instances", Icon: FolderKanban, zone: "projects" as const },
@@ -16,27 +27,45 @@ export function HomePanel({
   onZone,
   onPickSession,
   onOpenAgents,
+  onOpenTodos,
   onAsk,
 }: {
-  onZone: (zone: "chats" | "todos" | "workflows" | "projects") => void;
+  onZone: (zone: "chats" | "workflows" | "projects") => void;
   onPickSession: (browserId: string) => void;
   /** Role card (#344): chooses a role from the mounted catalogue. */
   onOpenAgents?: () => void;
+  /** The full todo board is a drawer; Home shows the daily summary. */
+  onOpenTodos?: () => void;
   /** Scenario prompt templates (#314): one click sends a prepared request. */
   onAsk?: (prompt: string) => void;
 }) {
   const [todos, setTodos] = useState<Todo[]>([]);
   const [sessions, setSessions] = useState<SessionRow[]>([]);
   const [projects, setProjects] = useState<ProjectInstance[]>([]);
+  const [workflows, setWorkflows] = useState<WorkflowSummary[]>([]);
+  const [lastRuns, setLastRuns] = useState<Record<string, WorkflowRun | null>>({});
   useEffect(() => {
     void getTodos().then((b) => setTodos(b.todos)).catch(() => undefined);
     void getSessions().then((b) => setSessions(b.sessions.slice(0, 5))).catch(() => undefined);
     void getProjectInstances().then((b) => setProjects(b.instances.slice(0, 5))).catch(() => undefined);
+    void getWorkflows()
+      .then(async (b) => {
+        const list = b.workflows.slice(0, 4);
+        setWorkflows(list);
+        const entries = await Promise.all(
+          list.map(async (w) => {
+            const r = await getWorkflowRuns(w.name).catch(() => ({ runs: [] as WorkflowRun[] }));
+            return [w.name, r.runs[0] ?? null] as const;
+          }),
+        );
+        setLastRuns(Object.fromEntries(entries));
+      })
+      .catch(() => undefined);
   }, []);
   const focus = todos.filter((t) => isTodayFocus(t)).slice(0, 5);
   return (
     <ScrollArea className="min-h-0 flex-1">
-      <div className="mx-auto flex max-w-3xl flex-col gap-4 px-4 py-6 text-sm">
+      <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 px-4 py-6 text-sm md:px-6">
         <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
           {SCENARIOS.map(({ key, label, hint, Icon, zone }) => (
             <button
@@ -64,10 +93,15 @@ export function HomePanel({
         <section>
           <div className="mb-1 flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-muted-foreground">
             <ListTodo className="h-3 w-3" /> today's focus
+            {onOpenTodos && (
+              <button onClick={onOpenTodos} className="ml-auto normal-case tracking-normal text-primary hover:underline">
+                open board
+              </button>
+            )}
           </div>
           {focus.length === 0 ? (
             <div className="text-xs text-muted-foreground">
-              nothing due today — add a todo (the model can also do this with todo_add) or open the todos panel.
+              nothing due today — add one from the board, or let the model record it with todo_add.
             </div>
           ) : (
             <ul className="space-y-1">
@@ -78,6 +112,43 @@ export function HomePanel({
                   <span className="text-[10px] text-muted-foreground">{t.status}</span>
                 </li>
               ))}
+            </ul>
+          )}
+        </section>
+
+        <section>
+          <div className="mb-1 flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-muted-foreground">
+            <Workflow className="h-3 w-3" /> workflow runs
+            <button onClick={() => onZone("workflows")} className="ml-auto normal-case tracking-normal text-primary hover:underline">
+              open
+            </button>
+          </div>
+          {workflows.length === 0 ? (
+            <div className="text-xs text-muted-foreground">no workflows mounted</div>
+          ) : (
+            <ul className="space-y-1">
+              {workflows.map((w) => {
+                const last = lastRuns[w.name] ?? null;
+                const Icon = !last ? CirclePlay : last.status === "done" ? CircleCheck : last.status === "error" ? CircleAlert : CirclePlay;
+                return (
+                  <li key={w.name} className="flex items-center gap-2 rounded border border-border px-2 py-1 text-xs">
+                    <Icon
+                      className={
+                        "h-3 w-3 shrink-0 " +
+                        (!last ? "text-muted-foreground" : last.status === "done" ? "text-ok" : last.status === "error" ? "text-err" : "text-run")
+                      }
+                    />
+                    <span className="min-w-0 flex-1 truncate font-mono">{w.name}</span>
+                    <span className="text-[10px] text-muted-foreground">
+                      {last ? `${last.status} · ${new Date(last.startedAtMs).toLocaleString()}` : "never run"}
+                    </span>
+                    {typeof w.missed === "number" && w.missed > 0 && (
+                      <span className="rounded bg-warn/20 px-1 text-[10px] text-warn">missed {w.missed}</span>
+                    )}
+                    {w.nextRun && <span className="text-[10px] text-muted-foreground">next {new Date(w.nextRun).toLocaleString()}</span>}
+                  </li>
+                );
+              })}
             </ul>
           )}
         </section>

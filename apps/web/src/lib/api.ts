@@ -19,6 +19,15 @@ export function accessToken(): string | null {
     const fromUrl = new URLSearchParams(window.location.search).get("token");
     if (fromUrl) {
       localStorage.setItem(TOKEN_KEY, fromUrl);
+      // Drop it from the address bar: the token is now in this browser's
+      // storage, and leaving it in the URL would copy it into history.
+      try {
+        const clean = new URL(window.location.href);
+        clean.searchParams.delete("token");
+        window.history.replaceState(null, "", clean.pathname + clean.search + clean.hash);
+      } catch {
+        /* replaceState blocked: the token still works, only the URL keeps it */
+      }
       return fromUrl;
     }
     return localStorage.getItem(TOKEN_KEY);

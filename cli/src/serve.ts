@@ -9,6 +9,7 @@
  * only assembles, pumps, and does ledger bookkeeping.
  */
 import { randomBytes } from "node:crypto";
+import { networkInterfaces } from "node:os";
 import { createInterface } from "node:readline";
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
@@ -50,7 +51,7 @@ import { budgetExceeded, Semaphore } from "./concurrency.js";
 import { commitDraft } from "@agentos/core";
 import { EntryCli, formatUsageSummary } from "@agentos/entry-cli";
 import { startServer, CAPABILITIES as REST_CAPABILITIES, ENTRY_NAME as REST_ENTRY, type ToolDescriptor } from "@agentos/entry-rest";
-import { BASE_SYSTEM_PROMPT, createInProcessServer, readTranscript, runTurn, type ModelLease } from "@agentos/adapter-claude-sdk";
+import { BASE_SYSTEM_PROMPT, createInProcessServer, deleteTranscript, readTranscript, runTurn, type ModelLease } from "@agentos/adapter-claude-sdk";
 
 export interface ServeFlags {
   preset: string;
@@ -63,6 +64,12 @@ export interface ServeFlags {
   host?: string;
   /** P6 request-level override: manifest name OR alias; beats the preset slot. */
   model?: string;
+  /**
+   * Turn the web token gate OFF (spec #116/#287 opt-out). For a single-user
+   * intranet deployment where the network boundary is the protection. Also
+   * readable from AGENTOS_WEB_NO_TOKEN=1 so it can live in a local .env.
+   */
+  noToken?: boolean;
 }
 
 export interface Assembly {
@@ -264,13 +271,21 @@ export function assemble(flags: ServeFlags): { ok: true; value: Assembly } | { o
   const refErrors = validatePresetRefs(loaded, { entryNames: ENTRY_ADAPTER_NAMES });
   if (refErrors.length) return { ok: false, exitCode: 1, lines: refErrors.map((e) => `✗ ${e.path}: ${e.message}`) };
   const manifests = loaded.map((l) => l.manifest);
-  const preset = manifests.find((m) => m.kind === "preset");
+  // The REQUESTED file wins. A second preset often carries local-only choices
+  // (a gitignored config/presets/local.yml mounting providers whose credentials
+  // never ship); "first preset in load order" would silently serve the wrong
+  // business. Fallback keeps single-preset trees and fixtures working.
+  const requested = loaded.find((l) => l.manifest.kind === "preset" && resolve(l.source) === presetPath)?.manifest;
+  const preset = requested ?? manifests.find((m) => m.kind === "preset");
   if (!preset || preset.kind !== "preset") return { ok: false, exitCode: 1, lines: ["✗ preset manifest missing"] };
   const model = manifests.find((m) => m.name === preset.model && m.kind === "model");
   if (!model || model.kind !== "model") return { ok: false, exitCode: 1, lines: [`✗ model "${preset.model}" not found`] };
 
   const repoRoot = findRepoRoot(process.cwd());
   process.env.AGENTOS_FS_ROOT ??= repoRoot;
+  // ${AGENTOS_REPO_ROOT}: manifests may name repo files (e.g. a launcher script
+  // for an MCP package that ships no bin entry) without assuming a cwd.
+  process.env.AGENTOS_REPO_ROOT ??= repoRoot;
   // No credential sugar here (spec #227): a manifest whose lease cannot be
   // resolved must fail loudly at plan time. The doc placeholder mount is
   // declared with enabled:false instead of being propped up with a fake token.
@@ -727,7 +742,12 @@ export async function runServeWeb(flags: ServeFlags): Promise<number> {
   const swept = ledger.sweepRunning(); // #253: boot recovery, same rule as the REPL
   // Local one-time token (spec #287): generated per boot unless the operator
   // pins one. It is printed to this terminal only and never logged anywhere.
-  const webToken = process.env.AGENTOS_WEB_TOKEN ?? randomBytes(24).toString("base64url");
+  // --no-token / AGENTOS_WEB_NO_TOKEN=1 turns the gate OFF: the deployment's
+  // own network boundary (loopback or intranet) is then the only protection.
+  const tokenDisabled = flags.noToken === true || process.env.AGENTOS_WEB_NO_TOKEN === "1";
+  const webToken = tokenDisabled
+    ? undefined
+    : (process.env.AGENTOS_WEB_TOKEN ?? randomBytes(24).toString("base64url"));
   if (swept > 0) write(`⚠ ledger: ${swept} stale running row(s) marked aborted\n`);
   const dbPath = ledgerPathFromEnv();
   // Active-turn registry for SIGTERM drainage (spec #293): a shutdown waits
@@ -886,12 +906,22 @@ export async function runServeWeb(flags: ServeFlags): Promise<number> {
     // entry-rest stays format-blind; it just calls what it was handed.
     readTranscript: ({ sdkSessionId, externalKey }) =>
       readTranscript(sdkSessionId, join(repoRoot, ".agentos", "workspaces", externalKey)),
+    // Deleting a session deletes its conversation too (no orphan transcripts):
+    // the ledger row is gone first, then the kernel's copy under its own store.
+    onSessionDeleted: (row) => {
+      if (row.sdkSessionId !== null && row.sdkSessionId !== undefined) {
+        deleteTranscript({
+          sdkSessionId: row.sdkSessionId,
+          workspaceDir: join(repoRoot, ".agentos", "workspaces", row.externalKey),
+        });
+      }
+    },
     port: flags.port ?? 8787,
     ...(flags.host ? { host: flags.host } : {}),
     dbPath,
     staticDir,
     systemPrompt: BASE_SYSTEM_PROMPT,
-    token: webToken,
+    ...(webToken !== undefined ? { token: webToken } : {}),
     health: async () => ({
       model: await (async () => {
         try {
@@ -1124,8 +1154,29 @@ export async function runServeWeb(flags: ServeFlags): Promise<number> {
     }
   }, 60_000);
   scheduler.unref?.();
+  // A wildcard bind is only useful if the operator can tell colleagues where to
+  // point the browser: print the first non-internal IPv4 besides loopback.
+  const lanUrl = (() => {
+    const host = flags.host;
+    if (!host || host === "127.0.0.1" || host === "localhost" || host === "::1") return null;
+    for (const list of Object.values(networkInterfaces())) {
+      for (const ni of list ?? []) {
+        if (ni.family === "IPv4" && !ni.internal) return `http://${ni.address}:${server.port}`;
+      }
+    }
+    return null;
+  })();
   write(
-    `● agentos serve --web | preset=${presetName} mounts=${plans.length}\n  console: ${server.url}\n  token:   ${webToken}\n  (paste the token into the console once; it is stored in this browser only)\n  Ctrl+C exits cleanly (ledger stays zombie-free)\n`,
+    `● agentos serve --web | preset=${presetName} mounts=${plans.length}\n` +
+      `  console: ${server.url}\n` +
+      (lanUrl ? `  lan:     ${lanUrl}   (needs the OS firewall to allow node)\n` : "") +
+      (webToken !== undefined
+        ? `  link:    ${server.url}/?token=${encodeURIComponent(webToken)}\n` +
+          `  (open the link — it unlocks this browser once and stores the token there)\n` +
+          `  token:   ${webToken}   (for curl / scripts: x-agentos-token header)\n`
+        : `  ⚠ token gate OFF (--no-token / AGENTOS_WEB_NO_TOKEN=1): anyone who can reach this\n` +
+          `    port can read sessions and drive this agent. The network is the boundary.\n`) +
+      `  Ctrl+C exits cleanly (ledger stays zombie-free)\n`,
   );
 
   const onTermSignal = () => {

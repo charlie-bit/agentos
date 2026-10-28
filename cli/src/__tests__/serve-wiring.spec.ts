@@ -214,6 +214,35 @@ describe("preset.tools is the mount list (spec #5/#17)", () => {
   });
 });
 
+describe("the requested preset wins over load order", () => {
+  it("--preset selects that file even when another preset sorts first", async () => {
+    const { assemble } = await import("../serve.js");
+    const dir = mkdtempSync(join(tmpdir(), "agentos-two-presets-"));
+    roots.push(dir);
+    for (const sub of ["presets", "knowledge", "models", "tools"]) mkdirSync(join(dir, sub), { recursive: true });
+    writeFileSync(join(dir, "knowledge", "k.yml"), ["kind: knowledge", 'version: "1"', "name: k", "provider: markdown", "mount: { type: path, path: ./kb }", ""].join("\n"));
+    writeFileSync(join(dir, "models", "m.yml"), ["kind: model", 'version: "1"', "name: m", "provider: v", "models: { a: real-a }", ""].join("\n"));
+    // "aaa" sorts first and would win under the old "first preset loaded" rule.
+    writeFileSync(join(dir, "presets", "aaa.yml"), ["kind: preset", 'version: "1"', "name: committed", "knowledge: k", "model: m", "tools: [first]", "entry: cli", ""].join("\n"));
+    writeFileSync(join(dir, "presets", "zzz.yml"), ["kind: preset", 'version: "1"', "name: local", "knowledge: k", "model: m", "tools: [second]", "entry: cli", ""].join("\n"));
+    for (const name of ["first", "second"]) {
+      writeFileSync(join(dir, "tools", `${name}.yml`), ["kind: tool", 'version: "1"', `name: ${name}`, "transport: stdio", `command: npx -y ${name}-server`, "auth: { mode: none }", "schemaExchange: json-schema", ""].join("\n"));
+    }
+
+    const local = assemble({ preset: join(dir, "presets", "zzz.yml") });
+    expect(local.ok).toBe(true);
+    if (!local.ok) return;
+    expect(local.value.presetName).toBe("local");
+    expect(local.value.plans.map((p) => p.key)).toEqual(["second"]);
+
+    const committed = assemble({ preset: join(dir, "presets", "aaa.yml") });
+    expect(committed.ok).toBe(true);
+    if (!committed.ok) return;
+    expect(committed.value.presetName).toBe("committed");
+    expect(committed.value.plans.map((p) => p.key)).toEqual(["first"]);
+  });
+});
+
 describe("todo tool mount + retry split (spec #309/#312)", () => {
   it("mounts the four todo tools; only todo_list is retry-safe", async () => {
     const { wireTodo } = await import("../serve.js");

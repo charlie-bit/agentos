@@ -1,0 +1,23 @@
+# Datadog's HOSTED MCP server, mounted through mcp-remote.
+#
+# Datadog publishes the endpoint per SITE (the setup docs render it with a site
+# selector and never print a constant), so it enters as an env var:
+#   export DATADOG_MCP_URL=https://<your-site-endpoint>     # e.g. the US1 host
+# Datadog's own setup page marks OAuth 2.0 as the recommended auth and expects
+# the MCP client to run it. AgentOS has no OAuth client by design (#117), so
+# mcp-remote is that client: the first mount opens the browser, you authorize,
+# and tokens are cached under ~/.mcp-auth — local, never committed.
+#
+# Alternative without a browser: datadog-key.yml (DD_API_KEY / DD_APP_KEY).
+# allowedTools stays absent until a real mount can be probed (no lie in config).
+#
+# Missing DATADOG_MCP_URL is an ENVIRONMENT defect: this provider degrades with
+# a ⚠ and the rest of the preset still boots (spec #204).
+kind: tool
+version: "1"
+name: datadog
+transport: stdio
+command: npx -y mcp-remote@0.15.2 ${DATADOG_MCP_URL}
+auth:
+  mode: none
+schemaExchange: json-schema

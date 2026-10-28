@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AgentOS · Web/REST 网络侧技术文档</title>
+<style>
+  :root {
+    --bg:#0d1117; --card:#161b22; --border:#30363d; --text:#c9d1d9; --heading:#f0f6fc;
+    --accent:#58a6ff; --green:#3fb950; --yellow:#d29922; --red:#f85149;
+    --purple:#bc8cff; --orange:#d18616; --cyan:#39d2c0; --muted:#8b949e;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  html, body { overflow-x:hidden; }
+  body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;
+         background:var(--bg); color:var(--text); line-height:1.65;
+         padding:2rem; max-width:1280px; margin:0 auto; width:100%; }
+  h1 { color:var(--heading); font-size:1.8rem; margin-bottom:.3rem; }
+  h2 { color:var(--accent); font-size:1.3rem; margin:2rem 0 1rem;
+       border-bottom:1px solid var(--border); padding-bottom:.4rem; }
+  h3 { color:var(--heading); font-size:1rem; margin:1.2rem 0 .6rem; }
+  .subtitle { color:var(--muted); margin-bottom:1.2rem; font-size:.9rem; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:8px;
+          padding:1.3rem; margin-bottom:1.2rem; overflow:hidden; }
+  table { width:100%; border-collapse:collapse; margin:.8rem 0; font-size:.86rem;
+          table-layout:fixed; word-break:break-word; }
+  th, td { padding:.5rem .7rem; text-align:left; border:1px solid var(--border); vertical-align:top; }
+  th { background:#21262d; color:var(--heading); font-weight:600; }
+  code { background:#21262d; padding:2px 6px; border-radius:4px; font-size:.82rem;
+         color:var(--orange); font-family:'SF Mono',Consolas,monospace; }
+  pre { font-family:'SF Mono',Consolas,monospace; font-size:.78rem; line-height:1.65;
+        overflow-x:auto; white-space:pre-wrap; word-break:break-all; color:var(--text);
+        background:#21262d; padding:.9rem; border-radius:6px; margin:.6rem 0; }
+  .tag { display:inline-block; padding:1px 8px; border-radius:12px; font-size:.72rem;
+         font-weight:600; white-space:nowrap; }
+  .ok { background:#1a3a1a; color:var(--green); }
+  .pr { background:#1f3a5f; color:var(--accent); }
+  .stub { background:#2d1a1a; color:var(--red); }
+  .todo { background:#2d2000; color:var(--yellow); }
+  .note { background:#1a2332; border-left:3px solid var(--accent);
+          padding:.7rem 1rem; margin:.8rem 0; border-radius:0 4px 4px 0; font-size:.86rem; }
+  .warn { background:#2d1f00; border-left:3px solid var(--yellow);
+          padding:.7rem 1rem; margin:.8rem 0; border-radius:0 4px 4px 0; font-size:.86rem; }
+  .toc { list-style:none; margin:.4rem 0; }
+  .toc ul { list-style:none; margin:.2rem 0 .3rem 1.1rem; }
+  .toc li { margin:.15rem 0; }
+  .toc a { color:var(--muted); font-size:.88rem; }
+  .toc a:hover { color:var(--accent); }
+  a { color:var(--accent); text-decoration:none; }
+  a:hover { text-decoration:underline; }
+  ul, ol { margin:.4rem 0 .6rem 1.3rem; }
+  li { margin:.2rem 0; }
+  .mermaid { background:#161b22; border:1px solid var(--border); border-radius:6px;
+             padding:.8rem; margin:.8rem 0; overflow-x:auto; }
+  .kv { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:.7rem; margin:.6rem 0; }
+  .kv .item { background:#21262d; border:1px solid var(--border); border-radius:6px; padding:.7rem; }
+  .kv .k { color:var(--heading); font-weight:600; font-size:.88rem; margin-bottom:.2rem; }
+  .kv .v { color:var(--muted); font-size:.8rem; }
+  .muted { color:var(--muted); }
+</style>
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.esm.min.mjs';
+  mermaid.initialize({ startOnLoad:false, theme:'dark', securityLevel:'loose',
+    themeVariables:{ fontSize:'14px', fontFamily:'ui-sans-serif, system-ui' } });
+  let n = 0;
+  for (const el of document.querySelectorAll('.mermaid')) {
+    const src = el.textContent;
+    try {
+      const { svg } = await mermaid.render('mmd-' + (++n), src);
+      el.innerHTML = svg;
+    } catch (err) {
+      el.classList.add('mermaid-error');
+      el.insertAdjacentHTML('beforeend', '<div class="warn">mermaid 渲染失败，源码保留在上方</div>');
+    }
+  }
+</script>
+</head>
+<body>
+
+<h1>AgentOS · Web/REST 网络侧技术文档</h1>
+<div class="subtitle">
+  版本 v4（spec #1–#457）· 2026-10-28 · 覆盖 <code>packages/entry/entry-rest</code> ·
+  <code>apps/web</code> · <code>cli/src/serve.ts</code><br>
+  图例：<span class="tag ok">已实现</span> 代码 + 测试兑现 ·
+  <span class="tag pr">已接线</span> 需真实运行验证 ·
+  <span class="tag todo">未建面</span> 明确未实现 ·
+  <span class="tag stub">边界</span> 刻意不做
+</div>
+
+<div class="card">
+  <h2 id="tldr" style="margin-top:0">TL;DR</h2>
+  <div class="kv">
+    <div class="item"><div class="k">一个进程</div><div class="v">REST/SSE 接口 + 静态 Web 控制台由同一个 Node 进程提供</div></div>
+    <div class="item"><div class="k">一个 token（默认）</div><div class="v">每次启动打印一次性 token；所有 <code>/api/*</code> 必须携带。单用户内网可用 <code>--no-token</code> 显式关闭</div></div>
+    <div class="item"><div class="k">一个会话模型</div><div class="v">浏览器 sessionId ↔ ledger external key（<code>web-</code> 前缀）</div></div>
+    <div class="item"><div class="k">一条边界</div><div class="v">默认 <code>127.0.0.1</code>；不是团队服务器</div></div>
+  </div>
+</div>
+
+<div class="card">
+  <h2 id="toc" style="margin-top:0">目录</h2>
+  <ul class="toc">
+    <li><a href="#1-topology">1 拓扑与职责</a></li>
+    <li><a href="#2-entry-contract">2 入口契约</a></li>
+    <li><a href="#3-api">3 HTTP API 面</a></li>
+    <li><a href="#4-sse">4 SSE 协议</a></li>
+    <li><a href="#5-auth">5 鉴权与安全边界</a></li>
+    <li><a href="#6-console">6 Web 控制台</a></li>
+    <li><a href="#7-concurrency">7 并发、预算与生命周期</a></li>
+    <li><a href="#8-deploy">8 部署形态</a></li>
+    <li><a href="#9-observability">9 可观测与诊断</a></li>
+    <li><a href="#10-failure">10 降级与故障恢复</a></li>
+    <li><a href="#11-status">11 状态矩阵与边界</a></li>
+  </ul>
+</div>
+
+<!-- ============================================================ -->
+<div class="card">
+<h2 id="1-topology">1 拓扑与职责</h2>
+
+<div class="mermaid">
+flowchart LR
+  subgraph Browser["浏览器"]
+    UI[Web 控制台<br/>React + SSE]
+  end
+  subgraph Proc["Node 单进程（serve --web）"]
+    STATIC[静态资源<br/>apps/web/dist]
+    REST[EntryRest<br/>HTTP + SSE]
+    COMP[composition root<br/>serve.ts]
+    K[Kernel / Adapter]
+    DB[(sessions.db)]
+    REST --> COMP --> K
+    COMP --> DB
+    K --> DB
+  end
+  UI -->|GET / 静态| STATIC
+  UI -->|/api/* + x-agentos-token| REST
+  REST -->|SSE data: JSON| UI
+  K -.->|工具 / 模型 / 知识| EXT[外部 provider]
+</div>
+
+<table>
+  <tr><th style="width:22%">组件</th><th>职责</th><th style="width:30%">代码</th></tr>
+  <tr><td>EntryRest</td><td>路由、token 门禁、SSE 写帧、会话/待办/项目/工作流只读与数据端点</td><td><code>packages/entry/entry-rest/src/index.ts</code></td></tr>
+  <tr><td>composition root</td><td>装配 manifest → 挂载工具/知识/模型 → 注入回调（runner、ledger、确认、通知）</td><td><code>cli/src/serve.ts</code></td></tr>
+  <tr><td>Web 控制台</td><td>四区 UI（Home 总览 / Chats / Workflows / Projects）+ 待办抽屉、SSE 消费、确认弹窗、只读配置披露</td><td><code>apps/web/src/</code></td></tr>
+  <tr><td>EntryAdapter 契约</td><td>identity / session / render / confirm 四动词</td><td><code>packages/contracts/src/entry.ts</code></td></tr>
+</table>
+
+<div class="note">
+  <strong>net 与 agent 的物理关系：</strong>当前是同一进程内的两个逻辑层，不是两个容器。
+  想要"net 一容器、agent 一容器"需要新增编排与跨进程会话协议——仓库里没有，本文不假装有。
+</div>
+</div>
+
+<!-- ============================================================ -->
+<div class="card">
+<h2 id="2-entry-contract">2 入口契约</h2>
+
+<table>
+  <tr><th style="width:18%">动词</th><th>语义</th><th style="width:24%">失败约定</th></tr>
+  <tr><td><code>identity()</code></td><td>凭证 → <code>{ userId, tenant }</code></td><td>无法建立身份时抛错</td></tr>
+  <tr><td><code>session()</code></td><td>客户端会话 ↔ agent 会话绑定；同一客户端会话重复调用返回同一绑定</td><td>—</td></tr>
+  <tr><td><code>render(events)</code></td><td>把中立事件推给客户端；<strong>显示故障不得抛出</strong></td><td>吞掉展示错误</td></tr>
+  <tr><td><code>confirm(req)</code></td><td>让人类批准有后果的动作；超时视为拒绝</td><td>超时是 adapter 自己的责任</td></tr>
+  <tr><td><code>capabilities.confirm</code></td><td><code>false</code> 合法：核心自动把知识写降级为只读</td><td>注册期降级，不是运行期报错</td></tr>
+</table>
+
+<h3>TranscriptEntry —— 回放的最小集</h3>
+<pre>interface TranscriptEntry {
+  role: "user" | "assistant" | "tool";
+  text: string;                 // tool 行是（可能截断的）输入
+  toolName?: string;            // 仅 tool
+  isError?: boolean;            // 仅 tool：调用失败
+  timestampMs?: number;
+  event?: "todo.changed";       // additive：待办变更可标记
+}</pre>
+<p class="muted">刻意不包含：消息 id、块树、用量、推理轨迹。内核的私有存储格式不泄漏给入口。</p>
+
+<div class="warn">
+  <strong>会话主权：</strong>一个入口只属于一个内核。双内核劫持同一会话 = 上下文分裂与状态错配，
+  所以 <code>channels</code> 路由到一个与当前 serve 模式不同的适配器会在启动期被拒绝。
+</div>
+</div>
+
+<!-- ============================================================ -->
+<div class="card">
+<h2 id="3-api">3 HTTP API 面</h2>
+<p>所有 <code>/api/*</code> 需要 <code>x-agentos-token</code> 头或 <code>?token=</code>；
+静态文件与 <code>/healthz</code> 开放。</p>
+
+<h3>3.1 会话与对话</h3>
+<table>
+  <tr><th style="width:12%">方法</th><th style="width:42%">路径</th><th>说明</th></tr>
+  <tr><td>GET</td><td><code>/api/sessions</code></td><td>会话列表；<code>?agent=</code> 过滤，total 按过滤集计数</td></tr>
+  <tr><td>PATCH</td><td><code>/api/sessions/:id/title</code></td><td>改名（用户数据）</td></tr>
+  <tr><td>POST</td><td><code>/api/sessions/:id/abort</code></td><td>中止当前 turn</td></tr>
+  <tr><td>DELETE</td><td><code>/api/sessions/:id</code></td><td>删除会话</td></tr>
+  <tr><td>GET</td><td><code>/api/sessions/:id/messages</code></td><td>回放 transcript（中立条目）</td></tr>
+  <tr><td>POST</td><td><code>/api/sessions/:id/attachments</code></td><td>会话附件</td></tr>
+  <tr><td>POST</td><td><code>/api/sessions/export</code> · <code>/api/sessions/:id/export</code></td><td>导出（复用数据导出基建）</td></tr>
+  <tr><td>POST</td><td><code>/api/chat</code></td><td>发起一轮，返回 SSE 流（见第 4 节）</td></tr>
+</table>
+
+<h3>3.2 门禁与人工升级</h3>
+<table>
+  <tr><th style="width:12%">方法</th><th style="width:42%">路径</th><th>说明</th></tr>
+  <tr><td>POST</td><td><code>/api/confirm</code></td><td>批准/拒绝待确认动作</td></tr>
+  <tr><td>POST</td><td><code>/api/escalate</code></td><td>人工接管请求</td></tr>
+  <tr><td>GET</td><td><code>/api/escalations</code></td><td>升级队列（只读）</td></tr>
+</table>
+
+<h3>3.3 待办（数据面，可写）</h3>
+<table>
+  <tr><th style="width:12%">方法</th><th style="width:42%">路径</th><th>说明</th></tr>
+  <tr><td>GET</td><td><code>/api/todos</code></td><td><code>?q=</code> 搜索、<code>?source=</code> 来源、<code>?project=</code> 项目、状态过滤</td></tr>
+  <tr><td>POST</td><td><code>/api/todos</code></td><td>新建</td></tr>
+  <tr><td>PATCH / DELETE</td><td><code>/api/todos/:id</code></td><td>更新状态/字段；删除</td></tr>
+  <tr><td>GET</td><td><code>/api/todos/export?format=jsonl|md</code></td><td>浏览器下载</td></tr>
+</table>
+
+<h3>3.4 角色 / 工作流 / 项目</h3>
+<table>
+  <tr><th style="width:12%">方法</th><th style="width:42%">路径</th><th>说明</th></tr>
+  <tr><td>GET</td><td><code>/api/agents</code></td><td>已挂载角色（名字/基座链/提示预览/tools/knowledge/model/manifest 路径）</td></tr>
+  <tr><td>GET</td><td><code>/api/workflows</code></td><td>工作流目录（未接线返回 501）</td></tr>
+  <tr><td>GET</td><td><code>/api/workflows/:name/runs</code> · <code>/api/workflows/runs/:id</code></td><td>运行列表 / 详情</td></tr>
+  <tr><td>GET</td><td><code>/api/workflows/runs/:id/export</code></td><td>运行导出</td></tr>
+  <tr><td>POST</td><td><code>/api/workflows/:name/run</code></td><td>手动触发</td></tr>
+  <tr><td>POST</td><td><code>/api/hooks/:name</code></td><td>webhook 触发；Bearer 校验 manifest 的 <code>secretEnv</code></td></tr>
+  <tr><td>GET</td><td><code>/api/project-templates</code> · <code>/api/project-instances</code></td><td>模板（配置）/ 实例（数据）</td></tr>
+  <tr><td>POST</td><td><code>/api/project-instances</code></td><td>实例化模板</td></tr>
+  <tr><td>GET</td><td><code>/api/project-instances/:id/dashboard</code> · <code>/export</code></td><td>仪表盘（聚合待办）/ 导出</td></tr>
+  <tr><td>PATCH / DELETE</td><td><code>/api/project-instances/:id</code></td><td>实例标题/数据；删除</td></tr>
+</table>
+
+<h3>3.5 知识 / 配置 / 诊断</h3>
+<table>
+  <tr><th style="width:12%">方法</th><th style="width:42%">路径</th><th>说明</th></tr>
+  <tr><td>GET</td><td><code>/api/kb/drafts</code></td><td>未提交草稿</td></tr>
+  <tr><td>POST</td><td><code>/api/kb/drafts/:id/commit</code> · <code>/discard</code></td><td>两阶段写回（门禁后）</td></tr>
+  <tr><td>GET</td><td><code>/api/presets</code></td><td>preset 目录（名字 + 相对路径，不含内容）</td></tr>
+  <tr><td>POST</td><td><code>/api/presets/validate</code></td><td>热校验；路径围栏：只允许 config/presets · agents · workflows · projects · examples</td></tr>
+  <tr><td>GET</td><td><code>/api/status</code></td><td>只读披露：preset、模型租约、mounts（含 degraded + manifestPath）、knowledge、entry、dialect、systemPrompt</td></tr>
+  <tr><td>GET</td><td><code>/api/tools</code></td><td>工具目录</td></tr>
+  <tr><td>GET</td><td><code>/api/usage</code></td><td>用量/成本，可按 agent 聚合</td></tr>
+  <tr><td>GET</td><td><code>/api/logs</code></td><td>脱敏日志</td></tr>
+  <tr><td>GET</td><td><code>/api/notifications</code></td><td>通知中心（元数据级）</td></tr>
+  <tr><td>GET</td><td><code>/api/workspace/files</code> · <code>/api/workspace/file</code></td><td>会话工作区浏览（路径围栏）</td></tr>
+  <tr><td>GET</td><td><code>/healthz</code></td><td>存活探针，免 token</td></tr>
+</table>
+</div>
+
+<!-- ============================================================ -->
+<div class="card">
+<h2 id="4-sse">4 SSE 协议</h2>
+
+<div class="mermaid">
+sequenceDiagram
+  participant C as 浏览器
+  participant R as EntryRest
+  participant K as Kernel
+  C->>R: POST /api/chat {sessionId, message, model?, agent?, project?}
+  R-->>C: 200 text/event-stream
+  R-->>C: data: {"type":"session.meta","payload":{agentSessionId,resumed}}
+  loop 每个内核事件
+    K-->>R: RenderEvent
+    R-->>C: data: {"type":"assistant.text","payload":...}
+  end
+  R-->>C: ": keepalive <ts>"（每 15s，注释行）
+  C->>R: POST /api/sessions/:id/abort
+  R-->>C: 流结束，ledger 落 idle
+</div>
+
+<table>
+  <tr><th style="width:24%">帧</th><th>说明</th></tr>
+  <tr><td><code>data: {type, payload, timestampMs}</code></td><td>唯一的数据帧形状；<code>type</code> 是点分命名空间</td></tr>
+  <tr><td><code>session.meta</code></td><td>首帧：agentSessionId + 是否 resume</td></tr>
+  <tr><td><code>assistant.text</code> · <code>tool.progress</code></td><td>增量文本 / 工具进度</td></tr>
+  <tr><td><code>todo.changed</code></td><td>广播到所有活跃流（多标签页即时同步），不是单流事件</td></tr>
+  <tr><td><code>: keepalive</code></td><td>SSE 注释行，保活；reducer 不需要理解</td></tr>
+</table>
+
+<h3>约束</h3>
+<ul>
+  <li><strong>每会话一路：</strong>turn 用 <code>AbortController</code> 注册，<code>abort</code> 端点命中该控制器（#216 per-session 帧路由）。</li>
+  <li><strong>turn 状态在 DB：</strong>流开始 <code>markStatus running</code>，结束落 <code>idle</code>；侧栏读 DB，不读内存。</li>
+  <li><strong>断线重连：</strong>客户端重新拉 <code>/api/sessions/:id/messages</code> 回放，再开新流；不依赖服务端缓冲。</li>
+  <li><strong>响应头：</strong><code>cache-control: no-cache</code> · <code>connection: keep-alive</code> · <code>x-accel-buffering: no</code>（防反代缓冲）。</li>
+</ul>
+</div>
+
+<!-- ============================================================ -->
+<div class="card">
+<h2 id="5-auth">5 鉴权与安全边界</h2>
+
+<table>
+  <tr><th style="width:24%">机制</th><th>行为</th><th style="width:20%">依据</th></tr>
+  <tr><td>一次性 token</td><td>默认开启：启动生成（或 <code>AGENTOS_WEB_TOKEN</code> 固定），终端打印；浏览器首次输入后存本地。<code>--no-token</code> / <code>AGENTOS_WEB_NO_TOKEN=1</code> 可显式关闭</td><td>#287 / #116</td></tr>
+  <tr><td>token 校验</td><td>开启时：<code>x-agentos-token</code> 头或 <code>?token=</code>；缺失 = 403。关闭时：<code>/api/*</code> 不再校验，启动输出打警告</td><td><code>entry-rest</code></td></tr>
+  <tr><td>绑定地址</td><td>默认 <code>127.0.0.1</code>；容器内 <code>0.0.0.0</code> 是网络命名空间内部，发布由运维决定</td><td>#116 / #302</td></tr>
+  <tr><td>路径围栏</td><td>preset 校验与工作区浏览只能落在白名单目录</td><td>#289 R7</td></tr>
+  <tr><td>日志隐私</td><td>只落元数据；不落 prompt / 回复 / 工具载荷；写盘前按 env 值脱敏</td><td>R2 / R9</td></tr>
+  <tr><td>身份</td><td>内核不做 OAuth/SSO；企业身份是入口层示例</td><td>#117 <span class="tag stub">边界</span></td></tr>
+  <tr><td>团队服务器</td><td>不是产品承诺；远程共享由部署者自加反代/VPN</td><td>#173 <span class="tag stub">边界</span></td></tr>
+</table>
+
+<div class="warn">
+  <strong>容器提醒：</strong><code>docker run -p 8787:8787</code> 等于把控制台发布到宿主机所有网卡。
+  只想本机访问就用 <code>-p 127.0.0.1:8787:8787</code>。
+</div>
+</div>
+
+<!-- ============================================================ -->
+<div class="card">
+<h2 id="6-console">6 Web 控制台</h2>
+
+<table>
+  <tr><th style="width:14%">区</th><th>能力</th><th style="width:32%">主要组件</th></tr>
+  <tr><td>Home</td><td>总览、场景卡入口、健康摘要</td><td><code>HomePanel</code> · <code>StatusStrip</code></td></tr>
+  <tr><td>Chats</td><td>会话列表、流式对话、工具卡、确认弹窗、时间线</td><td><code>ChatStream</code> · <code>SessionSidebar</code> · <code>ConfirmModal</code> · <code>TimelinePanel</code></td></tr>
+  <tr><td>待办看板（抽屉）</td><td>从 Home 打开：四状态列、行内编辑、今日聚焦、来源/项目过滤</td><td><code>TodoPanel</code> · <code>InlineEditableTitle</code></td></tr>
+  <tr><td>Workflows</td><td>目录、运行列表/详情、手动触发、只读步骤图</td><td><code>WorkflowsPanel</code></td></tr>
+  <tr><td>Projects</td><td>模板实例化、实例仪表盘、待办聚合</td><td><code>ProjectsPanel</code></td></tr>
+</table>
+
+<h3>辅助面</h3>
+<p><code>AgentsPanel</code>（角色卡 / 基座链）、<code>ToolsPanel</code>（工具目录）、<code>ConfigDialog</code>（四层 manifest 路径只读披露）、
+<code>UsagePanel</code> / <code>UsageBar</code>、<code>LogsPanel</code>、<code>DraftInbox</code>（知识草稿）、
+<code>NotificationsBell</code>、<code>CommandPalette</code>（⌘K）、<code>FilePanel</code>（工作区）、<code>EscalationsPanel</code>。</p>
+
+<h3>键盘</h3>
+<table>
+  <tr><th style="width:26%">快捷键</th><th>动作</th></tr>
+  <tr><td><code>1</code> – <code>4</code></td><td>切换四区</td></tr>
+  <tr><td><code>Alt + ↑ / ↓</code></td><td>上/下一个会话</td></tr>
+  <tr><td><code>Esc</code></td><td>清空输入 / 关闭浮层</td></tr>
+  <tr><td><code>⌘K</code></td><td>命令面板</td></tr>
+</table>
+
+<div class="note">
+  <strong>配置 vs 数据：</strong>Web 能写的是"我的数据"（会话、待办、项目实例、草稿）；
+  不能写系统配置（角色/工作流/项目模板 = yml + git）。配置面只读 + validate 触发。
+</div>
+</div>
+
+<!-- ============================================================ -->
+<div class="card">
+<h2 id="7-concurrency">7 并发、预算与生命周期</h2>
+
+<table>
+  <tr><th style="width:24%">机制</th><th>行为</th><th style="width:22%">配置</th></tr>
+  <tr><td>会话并发</td><td>超过上限的 turn 排队（FIFO），不失败</td><td><code>maxConcurrentSessions</code></td></tr>
+  <tr><td>工作流并发</td><td>同一上限模型</td><td><code>maxConcurrentWorkflows</code></td></tr>
+  <tr><td>预算门禁</td><td>累计成本越过阈值，下一轮先问人</td><td><code>budgetUsd</code></td></tr>
+  <tr><td>中止</td><td>入口 AbortController → 内核；workflow 实例同样可中止</td><td><code>POST /api/sessions/:id/abort</code></td></tr>
+  <tr><td>优雅退出</td><td>SIGTERM 等待在飞 turn，超时后 sweep 遗留行</td><td>—</td></tr>
+  <tr><td>启动恢复</td><td><code>sweepRunning()</code> 把崩溃遗留的 running 行标 aborted</td><td>—</td></tr>
+</table>
+
+<pre># 同时限制会话与工作流，并设 5 美元预算
+kind: preset
+budgetUsd: 5
+maxConcurrentSessions: 2
+maxConcurrentWorkflows: 1</pre>
+</div>
+
+<!-- ============================================================ -->
+<div class="card">
+<h2 id="8-deploy">8 部署形态</h2>
+
+<h3>本地（常态）</h3>
+<pre>pnpm install &amp;&amp; pnpm build
+node cli/main.mjs serve --web --preset config/presets/example.yml</pre>
+<p>输出控制台 URL 与本次启动的 token；服务只绑定 <code>127.0.0.1</code>。</p>
+
+<h3>容器（单进程）</h3>
+<pre>docker build -t agentos .
+docker run --rm -p 127.0.0.1:8787:8787 \
+  -v "$PWD/.agentos-docker:/app/.agentos" \
+  --env-file .env \
+  agentos</pre>
+<p>镜像内启动 <code>serve --web --host 0.0.0.0</code>；token 门禁仍对每个 <code>/api/*</code> 生效。
+数据卷只有一个：<code>/app/.agentos</code>。</p>
+
+<div class="mermaid">
+flowchart LR
+  U[浏览器] -->|127.0.0.1:8787| D[Docker: agentos]
+  D --> S[serve --web]
+  S --> W[静态控制台]
+  S --> A[REST + SSE]
+  A --> K[内核 · 工具 · 模型 · 知识]
+  K --> V[(".agentos 卷<br/>sessions.db / workspaces / logs")]
+</div>
+
+<div class="warn">
+  <strong>当前没有</strong>"net 容器 + agent 容器"的拆分编排。Dockerfile 是单镜像单进程；
+  两容器方案需要新增：跨进程会话协议、共享 ledger 或 RPC、鉴权传递。属于新架构，不是配置项。
+</div>
+
+<h3>环境变量</h3>
+<table>
+  <tr><th style="width:34%">变量</th><th>作用</th></tr>
+  <tr><td><code>AGENTOS_WEB_TOKEN</code></td><td>固定 Web token（默认每次启动随机）</td></tr>
+  <tr><td><code>AGENTOS_WEB_NO_TOKEN</code></td><td><code>1</code> = 关闭 token 门禁（等价 <code>--no-token</code>），单用户内网用</td></tr>
+  <tr><td><code>AGENTOS_SESSION_DB</code></td><td>ledger 路径（默认 <code>.agentos/sessions.db</code>）</td></tr>
+  <tr><td><code>AGENTOS_FS_ROOT</code> · <code>AGENTOS_REPO_ROOT</code></td><td>装配期注入：文件工具沙箱根 / 仓库根（manifest 引用仓库文件用）</td></tr>
+  <tr><td><code>AGENTOS_ENV</code></td><td>环境标签；tool manifest 的 <code>envRouting</code> 消费</td></tr>
+  <tr><td><code>AGENTOS_DEEPSEEK_*</code> 等</td><td>模型租约（变量名由 model manifest 指定）</td></tr>
+</table>
+</div>
+
+<!-- ============================================================ -->
+<div class="card">
+<h2 id="9-observability">9 可观测与诊断</h2>
+
+<table>
+  <tr><th style="width:22%">面</th><th>内容</th><th style="width:26%">入口</th></tr>
+  <tr><td>状态披露</td><td>preset、模型租约名、工具挂载（含降级标记与 manifest 路径）、知识挂载、入口能力、system prompt</td><td><code>GET /api/status</code> · ConfigDialog</td></tr>
+  <tr><td>用量</td><td>逐轮模型/成本/租户/角色</td><td><code>GET /api/usage</code> · <code>.agentos/usage.log</code></td></tr>
+  <tr><td>日志</td><td>脱敏后的运行日志</td><td><code>GET /api/logs</code> · LogsPanel</td></tr>
+  <tr><td>审计</td><td>门禁、工具围栏拒绝、待办写路径（只记 id + 动作）</td><td><code>.agentos/audit.jsonl</code></td></tr>
+  <tr><td>通知</td><td>待办到期、工作流完成/失败——元数据级</td><td><code>GET /api/notifications</code> · NotificationsBell</td></tr>
+  <tr><td>健康</td><td>进程存活</td><td><code>GET /healthz</code></td></tr>
+</table>
+
+<pre>curl -s -H "x-agentos-token: $TOKEN" http://127.0.0.1:8787/api/status | jq .
+{
+  "preset": "example",
+  "model": { "provider": "deepseek", "baseUrlEnv": "...", "credentialsEnv": "..." },
+  "mounts": [{ "key": "mcp-filesystem", "transport": "stdio",
+               "degraded": false, "manifestPath": "config/tools/mcp-filesystem.yml" }],
+  "knowledge": { "name": "local-markdown", "mountType": "path" },
+  "entry": { "name": "cli", "confirm": true },
+  "dialect": "anthropic-compat",
+  "systemPrompt": "..."
+}</pre>
+</div>
+
+<!-- ============================================================ -->
+<div class="card">
+<h2 id="10-failure">10 降级与故障恢复</h2>
+
+<table>
+  <tr><th style="width:26%">故障</th><th>行为</th></tr>
+  <tr><td>工具 provider 缺凭证/缺变量</td><td>该 provider 缺席 + <code>⚠</code> 告警，其余正常启动（环境错误不拖垮整体）</td></tr>
+  <tr><td>manifest 说谎（schema/引用）</td><td>fail loud，拒绝启动——配置谎言不是部署状态</td></tr>
+  <tr><td>模型端点不健康</td><td>alias 内 fallbackChain → 跨 manifest <code>fallbackModels</code>；结果卡片标 <code>model-fallback</code></td></tr>
+  <tr><td>工具缺失</td><td>错误 subtype <code>tool-missing</code>，渲染可行动卡片</td></tr>
+  <tr><td>门禁拒绝</td><td>subtype <code>gate-denied</code>，落审计</td></tr>
+  <tr><td>网络错误</td><td>subtype <code>network</code>，可重试提示</td></tr>
+  <tr><td>SSE 断线</td><td>客户端重新回放 <code>messages</code> 再开流；服务端每 15s keepalive</td></tr>
+  <tr><td>进程崩溃</td><td>重启时 sweep running 行；工作流恢复按 ledger 指针</td></tr>
+</table>
+</div>
+
+<!-- ============================================================ -->
+<div class="card">
+<h2 id="11-status">11 状态矩阵与边界</h2>
+
+<table>
+  <tr><th style="width:34%">能力</th><th style="width:14%">状态</th><th>证据 / 说明</th></tr>
+  <tr><td>四区控制台</td><td><span class="tag ok">已实现</span></td><td><code>apps/web/src/App.tsx</code> 的 zone 状态机（Home 总览 + 待办抽屉）</td></tr>
+  <tr><td>SSE 对话 + 中止</td><td><span class="tag ok">已实现</span></td><td><code>POST /api/chat</code> · <code>/abort</code> · conformance</td></tr>
+  <tr><td>待办 CRUD + 导出 + 广播</td><td><span class="tag ok">已实现</span></td><td><code>/api/todos*</code> · <code>todo.changed</code></td></tr>
+  <tr><td>角色目录与会话</td><td><span class="tag ok">已实现</span></td><td><code>GET /api/agents</code> · <code>/api/chat</code> 的 <code>agent</code> 参数</td></tr>
+  <tr><td>工作流触发/详情</td><td><span class="tag ok">已实现</span></td><td><code>/api/workflows*</code> · <code>/api/hooks/:name</code></td></tr>
+  <tr><td>项目模板/实例</td><td><span class="tag ok">已实现</span></td><td><code>/api/project-*</code></td></tr>
+  <tr><td>知识草稿 inbox</td><td><span class="tag ok">已实现</span></td><td><code>/api/kb/drafts</code> + commit/discard</td></tr>
+  <tr><td>一次性 token 门禁</td><td><span class="tag ok">已实现</span></td><td>默认开启；无 token 请求 403（实测）。<code>--no-token</code> 显式关闭并打印警告</td></tr>
+  <tr><td>浏览器 E2E</td><td><span class="tag todo">未建面</span></td><td>维护者决定不引入 Playwright；最终决策待定（#437）</td></tr>
+  <tr><td>实时工作流点亮（SSE）</td><td><span class="tag todo">未建面</span></td><td>#377 未建面</td></tr>
+  <tr><td>面板壳统一</td><td><span class="tag todo">未建面</span></td><td>#432 保留</td></tr>
+  <tr><td>OAuth / SSO 身份</td><td><span class="tag stub">边界</span></td><td>#117：企业身份是入口示例，不是内核功能</td></tr>
+  <tr><td>net / agent 双容器</td><td><span class="tag todo">未建面</span></td><td>当前单进程；拆分需新协议与编排</td></tr>
+  <tr><td>团队服务器</td><td><span class="tag stub">边界</span></td><td>#173：默认 loopback，远程共享由部署者负责</td></tr>
+</table>
+
+<div class="note">
+  <strong>验收口径：</strong>离线项（路由、状态机、SSE 帧、门禁）由 conformance + vitest 兑现；
+  真实项（浏览器 E2E、真实模型 turn、真实第三方 MCP）集中在最后阶段跑，未跑过不标"已验证真实运行"。
+</div>
+</div>
+
+</body>
+</html>

@@ -2,7 +2,10 @@
 **/dist
 .git
 .agentos
-.env
+# local credentials and local-only config never enter the build context
+**/.env*
+**/*.local
+config/presets/local.yml
 .docs
 .reference
 test-results

@@ -27,6 +27,7 @@ function makeStaticDir(dir: string): string {
 async function boot(
   runner: TurnRunner,
   readTranscript?: TranscriptReader,
+  onSessionDeleted?: (row: { externalKey: string; sdkSessionId: string | null }) => void | Promise<void>,
 ): Promise<{ srv: RunningServer; dbPath: string; escPath: string }> {
   const dir = mkdtempSync(join(tmpdir(), "agentos-rest-conf-"));
   tempDirs.push(dir);
@@ -46,6 +47,7 @@ async function boot(
     escalatePath: escPath,
     staticDir: makeStaticDir(dir),
     ...(readTranscript ? { readTranscript } : {}),
+    ...(onSessionDeleted ? { onSessionDeleted } : {}),
   });
   servers.push(srv);
   return { srv, dbPath, escPath };
@@ -233,6 +235,27 @@ describe("DELETE /api/sessions/:id", () => {
     expect((await res.json()) as { ok: boolean }).toEqual({ ok: true });
     const list = (await (await api(srv, "/api/sessions")).json()) as { sessions: Array<{ id: string }> };
     expect(list.sessions.some((s) => s.id === id)).toBe(false);
+  });
+
+  it("hands the deleted row to the cleanup hook, and a throwing hook cannot fail the delete", async () => {
+    const seen: Array<string | null> = [];
+    const { srv } = await boot(
+      async () => ({ sdkSessionId: "sdk-cleanup" }),
+      undefined,
+      (row) => {
+        seen.push(row.sdkSessionId);
+      },
+    );
+    const id = await seedRow(srv, "cleanup");
+    expect((await api(srv, `/api/sessions/${id}`, { method: "DELETE" })).status).toBe(200);
+    expect(seen).toEqual(["sdk-cleanup"]);
+
+    const { srv: boom } = await boot(async () => ({ sdkSessionId: "sdk-boom" }), undefined, () => {
+      throw new Error("cleanup sink is down");
+    });
+    const id2 = await seedRow(boom, "cleanup-boom");
+    const res = await api(boom, `/api/sessions/${id2}`, { method: "DELETE" });
+    expect(res.status).toBe(200); // the row is gone; cleanup failure is not the caller's
   });
 
   it("unknown id answers 404, and a second delete of the same id also answers 404", async () => {
@@ -1970,7 +1993,7 @@ describe("notification centre includes pending gates (spec #427)", () => {
       void ctx.confirm({ prompt: "approve secret-ish evidence?" });
       await new Promise<void>((r) => {
         release = r;
-        ctx.signal?.addEventListener("abort", r, { once: true });
+        ctx.signal?.addEventListener("abort", () => r(), { once: true });
       });
       return {};
     });

@@ -26,7 +26,9 @@ export {
 
 export {
   readTranscript,
+  deleteTranscript,
   projectDirName,
   type ReadTranscriptOptions,
+  type DeleteTranscriptOptions,
   type TranscriptWarning,
 } from "./transcript.js";

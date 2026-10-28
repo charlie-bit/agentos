@@ -36,3 +36,20 @@ Start here, then follow the path that matches what you are doing.
 
 This directory is the documentation set; it renders as-is on GitHub and any
 Markdown host, with no site generator and no new dependency.
+
+## From nothing to something (scaffolds)
+
+Every config face has a scaffold that writes a skeleton which is validated by
+the real loader before the command reports success:
+
+```bash
+agentos preset validate config/presets/example.yml   # check an assembled preset
+agentos agents scaffold my-role                      # role yml
+agentos workflows scaffold my-flow                   # five-step workflow yml
+agentos projects scaffold my-project                 # project template yml
+agentos agents export my-role --out share.yml        # take a role with you
+```
+
+All four exit non-zero on a bad name, refuse to overwrite, and print the next
+command to run. There is no generator and no editor: the file is the product.
+([中文](scaffolds.zh-CN.md))

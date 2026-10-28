@@ -9,6 +9,17 @@ pm-skills-temp/
 .reference/
 *.local
 
+# local-only preset: mounts providers whose credentials stay in .env.local
+config/presets/local.yml
+
+# third-party design skill, linked from a local checkout — not part of the product
+.claude/skills/impeccable
+# impeccable working artifacts; PRODUCT.md and surface briefs stay tracked
+apps/web/.impeccable/mocks/
+apps/web/.impeccable/build/
+apps/web/.impeccable/review/
+apps/web/.impeccable/config.local.json
+
 # session ledger database (default location; path overridable via AGENTOS_SESSION_DB)
 .agentos/
 

@@ -14,6 +14,21 @@ node cli/main.mjs serve --web --preset config/presets/example.yml
 Prints the console URL and a per-boot token. The server binds `127.0.0.1`
 only; every `/api/*` route requires the token (see `SECURITY.md`).
 
+### Turning the token gate off (single-user intranet)
+
+The token exists to stop other local processes and stray browser tabs from
+reading sessions or driving the agent. If this deployment is single-user and
+the network is the boundary, say so explicitly:
+
+```bash
+node cli/main.mjs serve --web --no-token --host 0.0.0.0 --preset config/presets/example.yml
+# or put AGENTOS_WEB_NO_TOKEN=1 in .env
+```
+
+The boot output then warns that anyone who can reach the port can drive the
+agent. Nothing else changes: the bind address, data directory and provider
+leases are unaffected.
+
 ## Container
 
 ```bash

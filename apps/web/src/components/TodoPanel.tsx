@@ -22,12 +22,13 @@ export function isTodayFocus(t: Todo, now = Date.now()): boolean {
 
 /** Four-column board (#321) with a today focus toggle (#322), 5s polling. */
 export function TodoPanel({
-  onClose,
   onOpenSession,
+  onClose,
 }: {
-  onClose: () => void;
   /** Jump to the session a todo came from (#315). */
   onOpenSession?: (sessionKey: string) => void;
+  /** Present when the board is a drawer over the work area rather than a page. */
+  onClose?: () => void;
 }) {
   const [todos, setTodos] = useState<Todo[]>([]);
   const [query, setQuery] = useState("");
@@ -66,51 +67,65 @@ export function TodoPanel({
   };
 
   return (
-    <aside className="flex w-full shrink-0 flex-col gap-2 border-l border-border p-2 text-xs md:w-96" aria-label="todos">
-      <div className="flex items-center justify-between px-1">
-        <span className="text-[11px] uppercase tracking-wide text-muted-foreground">todos ({visible.length})</span>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setTodayOnly((v) => !v)}
-            className={cn("rounded border border-border px-1.5 py-0.5 text-[10px]", todayOnly ? "bg-primary text-primary-foreground" : "text-muted-foreground")}
-            title="due within 24h, not done"
-          >
-            today
-          </button>
-          <button onClick={onClose} className="rounded p-0.5 text-muted-foreground hover:text-foreground">×</button>
-        </div>
-      </div>
-      <div className="flex gap-1">
+    <div
+      className={
+        onClose
+          ? "flex w-full shrink-0 flex-col gap-2 border-l border-border bg-card/20 p-3 text-xs md:w-[26rem]"
+          : "flex min-h-0 min-w-0 flex-1 flex-col gap-3 p-4 md:p-6"
+      }
+      aria-label="todos"
+    >
+      <div className="flex flex-wrap items-center gap-2">
         <input
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && void create()}
-          placeholder="add a todo…"
-          className="min-w-0 flex-1 rounded border border-border bg-background px-2 py-1 outline-none focus:border-primary"
+          placeholder="Add a todo…"
+          className="min-w-0 flex-1 basis-56 rounded-md border border-border bg-background px-3 py-1.5 text-sm outline-none focus:border-primary"
         />
-        <Button size="sm" onClick={() => void create()} disabled={draft.trim().length === 0} aria-label="add todo">
-          <Plus className="h-3 w-3" />
+        <Button size="sm" onClick={() => void create()} disabled={draft.trim().length === 0}>
+          <Plus className="h-3 w-3" /> Add
         </Button>
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Filter…"
+          className="w-full rounded-md border border-border bg-background px-3 py-1.5 text-sm outline-none focus:border-primary sm:w-56"
+        />
+        <button
+          onClick={() => setTodayOnly((v) => !v)}
+          className={cn(
+            "rounded-md border border-border px-2.5 py-1.5 text-xs",
+            todayOnly ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-card",
+          )}
+          title="due within 24h, not done"
+        >
+          Today
+        </button>
+        <span className="ml-auto text-[11px] text-muted-foreground">{visible.length} shown</span>
+        {onClose && (
+          <button onClick={onClose} className="rounded p-1 text-muted-foreground hover:text-foreground" aria-label="close todos">
+            ×
+          </button>
+        )}
       </div>
-      <input
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        placeholder="filter title / status / source / project…"
-        className="rounded border border-border bg-background px-2 py-1 outline-none focus:border-primary"
-      />
-      {error && <div className="px-1 text-err">{error}</div>}
+
+      {error && <div className="text-sm text-err">{error}</div>}
+
       <ScrollArea className="min-h-0 flex-1">
-        <div className="grid grid-cols-2 gap-2">
-          {COLUMNS.map((col) => (
-            <section key={col.key} className="min-h-24 rounded border border-border p-1">
-              <div className="mb-1 px-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-                {col.label} ({visible.filter((t) => t.status === col.key).length})
-              </div>
-              <ul className="space-y-1">
-                {visible
-                  .filter((t) => t.status === col.key)
-                  .map((t) => (
-                    <li key={t.id} className="rounded bg-background px-1.5 py-1">
+        <div className={cn("grid gap-3 pb-2", onClose ? "grid-cols-2" : "grid-cols-1 sm:grid-cols-2 xl:grid-cols-4")}>
+          {COLUMNS.map((col) => {
+            const items = visible.filter((t) => t.status === col.key);
+            return (
+              <section key={col.key} className="flex min-h-24 flex-col rounded-lg border border-border bg-card/40 p-2 sm:min-h-40">
+                <div className="mb-2 flex items-center justify-between px-1 text-[11px] uppercase tracking-wider text-muted-foreground">
+                  <span>{col.label}</span>
+                  <span>{items.length}</span>
+                </div>
+                {items.length === 0 && <div className="px-1 text-[11px] text-muted-foreground">—</div>}
+                <ul className="space-y-1.5">
+                  {items.map((t) => (
+                    <li key={t.id} className="rounded-md border border-border bg-background px-2.5 py-2 text-sm">
                       <button
                         className="block w-full text-left"
                         title={`click to move: ${t.status} → ${NEXT[t.status]}`}
@@ -118,7 +133,7 @@ export function TodoPanel({
                       >
                         <span className={cn(t.status === "done" && "line-through opacity-60")}>{t.title}</span>
                       </button>
-                      <div className="mt-0.5 flex items-center gap-1 text-[10px] text-muted-foreground">
+                      <div className="mt-1 flex items-center gap-1.5 text-[10px] text-muted-foreground">
                         {t.priority && <span className={cn("rounded px-1", t.priority === "P0" ? "bg-err/20 text-err" : t.priority === "P1" ? "bg-warn/20 text-warn" : "")}>{t.priority}</span>}
                         <span>{t.sourceKind}</span>
                         {t.sourceRef && /^(web-|wf-)/.test(t.sourceRef) && onOpenSession && (
@@ -142,14 +157,16 @@ export function TodoPanel({
                       </div>
                     </li>
                   ))}
-              </ul>
-            </section>
-          ))}
+                </ul>
+              </section>
+            );
+          })}
         </div>
       </ScrollArea>
-      <div className="px-1 text-[10px] text-muted-foreground">
-        Todos are local user data (#319–#320). The model can also add them via the todo_* tools; changes replay in the transcript (#311).
-      </div>
-    </aside>
+
+      <p className="text-[11px] text-muted-foreground">
+        Todos are local user data. The model can also add them with the <code>todo_*</code> tools; changes replay in the transcript.
+      </p>
+    </div>
   );
 }

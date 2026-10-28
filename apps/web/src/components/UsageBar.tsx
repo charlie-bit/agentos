@@ -35,8 +35,8 @@ export function UsageBar({
   const num = (n: number) => n.toLocaleString();
   return (
     <TooltipProvider delayDuration={200}>
-      <footer className="flex items-center gap-3 border-t border-border px-4 py-1.5 text-[11px] text-muted-foreground">
-        <span className="font-mono">
+      <footer className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border px-4 py-1.5 text-[11px] text-muted-foreground">
+        <span className="min-w-0 font-mono">
           in {num(usage.input + (live?.input ?? 0))} · out {num(usage.output + (live?.output ?? 0))}
           {usage.cacheRead > 0 && <> · cache_rd {num(usage.cacheRead)}</>}
           {usage.cacheWrite > 0 && <> · cache_wr {num(usage.cacheWrite)}</>} · ≈${usage.cost.toFixed(4)}

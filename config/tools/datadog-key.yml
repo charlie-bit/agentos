@@ -1,0 +1,28 @@
+# Datadog MCP without OAuth: the community stdio server over the Datadog API.
+# Credentials are read by the SERVER from the environment — DD_API_KEY and
+# DD_APP_KEY are required, DD_SITE / DD_LOGS_SITE / DD_METRICS_SITE optional.
+# They never appear here: a manifest names a server, not a secret (#12).
+# Every published tool is a read, so the whole mount is retry-safe.
+#
+# Mount this INSTEAD of datadog.yml when there is no browser in the loop.
+kind: tool
+version: "1"
+name: datadog-key
+transport: stdio
+command: npx -y datadog-mcp-server@1.0.9
+auth:
+  mode: none
+allowedTools:
+  - search-logs
+  - aggregate-logs
+  - get-dashboards
+  - get-dashboard
+  - get-monitors
+  - get-monitor
+  - get-events
+  - get-incidents
+  - get-metrics
+  - get-metric-metadata
+idempotent:
+  default: true
+schemaExchange: json-schema

@@ -8,7 +8,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
-import { projectDirName, readTranscript, type TranscriptWarning } from "../index.js";
+import { projectDirName, readTranscript, deleteTranscript, type TranscriptWarning } from "../index.js";
 
 const dirs: string[] = [];
 afterAll(() => {
@@ -237,5 +237,24 @@ describe("todo.changed replay marker (spec #311)", () => {
     expect(todo?.event).toBe("todo.changed");
     expect(kb?.event).toBeUndefined();
     rmSync(dir, { recursive: true, force: true });
+  });
+});
+
+describe("deleteTranscript: session deletion leaves no orphan conversation", () => {
+  it("removes the kernel's jsonl; a second call is a no-op", () => {
+    const { home, workspaceDir } = store([userText("hello")]);
+    expect(deleteTranscript({ sdkSessionId: SID, workspaceDir, env: {}, homeDir: home })).toBe(true);
+    expect(deleteTranscript({ sdkSessionId: SID, workspaceDir, env: {}, homeDir: home })).toBe(false);
+  });
+
+  it("refuses an id that could escape the store", () => {
+    const { home, workspaceDir } = store([userText("hello")]);
+    expect(deleteTranscript({ sdkSessionId: "../../etc/passwd", workspaceDir, env: {}, homeDir: home })).toBe(false);
+  });
+
+  it("a session that never took a turn has no file to delete", () => {
+    const home = mkdtempSync(join(tmpdir(), "agentos-transcript-empty-"));
+    dirs.push(home);
+    expect(deleteTranscript({ sdkSessionId: SID, env: {}, homeDir: home })).toBe(false);
   });
 });

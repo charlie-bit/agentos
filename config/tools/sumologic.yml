@@ -1,0 +1,24 @@
+# Sumo Logic MCP over stdio. `mcp-sumologic` publishes its server as the
+# package MAIN with no `bin` entry, so npx cannot launch it — scripts/mcp-sumo.mjs
+# is the missing launcher (the module starts the server on import).
+# Credentials are read by the SERVER from the environment: SUMO_API_ID +
+# SUMO_API_KEY + ENDPOINT (the org's region host, e.g.
+# https://api.au.sumologic.com/api/v1 — the server has no usable default).
+# The launcher falls back to ~/.sumologic.env, so the conventional local file
+# is the only place these live: nothing is entered into this repo.
+# ${AGENTOS_REPO_ROOT} is set by serve during assembly, so the command does not
+# depend on the caller's cwd.
+kind: tool
+version: "1"
+name: sumologic
+transport: stdio
+command: node ${AGENTOS_REPO_ROOT}/scripts/mcp-sumo.mjs
+auth:
+  mode: none
+allowedTools:
+  - search_sumologic
+  - test_connection
+  - get_israel_time
+idempotent:
+  default: true
+schemaExchange: json-schema

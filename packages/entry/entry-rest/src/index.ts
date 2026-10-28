@@ -117,6 +117,14 @@ export interface StartServerOptions {
   escalatePath?: string;
   /** History supplier for GET /api/sessions/:id/messages. Absent = no replay. */
   readTranscript?: TranscriptReader;
+  /**
+   * Cleanup hook for DELETE /api/sessions/:id, called AFTER the ledger row is
+   * gone. The composition root owns the kernel's transcript location, so the
+   * entry layer hands it the deleted row instead of learning the store layout.
+   * Failures are swallowed: cleanup must never turn a successful delete into
+   * a 404/500.
+   */
+  onSessionDeleted?: (row: SessionRow) => void | Promise<void>;
   /** The base system prompt actually sent to the model — surfaced read-only on
    * GET /api/status for the config-inspection dialog. Absent = field omitted. */
   systemPrompt?: string;
@@ -914,6 +922,15 @@ export async function startServer(o: StartServerOptions): Promise<RunningServer>
         const row = o.ledger.getById(id);
         if (row) entry.abort(row.externalKey);
         o.ledger.deleteSession(id);
+        // The kernel's transcript is not the ledger's to keep: let the root
+        // that knows the store layout clean it up. Never let it fail the delete.
+        if (row && o.onSessionDeleted) {
+          try {
+            await o.onSessionDeleted(row);
+          } catch {
+            /* cleanup is best effort */
+          }
+        }
         return sendJson(res, 200, { ok: true });
       } catch {
         return sendJson(res, 404, { error: "session not found" });

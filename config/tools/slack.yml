@@ -1,0 +1,22 @@
+# Slack's HOSTED MCP (https://mcp.slack.com/mcp) mounted through mcp-remote.
+#
+# Why a proxy instead of transport: http: AgentOS speaks MCP over http fine, but
+# the hosted server authenticates with OAuth 2.0, and AgentOS has no OAuth client
+# by design (#117 identity/OAuth is an entry concern, not kernel code). mcp-remote
+# IS that client: on the first mount it opens the browser, you authorize, and it
+# caches the tokens under ~/.mcp-auth — local, never committed. Later mounts are
+# silent. Nothing has to be typed into this repo.
+#
+# Trade-off: it is a third-party proxy on the path. The alternative is
+# slack-key.yml (bot token via env, no browser); same MCP, different credential.
+# allowedTools is deliberately absent: the hosted tool set could not be probed
+# here (no token yet), so the mount is drift-unverified rather than carrying a
+# list that might be a lie (#12 honesty rule). First successful mount reveals it.
+kind: tool
+version: "1"
+name: slack
+transport: stdio
+command: npx -y mcp-remote@0.15.2 https://mcp.slack.com/mcp
+auth:
+  mode: none
+schemaExchange: json-schema
