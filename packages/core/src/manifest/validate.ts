@@ -112,6 +112,9 @@ export function validatePresetRefs(
       if (step.type === "agent" && !byName.has(step.agent)) {
         errors.push({ source, category: REF, path: `steps.${i}.agent`, message: `references agent ${JSON.stringify(step.agent)}, which no config/agents manifest declares`, hint: "external agents are MCP tools; workflow agent steps name local roles" });
       }
+      if (step.type === "review" && !byName.has(step.agent)) {
+        errors.push({ source, category: REF, path: `steps.${i}.agent`, message: `references reviewer ${JSON.stringify(step.agent)}, which no config/agents manifest declares`, hint: "a review step is a mounted role, not a prompt" });
+      }
     });
   }
 
@@ -154,6 +157,11 @@ export function validatePresetRefs(
     };
     checkManifestRef("knowledge", manifest.knowledge);
     checkManifestRef("model", manifest.model);
+    (manifest.skills ?? []).forEach((ref, i) => {
+      const found = byName.get(ref);
+      if (!found) errors.push({ source, category: REF, path: `skills.${i}`, message: `references ${JSON.stringify(ref)}, which no skills manifest declares` });
+      else if (found.kind !== "skills") errors.push({ source, category: REF, path: `skills.${i}`, message: `references ${JSON.stringify(ref)} as a skills mount, but it is a ${JSON.stringify(found.kind)} manifest` });
+    });
 
     const seen = new Set<string>();
     manifest.tools.forEach((ref, i) => {

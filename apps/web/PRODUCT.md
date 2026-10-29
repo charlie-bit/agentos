@@ -47,6 +47,9 @@ whereas here the configuration files are.
   `1`–`4`, `Alt+↑/↓` across sessions, `Esc`, `⌘K`.
 - The web writes user data only; system configuration is read-only, with
   validate triggers.
+- Skills mounts are deployment-local and private: `config/skills/local.yml` and
+  the `skills-base/` content it points at are gitignored, like the knowledge
+  socket. The mount path may be an absolute path or `${ENV}`.
 
 ## Capabilities and Constraints
 
@@ -57,6 +60,11 @@ whereas here the configuration files are.
 - Deliberate boundaries: no accounts, no team server, no visual workflow
   editor, no config write API.
 - Explicit future direction, not current scope: multi-user accounts/tenancy.
+- Explicit future direction, not current scope: workflow authoring from the
+  console. Stage A ships the visual step composer plus a generated yml file
+  (export only, config stays file+git). The intended successor is an API write
+  path with config stored in the database, which replaces the read-only
+  configuration boundary for this one surface.
 
 ## Brand Commitments
 

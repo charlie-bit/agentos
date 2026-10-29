@@ -34,6 +34,10 @@ import {
   parseCron,
   windowVerdict,
   resolveAgent,
+  scanSkills,
+  callMountedTool,
+  probeMcp,
+  closeMcpConnections,
   type Attribution,
   type AnyManifest,
 } from "@agentos/core";
@@ -93,6 +97,8 @@ export interface Assembly {
   agents: Map<string, AgentManifest>;
   /** Mounted workflow manifests by name (spec #353; preset.workflows = advertised subset). */
   workflows: Map<string, WorkflowManifest>;
+  /** Mounted skills by name (stage C; preset.skills = the scanned mounts). */
+  skills: Map<string, import("@agentos/contracts").SkillEntry>;
   /** Project templates by name (spec #388/#392 fence source). */
   projectTemplates: Map<string, import("@agentos/contracts").ProjectManifest>;
   /** Role name -> repo-relative manifest path (#342 read-only disclosure). */
@@ -367,6 +373,30 @@ export function assemble(flags: ServeFlags): { ok: true; value: Assembly } | { o
           .filter((m) => (preset.workflows ?? []).includes(m.name))
           .map((m) => [m.name, m] as const),
       ),
+      skills: (() => {
+        const out = new Map<string, import("@agentos/contracts").SkillEntry>();
+        for (const m of manifests) {
+          if (m.kind !== "skills" || !(preset.skills ?? []).includes(m.name)) continue;
+          // The skills directory is deployment-local (private instructions, not
+          // repo content): ${VAR} and absolute paths are first-class, and a
+          // missing var degrades this mount instead of failing the boot.
+          let missing = false;
+          const path = m.mount.path.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g, (_w, name) => {
+            const v = process.env[name];
+            if (v === undefined || v.length === 0) { missing = true; return _w; }
+            return v;
+          });
+          if (missing) {
+            write(`⚠ skills mount "${m.name}" skipped: ${m.mount.path} has an unset env var\n`);
+            continue;
+          }
+          const root = path.startsWith("/") ? path : resolve(repoRoot, path);
+          for (const skill of scanSkills(root)) {
+            if (!out.has(skill.name)) out.set(skill.name, skill);
+          }
+        }
+        return out;
+      })(),
       agents: new Map<string, AgentManifest>(
         manifests
           .filter((m): m is AgentManifest => m.kind === "agent")
@@ -765,6 +795,12 @@ export async function runServeWeb(flags: ServeFlags): Promise<number> {
       return ws;
     },
     sessionKeyForRun: (runId) => `wf-${runId}`,
+    // Output sink: a direct MCP tools/call, no model turn. The provider is
+    // whatever the preset mounted; an unmounted tool fails the run loudly.
+    postOutput: async (output, text) => {
+      const res = await callMountedTool(plans, output.tool ?? "slack_post_message", { channel_id: output.channel, text });
+      if (res.isError) throw new Error(res.text.length > 0 ? res.text : "slack post failed");
+    },
     runAgentTurn: async (step, prompt, runId) => {
       const role = resolveAgent(step.agent, asm.value.agents);
       // One session per run (#387): replayable, agent-tagged, with a pointer.
@@ -794,6 +830,14 @@ export async function runServeWeb(flags: ServeFlags): Promise<number> {
         .trim();
       return text.length > 0 ? text : "(no assistant text)";
     },
+    skills: asm.value.skills,
+    runForeignTool: async (name, args) => {
+      // A mounted MCP server is a process: call it directly. No agent turn, no
+      // model nondeterminism — the same call the kernel would make.
+      const res = await callMountedTool(plans, name, args);
+      if (res.isError) throw new Error(res.text.length > 0 ? res.text : `tool "${name}" failed`);
+      return res.text;
+    },
     kbProvider: () =>
       asm.value.knowledge?.mount.type === "path"
         ? createMarkdownProvider({
@@ -820,6 +864,21 @@ export async function runServeWeb(flags: ServeFlags): Promise<number> {
   // key so the existing abort endpoint reaches it (#365).
   const workflowAborts = new Map<string, AbortController>();
   const budgetUsd = asm.value.budgetUsd;
+  // Live mount health: probe every MCP mount in the background (30s TTL) so the
+  // lists can show "actually reachable", not just "declared". ok:null = not
+  // probed yet; probing also warms the connection pool.
+  const mcpHealth = new Map<string, { ok: boolean | null; error?: string }>();
+  const probeMounts = async () => {
+    await Promise.all(
+      plans.map(async (p) => {
+        const r = await probeMcp(p);
+        mcpHealth.set(p.key, r.ok ? { ok: true } : { ok: false, ...(r.error ? { error: r.error } : {}) });
+      }),
+    );
+  };
+  void probeMounts();
+  const healthTimer = setInterval(() => void probeMounts(), 30_000);
+  healthTimer.unref?.();
   const server = await startServer({
     presetName,
     model: { provider: modelLease.provider, baseUrlEnv: modelLease.baseUrlEnv, credentialsEnv: modelLease.credentialsEnv },
@@ -942,6 +1001,8 @@ export async function runServeWeb(flags: ServeFlags): Promise<number> {
     knowledge: asm.value.knowledgeInfo ?? undefined,
     entry: { name: asm.value.entryName, confirm: REST_CAPABILITIES.confirm },
     dialect: selectDialect(modelLease),
+    mcpHealth: () =>
+      plans.map((p) => ({ key: p.key, transport: p.transport, ...(mcpHealth.get(p.key) ?? { ok: null }) })),
     schedulerStatus: () => ({
       alive: schedulerAlive,
       activeRuns: ledger.workflowRunList({ status: "running" }).length,
@@ -967,6 +1028,7 @@ export async function runServeWeb(flags: ServeFlags): Promise<number> {
         if (opts?.runId) workflowAborts.delete(`wf-${opts.runId}`);
       }
     },
+    skills: () => [...asm.value.skills.values()].map(({ name, description, path }) => ({ name, description, path })),
     onAbort: (externalKey) => {
       const controller = workflowAborts.get(externalKey);
       if (controller) controller.abort();
@@ -1014,9 +1076,13 @@ export async function runServeWeb(flags: ServeFlags): Promise<number> {
         steps: Array.isArray(row.steps) ? row.steps : [],
       };
     },
-    agents: () =>
-      [...asm.value.agents.values()].map((m) => {
+    agents: () => {
+      const surface = [...plans, ...(todoMount ? [todoMount.plan] : [])];
+      const declared = new Set(surface.flatMap((p) => p.allowedTools ?? []));
+      const wildcard = surface.some((p) => p.allowedTools === undefined);
+      return [...asm.value.agents.values()].map((m) => {
         const resolved = resolveAgent(m.name, asm.value.agents);
+        const missingTools = wildcard ? [] : resolved.tools.filter((t) => !declared.has(t));
         return {
           name: m.name,
           ...(m.baseAgent ? { baseAgent: m.baseAgent } : {}),
@@ -1026,8 +1092,11 @@ export async function runServeWeb(flags: ServeFlags): Promise<number> {
           ...(resolved.knowledge ? { knowledge: resolved.knowledge } : {}),
           ...(resolved.model ? { model: resolved.model } : {}),
           manifestPath: asm.value.agentManifestPaths[m.name] ?? null,
+          available: missingTools.length === 0,
+          missingTools,
         };
-      }),
+      });
+    },
     todos: {
       list: (filter) => {
         const all = ledger.todoList({
@@ -1189,6 +1258,7 @@ export async function runServeWeb(flags: ServeFlags): Promise<number> {
       } catch {
         /* already closed */
       }
+      closeMcpConnections();
       write("\n✗ aborted (server closed)\n");
       process.exit(130);
     };

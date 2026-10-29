@@ -52,6 +52,8 @@ finish review, the verdict, DESIGN.md, and every shipping raster carrying its pr
 
 - A session with no title renders its raw `web-<uuid>` in Home and the ledger
   list.
+- Workflow authoring is stage A: the composer emits a file. The API write path
+  with config in the database is the agreed successor, not built yet.
 - Secondary inspectors (files, drafts, logs, tools, escalations, timeline,
   usage, roles) stay right-side asides by design: they are drawers over the work
   area, not destinations.

@@ -393,7 +393,7 @@ model: deepseek</pre>
   <tr><td><code>tool</code></td><td><code>{ tool, args }</code> —— 进程内工具</td></tr>
   <tr><td><code>skill</code></td><td><code>{ skill, prompt? }</code> —— 经知识通道；<strong>当前无 headless runner</strong></td></tr>
   <tr><td><code>kb_search</code></td><td><code>{ query }</code></td></tr>
-  <tr><td><code>human</code></td><td><code>{ prompt, timeout }</code> —— confirm 门禁</td></tr>
+  <tr><td><code>review</code></td><td><code>{ agent, prompt?, mustInclude? }</code> —— 由已挂载角色裁决上一步；输出不含 APPROVE（可配置）即拒绝并停止</td></tr>
 </table>
 <table>
   <tr><th style="width:16%">触发</th><th>语义</th><th style="width:24%">状态</th></tr>
@@ -402,6 +402,20 @@ model: deepseek</pre>
   <tr><td><code>webhook</code></td><td><code>secretEnv</code> 指向 env 名，Bearer 校验</td><td><span class="tag ok">已实现</span></td></tr>
 </table>
 <p>并发上限 <code>maxConcurrentWorkflows</code>（#366）；中止可到达运行中的实例（#365）；每步落审计行。</p>
+<p>
+  <strong>Skills 挂载（stage C）：</strong><code>kind: skills</code> manifest 指向一个目录，启动时扫描其中的
+  <code>**/SKILL.md</code>（frontmatter <code>name</code>/<code>description</code>），preset 用 <code>skills: [名字]</code> 引用。
+  该 manifest 与目录本身<strong>不入库</strong>（<code>config/skills/local.yml</code> + <code>skills-base/</code> 均被 .gitignore），
+  路径支持绝对路径或 <code>${ENV}</code>；变量缺失只跳过该挂载并告警，不阻断启动。
+  <code>skill</code> 步骤按名字取正文作为该轮的系统提示。
+</p>
+<p>
+  <strong>输入 / 输出（stage B，additive）：</strong><code>category</code> 声明主题，用于控制台分组；
+  <code>input.source ∈ {none, manual}</code> —— manual 由运行端点传入，同时注入 <code>{input}</code>
+  并作为第一步的 <code>{prev}</code>（<code>{input}</code> 始终解析为原始输入）；
+  <code>output.sink ∈ {none, slack}</code> —— slack 在最后一步成功后，经<strong>已挂载的 Slack 工具</strong>投递到指定
+  channel；投递失败会把 run 标为 error 而不是静默丢弃。Slack 拉取型输入是下一个 additive 成员。
+</p>
 
 <h3>7.3 Project</h3>
 <p>模板（<code>config/projects/*.yml</code>，git 管理）vs 实例（<code>.agentos/</code>，Web 可建可写）。

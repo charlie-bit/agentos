@@ -94,6 +94,8 @@ export interface StatusResponse {
   entry?: { name: string; confirm: boolean } | null;
   dialect?: string | null;
   scheduler?: { alive: boolean; activeRuns: number } | null;
+  /** Live MCP health (background probe); ok:null = not probed yet. */
+  mcpHealth?: Array<{ key: string; transport: string; ok: boolean | null; error?: string }> | null;
   lastDrift: { missing: string[]; undeclared: string[] } | null;
   waitingConfirms: number;
   systemPrompt: string | null;
@@ -272,8 +274,19 @@ export interface AgentInfo {
   knowledge?: string;
   model?: string;
   manifestPath: string | null;
+  /** false = some declared tool is not on any mounted surface. */
+  available?: boolean;
+  missingTools?: string[];
 }
 export const getAgents = () => jget<{ agents: AgentInfo[] }>("/api/agents");
+
+/** Skills catalogue (stage C): mounted SKILL.md directories. */
+export interface SkillInfo {
+  name: string;
+  description: string;
+  path: string;
+}
+export const getSkills = () => jget<{ skills: SkillInfo[] }>("/api/skills");
 
 /** Todo data plane (spec #319/#320). */
 export interface Todo {

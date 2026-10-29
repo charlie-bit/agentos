@@ -72,8 +72,8 @@ describe("headless workflow runner", () => {
     ledger.close();
   });
 
-  it("a human step denies headless and the run is resumable at that index", async () => {
-    const { runner, ledger } = setup(wf([{ type: "kb_search", query: "x" }, { type: "human", prompt: "go?" }, { type: "tool", tool: "todo_add", args: {} }]));
+  it("a review step rejects when the role does not approve; the run is resumable at that index", async () => {
+    const { runner, ledger } = setup(wf([{ type: "kb_search", query: "x" }, { type: "review", agent: "reviewer", prompt: "review context: {prev}" }, { type: "tool", tool: "todo_add", args: {} }]));
     const result = await runner("daily", "schedule");
     expect(result.ok).toBe(false);
     const run = ledger.workflowRunList()[0]!;
@@ -82,7 +82,7 @@ describe("headless workflow runner", () => {
     ledger.close();
   });
 
-  it("an MCP tool name is refused instead of faked; unknown workflow is 404-shaped", async () => {
+  it("an MCP tool name with no direct-call wiring is refused instead of faked; unknown workflow is 404-shaped", async () => {
     const { runner, ledger } = setup(wf([{ type: "tool", tool: "mcp_remote_search", args: {} }]));
     expect((await runner("daily", "manual")).ok).toBe(false);
     expect((await runner("ghost", "manual")).ok).toBe(false);

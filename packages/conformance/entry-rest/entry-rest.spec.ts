@@ -1678,11 +1678,12 @@ describe("role removal boundary (spec #351)", () => {
 });
 
 describe("workflow triggers (spec #370/#371)", () => {
-  async function wired(): Promise<{ srv: RunningServer; calls: Array<{ name: string; trigger: string }> }> {
+  type RunCall = { name: string; trigger: string; opts?: { project?: string; resumeFrom?: number; runId?: string; input?: string } };
+  async function wired(): Promise<{ srv: RunningServer; calls: RunCall[] }> {
     const dir = mkdtempSync(join(tmpdir(), "agentos-wftrig-"));
     tempDirs.push(dir);
     const dbPath = join(dir, "sessions.db");
-    const calls: Array<{ name: string; trigger: string }> = [];
+    const calls: RunCall[] = [];
     const srv = await startServer({
       presetName: "p",
       model: { provider: "v" },
@@ -1692,8 +1693,8 @@ describe("workflow triggers (spec #370/#371)", () => {
       port: 0,
       dbPath,
       staticDir: makeStaticDir(dir),
-      runWorkflow: async (name, trigger) => {
-        calls.push({ name, trigger });
+      runWorkflow: async (name, trigger, opts) => {
+        calls.push({ name, trigger, opts });
         if (name !== "daily-brief") return { ok: false, reason: "unknown workflow" };
         return { ok: true, runId: `run-${calls.length}` };
       },
@@ -1703,14 +1704,19 @@ describe("workflow triggers (spec #370/#371)", () => {
     return { srv, calls };
   }
 
-  it("manual runs answer 200/404 and forward resumeFrom", async () => {
+  it("manual runs answer 200/404, forward resumeFrom and the stage-B input seed", async () => {
     const { srv, calls } = await wired();
     const ok = await postJson(srv, "/api/workflows/daily-brief/run", { resumeFrom: 2 });
     expect(ok.status).toBe(200);
     expect(((await ok.json()) as { runId: string }).runId).toBe("run-1");
-    expect(calls[0]).toEqual({ name: "daily-brief", trigger: "manual" });
+    expect(calls[0]).toEqual({ name: "daily-brief", trigger: "manual", opts: { resumeFrom: 2 } });
     expect((await postJson(srv, "/api/workflows/ghost/run", {})).status).toBe(404);
     expect((await postJson(srv, "/api/workflows/daily-brief/run", { resumeFrom: -1 })).status).toBe(400);
+
+    const seeded = await postJson(srv, "/api/workflows/daily-brief/run", { input: "seed text" });
+    expect(seeded.status).toBe(200);
+    const daily = calls.filter((c) => c.name === "daily-brief");
+    expect(daily.at(-1)?.opts).toEqual({ input: "seed text" });
   });
 
   it("webhooks enforce the env-named secret: 401 wrong, 202 right, 503 unconfigured", async () => {

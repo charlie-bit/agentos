@@ -62,6 +62,8 @@ export const presetSchema = manifestEnvelopeSchema.extend({
   agents: z.array(z.string().min(1)).optional(),
   /** Sixth reference layer (spec #358): workflows this business may run. */
   workflows: z.array(z.string().min(1)).optional(),
+  /** Skill mounts (stage C): names of skills manifests scanned at startup. */
+  skills: z.array(z.string().min(1)).optional(),
 });
 
 export type Preset = z.infer<typeof presetSchema>;

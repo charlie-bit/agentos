@@ -32,6 +32,7 @@ function assembly(knowledgeRoot: string): Assembly {
     channelRoutes: {},
     agents: new Map(),
     workflows: new Map(),
+    skills: new Map(),
     projectTemplates: new Map(),
     agentManifestPaths: {},
     repoRoot: knowledgeRoot,

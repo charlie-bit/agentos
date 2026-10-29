@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { Bot, CalendarClock, CirclePlay, CircleStop, CircleCheck, CircleAlert, Play, Search, Webhook, Wrench } from "lucide-react";
+import { Bot, CalendarClock, CirclePlay, CircleStop, CircleCheck, CircleAlert, Play, Plus, Search, Webhook, Wrench } from "lucide-react";
 import { getWorkflowRun, getWorkflowRuns, getWorkflows, runWorkflow, HttpError, type WorkflowRun, type WorkflowStepOutcome, type WorkflowSummary } from "../lib/api";
 import { ScrollArea } from "./ui/scroll-area";
 import { Button } from "./ui/button";
+import { WorkflowComposer } from "./WorkflowComposer";
 import { cn } from "../lib/utils";
 
 const STEP_ICON = { agent: Bot, tool: Wrench, skill: Play, kb_search: Search, human: CirclePlay } as const;
@@ -16,6 +17,7 @@ export function WorkflowsPanel({ onOpenSession }: { onOpenSession?: (key: string
   const [runs, setRuns] = useState<WorkflowRun[]>([]);
   const [detail, setDetail] = useState<{ id: string; steps: WorkflowStepOutcome[]; run: WorkflowRun } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [composing, setComposing] = useState(false);
 
   const refresh = async () => {
     try {
@@ -41,11 +43,18 @@ export function WorkflowsPanel({ onOpenSession }: { onOpenSession?: (key: string
     setRuns((await getWorkflowRuns(w.name).catch(() => ({ runs: [] }))).runs);
   };
 
+  if (composing) return <WorkflowComposer onClose={() => setComposing(false)} />;
+
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 p-4 md:p-6" aria-label="workflows">
-      <p className="text-xs text-muted-foreground">
-        Schedule cards show the next boundary; "missed" counts windows skipped while the server was down (never replayed).
-      </p>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs text-muted-foreground">
+          Schedule cards show the next boundary; "missed" counts windows skipped while the server was down (never replayed).
+        </p>
+        <Button size="sm" onClick={() => setComposing(true)}>
+          <Plus className="h-3 w-3" /> New workflow
+        </Button>
+      </div>
       {error && <div className="text-sm text-err">{error}</div>}
       {!error && workflows.length === 0 && (
         <div className="rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground">

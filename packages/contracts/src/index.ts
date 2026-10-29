@@ -13,3 +13,4 @@ export * from "./todo.js";
 export * from "./agent.js";
 export * from "./workflow.js";
 export * from "./project.js";
+export * from "./skills.js";

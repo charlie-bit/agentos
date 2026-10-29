@@ -30,3 +30,8 @@ knowledge-base/*
 
 # docker demo data volume
 .agentos-docker/
+
+# skills socket: private/local instruction directories never ship with the app
+skills-base/*
+!skills-base/README.md
+config/skills/local.yml

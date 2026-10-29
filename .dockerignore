@@ -6,6 +6,8 @@
 **/.env*
 **/*.local
 config/presets/local.yml
+config/skills/local.yml
+skills-base
 .docs
 .reference
 test-results

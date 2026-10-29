@@ -63,7 +63,9 @@ export function StatusStrip({
   }
 
   const driftCount = status.lastDrift ? status.lastDrift.missing.length + status.lastDrift.undeclared.length : 0;
-  const degraded = status.mounts.filter((m) => m.degraded === true).length;
+  const healthOf = (key: string) => status.mcpHealth?.find((h) => h.key === key);
+  const isDown = (m: { key: string; degraded?: boolean }) => m.degraded === true || healthOf(m.key)?.ok === false;
+  const degraded = status.mounts.filter((m) => isDown(m)).length;
   const healthy = status.mounts.length - degraded;
   const dialect = dialectBadge(status.dialect);
   const menus: Array<{ label: string; hint: string; run?: () => void }> = [
@@ -104,12 +106,21 @@ export function StatusStrip({
 
       {status.mounts.length > 0 && (
         <div className="hidden items-center gap-1 xl:flex">
-          {status.mounts.map((m) => (
-            <Badge key={m.key} className={m.degraded ? "border-warn text-warn" : "border-ok/40 text-ok"}>
-              {m.degraded ? "✗" : "✓"} {m.key}
-              <span className="opacity-50">·{m.transport}</span>
-            </Badge>
-          ))}
+          {status.mounts.map((m) => {
+            const h = healthOf(m.key);
+            const down = isDown(m);
+            const unknown = !down && (h === undefined || h.ok === null);
+            return (
+              <Badge
+                key={m.key}
+                className={down ? "border-err/40 text-err" : unknown ? "text-muted-foreground" : "border-ok/40 text-ok"}
+                title={h?.error ?? (unknown ? "not probed yet" : "")}
+              >
+                {down ? "✗" : unknown ? "?" : "✓"} {m.key}
+                <span className="opacity-50">·{m.transport}</span>
+              </Badge>
+            );
+          })}
         </div>
       )}
 

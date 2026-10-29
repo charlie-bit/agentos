@@ -58,7 +58,7 @@ description: What this workflow is for, in one line.
 steps:
   - { type: agent, agent: triage-analyst, prompt: "Summarise yesterday. Context: {prev}" }
   - { type: kb_search, query: "recent changes" }
-  - { type: human, prompt: "Continue with the plan?", timeoutMs: 120000 }
+  - { type: review, agent: reviewer, prompt: "Review the previous result. Reply APPROVE or REJECT." }
   - { type: tool, tool: todo_add, args: { title: "Follow up from ${name}" } }
 #  - { type: skill, skill: some-procedure, prompt: "Run it" }
 `;

@@ -191,7 +191,8 @@ export default function App() {
 
   const zoneMeta = ZONES.find((z) => z.key === zone) ?? ZONES[0];
   const mounted = status?.mounts ?? [];
-  const degraded = mounted.filter((m) => m.degraded === true).length;
+  const healthOf = (key: string) => status?.mcpHealth?.find((h) => h.key === key);
+  const degraded = mounted.filter((m) => m.degraded === true || healthOf(m.key)?.ok === false).length;
   const startChat = () => {
     newSession();
     goZone("chats");
@@ -270,6 +271,10 @@ export default function App() {
             >
               <Bot className="h-4 w-4 shrink-0 text-primary" />
               <span className="truncate">{a.name}</span>
+              <span
+                className={"h-1.5 w-1.5 shrink-0 rounded-full " + (a.available === false ? "bg-warn" : "bg-ok")}
+                title={a.available === false ? `missing tools: ${(a.missingTools ?? []).join(", ") || "unknown"}` : "available"}
+              />
               {a.baseAgent && <span className="ml-auto truncate text-[10px] opacity-60">← {a.baseAgent}</span>}
             </button>
           ))

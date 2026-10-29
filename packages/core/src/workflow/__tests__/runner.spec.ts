@@ -23,11 +23,7 @@ const deps = (over: Partial<WorkflowDeps> = {}): WorkflowDeps & { calls: string[
       calls.push(`kb:${s.query}`);
       return "kb-out";
     },
-    confirm: async () => {
-      calls.push("confirm");
-      return true;
-    },
-    offload: async (text, label) => {
+     offload: async (text, label) => {
       calls.push(`offload:${label}`);
       return `[offloaded ${text.length} bytes → pointer]`;
     },
@@ -48,6 +44,19 @@ describe("runWorkflow (#359)", () => {
     expect(r.status).toBe("done");
     expect(d.calls).toEqual(["agent:summarise", "kb:retry", "tool:todo_add"]);
     expect(r.steps.map((s) => s.status)).toEqual(["ok", "ok", "ok"]);
+  });
+
+  it("seeds the run input into {input}, and the first step also sees it as {prev} (stage B)", async () => {
+    const d = deps();
+    const steps: WorkflowStep[] = [
+      { type: "agent", agent: "analyst", prompt: "first: {prev} / {input}" },
+      { type: "agent", agent: "writer", prompt: "second: {prev} / {input}" },
+    ];
+    const r = await runWorkflow(steps, d, { input: "SEED" });
+    expect(r.status).toBe("done");
+    expect(d.calls[0]).toBe("agent:first: SEED / SEED");
+    // After step 1, {prev} is its output; {input} stays the original seed.
+    expect(d.calls[1]).toBe("agent:second: A(first: SEED / SEED) / SEED");
   });
 
   it("offloads a >1KB step result and passes the pointer forward (#360)", async () => {
@@ -74,17 +83,26 @@ describe("runWorkflow (#359)", () => {
   });
 });
 
-describe("human step (#361)", () => {
-  it("an approved gate continues; denial stops with earlier results kept", async () => {
-    const ok = await runWorkflow([{ type: "kb_search", query: "x" }, { type: "human", prompt: "ship?" }], deps());
+describe("review step: a mounted role judges the last result", () => {
+  it("an approving reviewer continues; a rejection stops with earlier results kept", async () => {
+    const approve = deps({ runAgent: async () => "APPROVE: looks good" });
+    const ok = await runWorkflow([{ type: "kb_search", query: "x" }, { type: "review", agent: "reviewer", prompt: "ship?" }], approve);
     expect(ok.status).toBe("done");
+    expect(ok.steps.map((s) => s.status)).toEqual(["ok", "ok"]);
 
-    const denied = await runWorkflow(
-      [{ type: "kb_search", query: "x" }, { type: "human", prompt: "ship?" }, { type: "tool", tool: "nope" }],
-      deps({ confirm: async () => false }),
+    const deny = deps({ runAgent: async () => "REJECT: missing tests" });
+    const rejected = await runWorkflow(
+      [{ type: "kb_search", query: "x" }, { type: "review", agent: "reviewer", prompt: "ship?" }, { type: "tool", tool: "nope" }],
+      deny,
     );
-    expect(denied.status).toBe("error");
-    expect(denied.steps.map((s) => s.status)).toEqual(["ok", "denied"]);
+    expect(rejected.status).toBe("error");
+    expect(rejected.steps.map((s) => s.status)).toEqual(["ok", "denied"]);
+  });
+
+  it("mustInclude overrides the default verdict word", async () => {
+    const d = deps({ runAgent: async () => "LGTM, ship it" });
+    const r = await runWorkflow([{ type: "review", agent: "reviewer", mustInclude: "LGTM" }], d);
+    expect(r.status).toBe("done");
   });
 });
 

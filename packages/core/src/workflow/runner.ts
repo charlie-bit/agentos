@@ -6,7 +6,8 @@
  * Laws:
  *   - steps run in order; `{prev}` in a prompt is replaced by the previous
  *     result, and a result over 1KB is offloaded with a pointer (#360);
- *   - a human step is a confirmation; denial stops the run (#361);
+ *   - a review step is a ROLE judging the previous result; a rejection stops
+ *     the run (replaces the old human gate, #361 rewritten);
  *   - the first failure stops the run, earlier results are kept, and
  *     `resumeFrom` skips already-completed steps (#362);
  *   - cancellation is cooperative via AbortSignal (#365 follows the same law).
@@ -32,9 +33,7 @@ export interface WorkflowDeps {
   runTool(step: Extract<WorkflowStep, { type: "tool" }>, prev: string | undefined): Promise<string>;
   runSkill(step: Extract<WorkflowStep, { type: "skill" }>, prompt: string): Promise<string>;
   kbSearch(step: Extract<WorkflowStep, { type: "kb_search" }>): Promise<string>;
-  /** Human gate; denial is a stop, timeout is the confirm contract's duty (#77). */
-  confirm(prompt: string, timeoutMs?: number): Promise<boolean>;
-  /** Offload a large result (#206) and return the pointer line. */
+   /** Offload a large result (#206) and return the pointer line. */
   offload(text: string, label: string): Promise<string>;
   signal?: AbortSignal;
   now?: () => number;
@@ -49,8 +48,9 @@ export interface RunResult {
 
 const bytes = (s: string): number => Buffer.byteLength(s, "utf8");
 
-function injectPrev(text: string, prev: string | undefined): string {
-  return text.includes("{prev}") ? text.replaceAll("{prev}", prev ?? "") : text;
+function injectPrev(text: string, prev: string | undefined, input: string | undefined): string {
+  const withInput = text.includes("{input}") ? text.replaceAll("{input}", input ?? "") : text;
+  return withInput.includes("{prev}") ? withInput.replaceAll("{prev}", prev ?? "") : withInput;
 }
 
 async function bound(text: string, deps: WorkflowDeps, label: string): Promise<string> {
@@ -61,11 +61,14 @@ async function bound(text: string, deps: WorkflowDeps, label: string): Promise<s
 export async function runWorkflow(
   steps: readonly WorkflowStep[],
   deps: WorkflowDeps,
-  opts: { resumeFrom?: number } = {},
+  opts: { resumeFrom?: number; input?: string } = {},
 ): Promise<RunResult> {
   const now = deps.now ?? Date.now;
   const outcomes: StepOutcome[] = [];
-  let prev: string | undefined;
+  const seed = opts.input;
+  // The run's input is the first value a step can consume: {input} always
+  // resolves to it, and {prev} starts there so the first step sees it too.
+  let prev: string | undefined = seed;
   const startIndex = Math.max(0, opts.resumeFrom ?? 0);
 
   // Steps before resumeFrom are recorded as skipped so the timeline is honest.
@@ -81,24 +84,35 @@ export async function runWorkflow(
       let raw: string;
       switch (step.type) {
         case "agent":
-          raw = await deps.runAgent(step, injectPrev(step.prompt, prev));
+          raw = await deps.runAgent(step, injectPrev(step.prompt, prev, seed));
           break;
         case "tool":
           raw = await deps.runTool(step, prev);
           break;
         case "skill":
-          raw = await deps.runSkill(step, injectPrev(step.prompt ?? "", prev));
+          raw = await deps.runSkill(step, injectPrev(step.prompt ?? "", prev, seed));
           break;
         case "kb_search":
           raw = await deps.kbSearch(step);
           break;
-        case "human": {
-          const approved = await deps.confirm(injectPrev(step.prompt, prev), step.timeoutMs);
-          // Denial stops the run; this is not a retryable failure.
-          outcomes.push({ index: i, type: step.type, status: approved ? "ok" : "denied", durationMs: now() - started, ...(approved ? {} : { error: "human denied" }) });
-          if (!approved) return { status: "error", steps: outcomes, ...(prev ? { output: prev } : {}) };
-          raw = prev ?? "approved";
-          break;
+        case "review": {
+          // A mounted ROLE judges the previous result. Roles can be anything
+          // (including a skill-backed reviewer), so the gate is automated while
+          // still stopping the run on a rejection. The verdict IS this step's
+          // output, so it is recorded here and the shared tail is skipped.
+          const verdict = await deps.runAgent(
+            { type: "agent", agent: step.agent, prompt: step.prompt ?? "" },
+            injectPrev(step.prompt ?? "Review the previous result. Reply APPROVE or REJECT with a reason.", prev, seed),
+          );
+          const needle = step.mustInclude ?? "APPROVE";
+          if (!verdict.includes(needle)) {
+            outcomes.push({ index: i, type: step.type, status: "denied", durationMs: now() - started, error: `review rejected (missing "${needle}")` });
+            return { status: "error", steps: outcomes, ...(prev ? { output: prev } : {}) };
+          }
+          const reviewed = await bound(verdict, deps, `review-${i}`);
+          outcomes.push({ index: i, type: step.type, status: "ok", output: reviewed, durationMs: now() - started });
+          prev = reviewed;
+          continue;
         }
       }
       const output = await bound(raw, deps, `${step.type}-${i}`);

@@ -11,7 +11,7 @@ describe("WorkflowManifest (#353)", () => {
       { type: "tool", tool: "todo_list", args: { status: "todo" } },
       { type: "skill", skill: "triage", prompt: "run it" },
       { type: "kb_search", query: "retry" },
-      { type: "human", prompt: "approve the release?", timeoutMs: 60000 },
+      { type: "review", agent: "reviewer", prompt: "approve the release?" },
     ]) {
       expect(workflowManifestSchema.safeParse(wf([step])).success, JSON.stringify(step)).toBe(true);
     }
@@ -29,6 +29,24 @@ describe("WorkflowManifest (#353)", () => {
     }
     expect(workflowManifestSchema.safeParse(wf([{ type: "kb_search", query: "x" }], { type: "mcp" })).success).toBe(false);
     expect(workflowManifestSchema.safeParse(wf([{ type: "kb_search", query: "x" }], { type: "webhook", secret: "literal" })).success).toBe(false);
+  });
+});
+
+describe("workflow input/output/category (stage B, additive)", () => {
+  const base = (extra: Record<string, unknown>) => ({ ...wf([{ type: "agent", agent: "a", prompt: "p" }]), ...extra });
+
+  it("accepts the declared input sources and output sinks", () => {
+    expect(workflowManifestSchema.safeParse(base({ category: "sre" })).success).toBe(true);
+    expect(workflowManifestSchema.safeParse(base({ input: { source: "manual" } })).success).toBe(true);
+    expect(workflowManifestSchema.safeParse(base({ input: { source: "none" } })).success).toBe(true);
+    expect(workflowManifestSchema.safeParse(base({ output: { sink: "slack", channel: "C0123" } })).success).toBe(true);
+    expect(workflowManifestSchema.safeParse(base({ output: { sink: "none" } })).success).toBe(true);
+  });
+
+  it("rejects an unimplemented input source and a slack sink without a channel", () => {
+    expect(workflowManifestSchema.safeParse(base({ input: { source: "slack" } })).success).toBe(false);
+    expect(workflowManifestSchema.safeParse(base({ output: { sink: "slack" } })).success).toBe(false);
+    expect(workflowManifestSchema.safeParse(base({ output: { sink: "room" } })).success).toBe(false);
   });
 });
 

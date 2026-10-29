@@ -103,6 +103,8 @@ export interface StartServerOptions {
   dialect?: string;
   /** Scheduler liveness + active instances (spec #428). */
   scheduler?: { alive: boolean; activeRuns: number };
+  /** Live MCP mount health (probed in the background); ok:null = not probed yet. */
+  mcpHealth?: () => Array<{ key: string; transport: string; ok: boolean | null; error?: string }>;
   runner: TurnRunner;
   ledger: Ledger;
   /** 0 = ephemeral port (tests). */
@@ -154,7 +156,9 @@ export interface StartServerOptions {
    * Workflow trigger surface (spec #370/#371): manual runs and webhook runs.
    * The engine is injected; this package only routes and authenticates.
    */
-  runWorkflow?: (name: string, trigger: "manual" | "webhook", opts?: { project?: string; resumeFrom?: number; runId?: string }) => Promise<{ ok: boolean; runId?: string; reason?: string }>;
+  runWorkflow?: (name: string, trigger: "manual" | "webhook", opts?: { project?: string; resumeFrom?: number; runId?: string; input?: string }) => Promise<{ ok: boolean; runId?: string; reason?: string }>;
+  /** Skills catalogue (stage C): names + descriptions of the mounted skill dirs. */
+  skills?: () => Array<{ name: string; description: string; path: string }> | Promise<Array<{ name: string; description: string; path: string }>>;
   /** Hook for surfaces whose work is NOT an entry turn (workflow runs, #365). */
   onAbort?: (externalKey: string) => void;
   /** Scheduler heartbeat supplier (#428); absent = field omitted. */
@@ -804,6 +808,7 @@ export async function startServer(o: StartServerOptions): Promise<RunningServer>
         entry: o.entry ?? null,
         dialect: o.dialect ?? null,
         scheduler: o.schedulerStatus ? await o.schedulerStatus() : null,
+        mcpHealth: o.mcpHealth ? o.mcpHealth() : null,
         systemPrompt: o.systemPrompt ?? null,
         ...entry.statusSnapshot(
           url.searchParams.get("session") === null ? undefined : webExternalKey(url.searchParams.get("session") as string),
@@ -1385,10 +1390,14 @@ export async function startServer(o: StartServerOptions): Promise<RunningServer>
       }
       try {
         const runId = typeof body?.runId === "string" && body.runId.length > 0 && body.runId.length <= 120 ? body.runId : undefined;
+        // Stage B input: a manual run may seed the pipeline. Bounded so a large
+        // body never becomes workflow state by accident.
+        const seed = typeof body?.input === "string" && body.input.length > 0 ? body.input.slice(0, 20_000) : undefined;
         const result = await o.runWorkflow(name, "manual", {
           ...(typeof body?.project === "string" ? { project: body.project } : {}),
           ...(resumeFrom !== undefined ? { resumeFrom } : {}),
           ...(runId ? { runId } : {}),
+          ...(seed !== undefined ? { input: seed } : {}),
         });
         if (!result.ok) return sendJson(res, /already exists/.test(result.reason ?? "") ? 409 : 404, result);
         return sendJson(res, 200, result);
@@ -1415,6 +1424,15 @@ export async function startServer(o: StartServerOptions): Promise<RunningServer>
       const result = await o.runWorkflow(name, "webhook");
       if (!result.ok) return sendJson(res, 404, result);
       return sendJson(res, 202, result);
+    }
+    if (req.method === "GET" && path === "/api/skills") {
+      if (!o.skills) return sendJson(res, 501, { error: "skills catalogue not wired by this deployment" });
+      try {
+        const skills = await o.skills();
+        return sendJson(res, 200, { skills: Array.isArray(skills) ? skills : [] });
+      } catch {
+        return sendJson(res, 200, { skills: [] });
+      }
     }
     if (req.method === "GET" && path === "/api/agents") {
       if (!o.agents) return sendJson(res, 501, { error: "agent catalogue not wired by this deployment" });

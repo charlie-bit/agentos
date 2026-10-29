@@ -12,7 +12,7 @@
  *   - human steps with no interactive channel are DENIED (#361 semantics).
  */
 import { randomUUID } from "node:crypto";
-import type { NeutralTool, WorkflowManifest, WorkflowStep } from "@agentos/contracts";
+import type { NeutralTool, SkillEntry, WorkflowManifest, WorkflowStep } from "@agentos/contracts";
 import type { KnowledgeProvider } from "@agentos/contracts";
 import { offloadIfLarge, runWorkflow, resumeIndex, type Ledger, type StepOutcome } from "@agentos/core";
 
@@ -30,6 +30,17 @@ export interface WorkflowRunnerConfig {
   kbProvider(): KnowledgeProvider | null;
   /** In-process tools available for `tool` steps (todo_* today). */
   tools: readonly NeutralTool[];
+  /** Mounted skills by name (stage C): the `skill` step resolves one here. */
+  skills?: ReadonlyMap<string, SkillEntry>;
+  /** MCP tools: a direct JSON-RPC call, no model turn. */
+  runForeignTool?(name: string, args: unknown, runId: string): Promise<string>;
+  /**
+   * Output sink executor (stage B). The composition root owns it because
+   * posting to Slack means driving the mounted Slack provider, which the
+   * domain-free runner must never learn. Absent + a declared sink = the run
+   * fails loudly instead of silently dropping the output.
+   */
+  postOutput?(output: Extract<WorkflowManifest["output"], { sink: "slack" }>, text: string, runId: string): Promise<void>;
   /** Audit sink (#385): instance/step ids + status + duration, never prompts. */
   audit?(record: Record<string, unknown>): void;
   now?: () => number;
@@ -47,7 +58,7 @@ export function createWorkflowRunner(cfg: WorkflowRunnerConfig) {
   return async function run(
     name: string,
     trigger: "manual" | "webhook" | "schedule",
-    opts: { project?: string; resumeFrom?: number; runId?: string } = {},
+    opts: { project?: string; resumeFrom?: number; runId?: string; input?: string } = {},
   ): Promise<TriggerResult> {
     const manifest = cfg.workflows.get(name);
     if (!manifest) return { ok: false, reason: `unknown workflow: ${name}` };
@@ -84,39 +95,58 @@ export function createWorkflowRunner(cfg: WorkflowRunnerConfig) {
       runAgent: (step, prompt) => cfg.runAgentTurn(step, prompt, runId),
       runTool: async (step) => {
         const tool = cfg.tools.find((t) => t.name === step.tool);
-        if (!tool) {
-          throw new Error(`tool step "${step.tool}" is not an in-process tool (MCP tools run inside the kernel)`);
-        }
-        return JSON.stringify(await tool.handler(step.args ?? {}));
+        if (tool) return JSON.stringify(await tool.handler(step.args ?? {}));
+        // MCP tools live inside the kernel: the composition root runs one fenced
+        // turn (stage B proxy). No proxy wired = loud error, never a silent skip.
+        if (cfg.runForeignTool) return cfg.runForeignTool(step.tool, step.args ?? {}, runId);
+        throw new Error(`tool step "${step.tool}" is not an in-process tool (MCP tools run inside the kernel)`);
       },
-      runSkill: async (step) => {
-        throw new Error(`skill step "${step.skill}" has no headless runtime yet (knowledge channel only)`);
+      runSkill: async (step, prompt) => {
+        // A skill is INSTRUCTIONS, not a turn: loading its body is free, and
+        // the following agent step executes it with {prev}. Running prose here
+        // would spend a model turn to produce the same text.
+        const skill = cfg.skills?.get(step.skill);
+        if (!skill) throw new Error(`skill step "${step.skill}" is not mounted (preset.skills)`);
+        return prompt.trim().length > 0 ? `${skill.body}\n\n${prompt}` : skill.body;
       },
       kbSearch: async (step) => {
         const provider = cfg.kbProvider();
         if (!provider) throw new Error("no knowledge provider mounted");
         return JSON.stringify(await provider.search(step.query));
       },
-      confirm: async () => {
-        // No interactive channel on a headless run: deny, per the confirm law.
-        return false;
-      },
-      offload: async (text, label) => {
+       offload: async (text, label) => {
         const out = offloadIfLarge({ text }, { workspaceDir: workspace, toolName: `wf-${label}` });
         return out.offloaded && out.pointer ? `result offloaded: ${out.pointer.path}` : text;
       },
       signal: cfg.signalForRun?.(runId),
       now,
-    }, opts.resumeFrom !== undefined ? { resumeFrom: opts.resumeFrom } : {});
+    }, {
+      ...(opts.resumeFrom !== undefined ? { resumeFrom: opts.resumeFrom } : {}),
+      ...(opts.input !== undefined ? { input: opts.input } : {}),
+    });
+
+    // Output sink (stage B): a declared sink is part of the run's contract, so
+    // failing to deliver flips the run to error instead of dropping the result.
+    let finalStatus = result.status;
+    let sinkError: string | undefined;
+    if (result.status === "done" && manifest.output?.sink === "slack") {
+      try {
+        if (!cfg.postOutput) throw new Error("slack output sink is declared but this deployment wired no sink executor");
+        await cfg.postOutput(manifest.output, result.output ?? "", runId);
+      } catch (err) {
+        finalStatus = "error";
+        sinkError = `output sink: ${err instanceof Error ? err.message : String(err)}`;
+      }
+    }
 
     const steps = result.steps as StepOutcome[];
     cfg.ledger.workflowRunUpdate(runId, {
-      status: result.status,
+      status: finalStatus,
       endedAtMs: now(),
       steps,
-      resumeFrom: result.status === "error" ? (resumeIndex(result) ?? null) : null,
+      resumeFrom: finalStatus === "error" ? (resumeIndex(result) ?? null) : null,
       ...(cfg.sessionKeyForRun?.(runId) ? { sessionKey: cfg.sessionKeyForRun(runId) as string } : {}),
-      error: result.status === "done" ? null : (steps.find((s) => s.status === "error" || s.status === "denied")?.error ?? result.status),
+      error: finalStatus === "done" ? null : (sinkError ?? steps.find((s) => s.status === "error" || s.status === "denied")?.error ?? finalStatus),
     });
     // Metadata-only audit (#385, R2/R9): ids, statuses, durations — no prompt
     // or step output text ever reaches this record.
@@ -126,12 +156,12 @@ export function createWorkflowRunner(cfg: WorkflowRunnerConfig) {
         runId,
         workflow: name,
         trigger,
-        status: result.status,
+        status: finalStatus,
         steps: steps.map((s) => ({ index: s.index, type: s.type, status: s.status, durationMs: s.durationMs })),
       });
     } catch {
       /* audit must never kill a run */
     }
-    return { ok: result.status === "done", runId };
+    return { ok: finalStatus === "done", runId };
   };
 }

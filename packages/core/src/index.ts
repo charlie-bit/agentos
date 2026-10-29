@@ -7,3 +7,5 @@ export * from "./routing/index.js";
 export * from "./governance/index.js";
 export * from "./agents/index.js";
 export * from "./workflow/index.js";
+export * from "./skills/index.js";
+export * from "./mcp/client.js";
