@@ -1,0 +1,13 @@
+# Daily brief (spec #383): schedule-driven, entirely from existing pieces.
+# triage-analyst summarises → kb_search recalls recent handbook pages →
+# a human gate → todo_add captures today's focus. Fictional scenario (R6).
+kind: workflow
+version: "1"
+name: daily-brief
+description: Morning brief built from the workbench roles and handbook.
+trigger: { type: schedule, cron: "@daily" }
+steps:
+  - { type: agent, agent: daily-standup, prompt: "Summarise the open todos and yesterday's activity. Context: {prev}" }
+  - { type: kb_search, query: "triage retry queue" }
+  - { type: human, prompt: "Post today's brief?", timeoutMs: 120000 }
+  - { type: tool, tool: todo_add, args: { title: "Review today's brief" } }

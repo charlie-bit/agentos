@@ -34,7 +34,12 @@ describe("agentos preset validate — happy", () => {
     for (const slot of ["local-markdown", "deepseek", "mcp-filesystem", "cli"]) {
       expect(text, `summary must name the ${slot} reference`).toContain(slot);
     }
-    expect(text).toContain("6 manifests validated");
+    // The count is a shape assertion, not a fixed number: a local-only preset
+    // (e.g. the gitignored config/presets/local.yml) legitimately adds manifests
+    // to the same config root. What must hold is that the whole tree was counted.
+    const count = /(\d+) manifests validated/.exec(text);
+    expect(count, "summary must report how many manifests were validated").not.toBeNull();
+    expect(Number(count?.[1])).toBeGreaterThanOrEqual(7);
   });
 });
 
@@ -98,5 +103,93 @@ describe("agentos serve — P4 gate", () => {
     const r = await run(["frobnicate"]);
     expect(r.exitCode).toBe(2);
     expect(r.lines.join("\n")).toContain("usage:");
+  });
+});
+
+describe("entry adapter registry is single-sourced (spec #228)", () => {
+  const preset = (entry: string) =>
+    [
+      "kind: preset",
+      'version: "1"',
+      "name: p",
+      "knowledge: k",
+      "model: m",
+      "tools: []",
+      `entry: ${entry}`,
+      "",
+    ].join("\n");
+  const manifests = {
+    "knowledge/k.yml": ["kind: knowledge", 'version: "1"', "name: k", "provider: markdown", "mount: { type: path, path: ./kb }", ""].join("\n"),
+    "models/m.yml": ["kind: model", 'version: "1"', "name: m", "provider: x", "models: { a: real-a }", ""].join("\n"),
+  };
+
+  it("a preset naming entry: rest validates (preset validate knows both adapters)", async () => {
+    const dir = makeTempConfig({ ...manifests, "presets/p.yml": preset("rest") });
+    const r = await run(["preset", "validate", join(dir, "presets/p.yml")]);
+    expect(r.exitCode).toBe(0);
+  });
+
+  it("an unregistered entry name is still rejected", async () => {
+    const dir = makeTempConfig({ ...manifests, "presets/p.yml": preset("ghost") });
+    const r = await run(["preset", "validate", join(dir, "presets/p.yml")]);
+    expect(r.exitCode).toBe(1);
+    expect(r.lines.join("\n")).toContain("ghost");
+  });
+});
+
+describe("channel routing table (spec #212)", () => {
+  const base = [
+    "kind: preset",
+    'version: "1"',
+    "name: p",
+    "knowledge: k",
+    "model: m",
+    "tools: []",
+  ];
+  const manifests = {
+    "knowledge/k.yml": ["kind: knowledge", 'version: "1"', "name: k", "provider: markdown", "mount: { type: path, path: ./kb }", ""].join("\n"),
+    "models/m.yml": ["kind: model", 'version: "1"', "name: m", "provider: x", "models: { a: real-a }", ""].join("\n"),
+  };
+
+  it("a preset may route channels to registered adapters", async () => {
+    const dir = makeTempConfig({
+      ...manifests,
+      "presets/p.yml": [...base, "entry: cli", "channels: { web: rest }", ""].join("\n"),
+    });
+    const r = await run(["preset", "validate", join(dir, "presets/p.yml")]);
+    expect(r.exitCode).toBe(0);
+  });
+
+  it("a dangling channel route fails validation, naming the channel", async () => {
+    const dir = makeTempConfig({
+      ...manifests,
+      "presets/p.yml": [...base, "entry: cli", "channels: { web: ghost-kernel }", ""].join("\n"),
+    });
+    const r = await run(["preset", "validate", join(dir, "presets/p.yml")]);
+    expect(r.exitCode).toBe(1);
+    expect(r.lines.join("\n")).toContain("channels.web");
+    expect(r.lines.join("\n")).toContain("ghost-kernel");
+  });
+});
+
+describe("declared cross-endpoint fallback (spec #26)", () => {
+  const manifests = {
+    "knowledge/k.yml": ["kind: knowledge", 'version: "1"', "name: k", "provider: markdown", "mount: { type: path, path: ./kb }", ""].join("\n"),
+    "models/a.yml": ["kind: model", 'version: "1"', "name: a", "provider: va", "models: { g: a-real }", ""].join("\n"),
+    "models/b.yml": ["kind: model", 'version: "1"', "name: b", "provider: vb", "models: { g: b-real }", ""].join("\n"),
+  };
+  const preset = (extra: string[]) =>
+    ["kind: preset", 'version: "1"', "name: p", "knowledge: k", "model: a", "tools: []", "entry: cli", ...extra, ""].join("\n");
+
+  it("accepts a declared fallback that resolves to a model manifest", async () => {
+    const dir = makeTempConfig({ ...manifests, "presets/p.yml": preset(["fallbackModels: [b]"]) });
+    expect((await run(["preset", "validate", join(dir, "presets/p.yml")])).exitCode).toBe(0);
+  });
+
+  it("a dangling fallback names fallbackModels.<i>", async () => {
+    const dir = makeTempConfig({ ...manifests, "presets/p.yml": preset(["fallbackModels: [ghost]"]) });
+    const r = await run(["preset", "validate", join(dir, "presets/p.yml")]);
+    expect(r.exitCode).toBe(1);
+    expect(r.lines.join("\n")).toContain("fallbackModels.0");
   });
 });

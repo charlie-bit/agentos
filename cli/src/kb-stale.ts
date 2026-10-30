@@ -5,35 +5,19 @@
  * input, not a lint error (D-0910-8-adjacent statute in core/governance/
  * frontmatter.ts) — this command is where it surfaces for triage.
  */
-import { readdirSync, readFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { splitFrontmatter, validatePageFrontmatter } from "@agentos/core";
+import { markdownFiles } from "./kb-scan.js";
 import type { CliResult } from "./preset-validate.js";
 
 const DAY = 86_400_000;
-
-function mdFiles(dir: string): string[] {
-  const out: string[] = [];
-  let entries;
-  try {
-    entries = readdirSync(dir, { withFileTypes: true });
-  } catch {
-    return out;
-  }
-  for (const e of entries) {
-    if (e.name === "README.md" || e.name.startsWith(".")) continue;
-    const p = join(dir, e.name);
-    if (e.isDirectory()) out.push(...mdFiles(p));
-    else if (/\.md$/i.test(e.name)) out.push(p);
-  }
-  return out.sort();
-}
 
 export function runKbStale(argv: readonly string[], now: Date = new Date()): CliResult {
   const dir = argv[0] && !argv[0].startsWith("-") ? argv[0] : "knowledge-base";
   const rows: Array<{ page: string; owner: string; daysOverdue: number }> = [];
 
-  for (const file of mdFiles(resolve(dir))) {
+  for (const file of markdownFiles(resolve(dir))) {
     let raw: string;
     try {
       raw = readFileSync(file, "utf8");

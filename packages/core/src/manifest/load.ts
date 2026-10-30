@@ -9,19 +9,26 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { parse as parseYaml } from "yaml";
 import {
+  agentManifestSchema,
   knowledgeManifestSchema,
   modelProviderManifestSchema,
   presetSchema,
+  projectManifestSchema,
+  workflowManifestSchema,
+  skillsManifestSchema,
   toolProviderManifestSchema,
+  type AgentManifest,
   type KnowledgeManifest,
   type ModelProviderManifest,
   type Preset,
+  type ProjectManifest,
+  type WorkflowManifest,
   type ToolProviderManifest,
 } from "@agentos/contracts";
 import { formatIssues, type ManifestError } from "./errors.js";
 
 /** Any validated manifest, discriminated by its envelope kind. */
-export type AnyManifest = ToolProviderManifest | ModelProviderManifest | KnowledgeManifest | Preset;
+export type AnyManifest = ToolProviderManifest | ModelProviderManifest | KnowledgeManifest | Preset | AgentManifest | WorkflowManifest | ProjectManifest | import("@agentos/contracts").SkillsManifest;
 
 export interface LoadedManifest {
   source: string;
@@ -40,6 +47,10 @@ const ROUTES = {
   model: modelProviderManifestSchema,
   knowledge: knowledgeManifestSchema,
   preset: presetSchema,
+  agent: agentManifestSchema,
+  workflow: workflowManifestSchema,
+  project: projectManifestSchema,
+  skills: skillsManifestSchema,
 } as const;
 
 const KNOWN_KINDS = Object.keys(ROUTES).sort();

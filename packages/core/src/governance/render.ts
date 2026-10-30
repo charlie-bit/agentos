@@ -9,10 +9,23 @@ import type { KbOverview } from "@agentos/contracts";
 
 const fmtDate = (ms: number | undefined): string => (ms === undefined ? "—" : new Date(ms).toISOString().slice(0, 10));
 
-/** Directory tree of index entries, path-grouped, stable order. */
-export function renderIndex(overview: KbOverview): string {
+/**
+ * Index menu budget (spec #225). The guide is resident context, so it must
+ * stay inside the 1–2K-token promise (#61) even for a 500-page corpus. 120
+ * path lines ≈ 800–1,200 tokens once directory lines are counted; the tail is
+ * summarized as "(…N more)" and pointed at kb_search, which is always
+ * available and exact.
+ */
+export const MAX_INDEX_ENTRIES = 120;
+
+/** Directory tree of index entries, path-grouped, stable order, bounded by MAX_INDEX_ENTRIES. */
+export function renderIndex(overview: KbOverview, opts: { maxEntries?: number } = {}): string {
+  const max = Math.max(1, opts.maxEntries ?? MAX_INDEX_ENTRIES);
+  const all = [...overview.index.entries].sort((a, b) => a.id.localeCompare(b.id));
+  const shown = all.length > max ? all.slice(0, max) : all;
+  const hidden = all.length - shown.length;
   const byPrefix = new Map<string, string[]>();
-  for (const e of overview.index.entries) {
+  for (const e of shown) {
     const slash = e.id.lastIndexOf("/");
     const dir = slash < 0 ? "." : e.id.slice(0, slash);
     const list = byPrefix.get(dir) ?? [];
@@ -24,6 +37,7 @@ export function renderIndex(overview: KbOverview): string {
     if (dir !== ".") lines.push(`${dir}/`);
     for (const name of (byPrefix.get(dir) ?? []).sort()) lines.push(dir === "." ? `  ${name}` : `    ${name}`);
   }
+  if (hidden > 0) lines.push(`… (${hidden} more page${hidden === 1 ? "" : "s"} — use kb_search to find them by topic)`);
   return lines.join("\n");
 }
 

@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AgentOS · Agent 内核技术文档</title>
+<style>
+  :root {
+    --bg:#0d1117; --card:#161b22; --border:#30363d; --text:#c9d1d9; --heading:#f0f6fc;
+    --accent:#58a6ff; --green:#3fb950; --yellow:#d29922; --red:#f85149;
+    --purple:#bc8cff; --orange:#d18616; --cyan:#39d2c0; --muted:#8b949e;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  html, body { overflow-x:hidden; }
+  body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;
+         background:var(--bg); color:var(--text); line-height:1.65;
+         padding:2rem; max-width:1280px; margin:0 auto; width:100%; }
+  h1 { color:var(--heading); font-size:1.8rem; margin-bottom:.3rem; }
+  h2 { color:var(--accent); font-size:1.3rem; margin:2rem 0 1rem;
+       border-bottom:1px solid var(--border); padding-bottom:.4rem; }
+  h3 { color:var(--heading); font-size:1rem; margin:1.2rem 0 .6rem; }
+  h4 { color:var(--purple); font-size:.92rem; margin:1rem 0 .5rem; }
+  .subtitle { color:var(--muted); margin-bottom:1.2rem; font-size:.9rem; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:8px;
+          padding:1.3rem; margin-bottom:1.2rem; overflow:hidden; }
+  table { width:100%; border-collapse:collapse; margin:.8rem 0; font-size:.86rem;
+          table-layout:fixed; word-break:break-word; }
+  th, td { padding:.5rem .7rem; text-align:left; border:1px solid var(--border); vertical-align:top; }
+  th { background:#21262d; color:var(--heading); font-weight:600; }
+  code { background:#21262d; padding:2px 6px; border-radius:4px; font-size:.82rem;
+         color:var(--orange); font-family:'SF Mono',Consolas,monospace; }
+  pre { font-family:'SF Mono',Consolas,monospace; font-size:.78rem; line-height:1.65;
+        overflow-x:auto; white-space:pre-wrap; word-break:break-all; color:var(--text);
+        background:#21262d; padding:.9rem; border-radius:6px; margin:.6rem 0; }
+  .tag { display:inline-block; padding:1px 8px; border-radius:12px; font-size:.72rem;
+         font-weight:600; white-space:nowrap; }
+  .ok { background:#1a3a1a; color:var(--green); }
+  .pr { background:#1f3a5f; color:var(--accent); }
+  .stub { background:#2d1a1a; color:var(--red); }
+  .todo { background:#2d2000; color:var(--yellow); }
+  .note { background:#1a2332; border-left:3px solid var(--accent);
+          padding:.7rem 1rem; margin:.8rem 0; border-radius:0 4px 4px 0; font-size:.86rem; }
+  .warn { background:#2d1f00; border-left:3px solid var(--yellow);
+          padding:.7rem 1rem; margin:.8rem 0; border-radius:0 4px 4px 0; font-size:.86rem; }
+  .toc { list-style:none; margin:.4rem 0; }
+  .toc ul { list-style:none; margin:.2rem 0 .3rem 1.1rem; }
+  .toc li { margin:.15rem 0; }
+  .toc a { color:var(--muted); font-size:.88rem; }
+  .toc a:hover { color:var(--accent); }
+  a { color:var(--accent); text-decoration:none; }
+  a:hover { text-decoration:underline; }
+  ul, ol { margin:.4rem 0 .6rem 1.3rem; }
+  li { margin:.2rem 0; }
+  .mermaid { background:#161b22; border:1px solid var(--border); border-radius:6px;
+             padding:.8rem; margin:.8rem 0; overflow-x:auto; }
+  .kv { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:.7rem; margin:.6rem 0; }
+  .kv .item { background:#21262d; border:1px solid var(--border); border-radius:6px; padding:.7rem; }
+  .kv .k { color:var(--heading); font-weight:600; font-size:.88rem; margin-bottom:.2rem; }
+  .kv .v { color:var(--muted); font-size:.8rem; }
+  .muted { color:var(--muted); }
+</style>
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.esm.min.mjs';
+  mermaid.initialize({ startOnLoad:false, theme:'dark', securityLevel:'loose',
+    themeVariables:{ fontSize:'14px', fontFamily:'ui-sans-serif, system-ui' } });
+  let n = 0;
+  for (const el of document.querySelectorAll('.mermaid')) {
+    const src = el.textContent;
+    try {
+      const { svg } = await mermaid.render('mmd-' + (++n), src);
+      el.innerHTML = svg;
+    } catch (err) {
+      el.classList.add('mermaid-error');
+      el.insertAdjacentHTML('beforeend', '<div class="warn">mermaid 渲染失败，源码保留在上方</div>');
+    }
+  }
+</script>
+</head>
+<body>
+
+<h1>AgentOS · Agent 内核技术文档</h1>
+<div class="subtitle">
+  版本 v4（spec #1–#457）· 2026-10-28 · 覆盖 <code>packages/core</code> · <code>packages/adapters</code> ·
+  <code>packages/providers</code> · <code>packages/contracts</code> · <code>cli</code><br>
+  图例：<span class="tag ok">已实现</span> 代码 + 测试兑现 ·
+  <span class="tag pr">已接线</span> 能力存在但需真实凭证验证 ·
+  <span class="tag todo">未建面</span> 明确未实现 ·
+  <span class="tag stub">边界</span> 刻意不做
+</div>
+
+<div class="card">
+  <h2 id="tldr" style="margin-top:0">TL;DR · 这份文档回答什么</h2>
+  <div class="kv">
+    <div class="item"><div class="k">一个内核</div><div class="v">Harness：agent 循环、会话 DB 态、结果落盘、沙箱、门禁</div></div>
+    <div class="item"><div class="k">三个插座</div><div class="v">Model / Tool / Knowledge，一 entry 一插件，运行时可换</div></div>
+    <div class="item"><div class="k">四层插件</div><div class="v">Manifest → Contract → Loader → Registry；preset 只做引用</div></div>
+    <div class="item"><div class="k">一条宪法</div><div class="v">换业务 = 换一个 preset 文件，零内核改动</div></div>
+  </div>
+  <div class="note">
+    本文只写<strong>当前代码能兑现的事实</strong>。未实现的点标 <span class="tag todo">未建面</span>，
+    刻意不做的点标 <span class="tag stub">边界</span>——不把愿望写成能力。
+  </div>
+</div>
+
+<div class="card">
+  <h2 id="toc" style="margin-top:0">目录</h2>
+  <ul class="toc">
+    <li><a href="#1-position">1 定位与边界</a></li>
+    <li><a href="#2-arch">2 全局架构</a></li>
+    <li><a href="#3-layers">3 四层插件模型</a></li>
+    <li><a href="#4-contracts">4 契约层</a></li>
+    <li><a href="#5-turn">5 一轮 turn 的生命周期</a></li>
+    <li><a href="#6-providers">6 三个 Provider 插座</a>
+      <ul>
+        <li><a href="#6-1-model">6.1 ModelProvider</a></li>
+        <li><a href="#6-2-tool">6.2 ToolProvider</a></li>
+        <li><a href="#6-3-knowledge">6.3 KnowledgeProvider</a></li>
+      </ul>
+    </li>
+    <li><a href="#7-orchestration">7 编排面：角色 / Workflow / Project / Todo</a></li>
+    <li><a href="#8-config">8 配置面与本地化</a></li>
+    <li><a href="#9-data">9 数据面与运维</a></li>
+    <li><a href="#10-status">10 验收、状态与边界</a></li>
+    <li><a href="#11-extend">11 扩展指南：新增四种插件</a></li>
+  </ul>
+</div>
+
+<!-- ============================================================ -->
+<div class="card">
+<h2 id="1-position">1 定位与边界</h2>
+
+<p>AgentOS 是<strong>可插拔的 Agent 执行框架</strong>，不是商业插件平台，也不是多租户 SaaS。
+产品形态是<strong>单进程、单机、一个数据目录</strong>（spec #134/#178）。</p>
+
+<table>
+  <tr><th style="width:22%">维度</th><th>承诺</th><th style="width:18%">依据</th></tr>
+  <tr><td>运行时</td><td>主 runtime 可换；当前内核由 <code>@anthropic-ai/claude-agent-sdk</code> 适配（<code>packages/adapters/claude-sdk</code>），跨运行时验收未完成</td><td>#144 / #298 <span class="tag todo">未建面</span></td></tr>
+  <tr><td>部署</td><td>一个进程、一个 <code>.agentos/</code> 数据目录；无 K8s / ArgoCD / ingress 产品化</td><td>#134 / #178 <span class="tag stub">边界</span></td></tr>
+  <tr><td>多 Pod</td><td>不支持；ledger 是嵌入式 <code>node:sqlite</code>，同会话多进程无协调</td><td>#132 纪律 <span class="tag stub">边界</span></td></tr>
+  <tr><td>密钥</td><td>manifest 只允许 env 变量<strong>名</strong>；内联凭证 schema 直接拒绝</td><td>#12 <span class="tag ok">已实现</span></td></tr>
+  <tr><td>配置写 API</td><td>不做；配置面 = yml + git，Web 只读 + validate 触发</td><td>#183 <span class="tag stub">边界</span></td></tr>
+  <tr><td>可视化编排器</td><td>不做；只读渲染 + 单击实例化，编辑 = 改 yml</td><td>#196 / #440 <span class="tag stub">边界</span></td></tr>
+  <tr><td>对等 Agent 协议</td><td>不做 A2A 内核化；外部 agent 唯一路径 = MCP 工具 manifest</td><td>#199 / #418 <span class="tag stub">边界</span></td></tr>
+</table>
+</div>
+
+<!-- ============================================================ -->
+<div class="card">
+<h2 id="2-arch">2 全局架构</h2>
+
+<div class="mermaid">
+flowchart TB
+  subgraph CFG["config/*.yml —— git 管理，启动期挂载"]
+    PRE[preset<br/>四层名字引用]
+    MOD[models/*.yml]
+    TOOL[tools/*.yml]
+    KB[knowledge/*.yml]
+    AG[agents/*.yml]
+    WF[workflows/*.yml]
+    PJ[projects/*.yml]
+  end
+  PRE --> LOAD
+  MOD --> LOAD[Loader<br/>kind 分发 · 引用校验 · ${VAR} 展开]
+  TOOL --> LOAD
+  KB --> LOAD
+  AG --> LOAD
+  WF --> LOAD
+  PJ --> LOAD
+  LOAD --> PLAN[ToolMountPlan / 模型租约 / 知识挂载]
+  PLAN --> KERNEL
+  subgraph KERNEL["Kernel（packages/core）"]
+    TURN[turn 循环]
+    LEDGER[(session ledger<br/>node:sqlite)]
+    GOV[治理：门禁 · 预算 · 并发 · offload]
+    SANDBOX[沙箱 / 工作区]
+    TURN --> LEDGER
+    TURN --> GOV
+    TURN --> SANDBOX
+  end
+  KERNEL --> ADAPTER[Adapter<br/>claude-sdk]
+  ADAPTER --> ENTRY[EntryAdapter<br/>cli / rest]
+  ENTRY --> CLIENT[终端 / 浏览器]
+  KERNEL --> DATA[".agentos/ —— 运行时数据"]
+</div>
+
+<h3>职责切分</h3>
+<table>
+  <tr><th style="width:20%">层</th><th>职责</th><th style="width:30%">代码位置</th></tr>
+  <tr><td>Contracts</td><td>类型与不变量；跨边界只用 JSON Schema</td><td><code>packages/contracts/src/</code></td></tr>
+  <tr><td>Core</td><td>manifest 加载/校验、tool plan、ledger、路由、治理、workflow 引擎</td><td><code>packages/core/src/</code></td></tr>
+  <tr><td>Adapters</td><td>唯一允许 import kernel SDK 的地方；把中立 plan 翻译成内核原生形状</td><td><code>packages/adapters/claude-sdk/</code></td></tr>
+  <tr><td>Providers</td><td>model-* / knowledge-* / entry-* 的具体实现</td><td><code>packages/providers/</code> · <code>packages/entry/</code></td></tr>
+  <tr><td>Composition root</td><td>装配：加载配置 → 校验 → 挂载 → 起服务</td><td><code>cli/src/serve.ts</code></td></tr>
+</table>
+
+<div class="note">
+  <strong>干净的接缝：</strong>core 不 import 任何 kernel；adapter 是唯一的 SDK 边界；
+  provider 只依赖 contracts。这就是"换 runtime 不改上层"的物理保证。
+</div>
+</div>
+
+<!-- ============================================================ -->
+<div class="card">
+<h2 id="3-layers">3 四层插件模型</h2>
+
+<div class="mermaid">
+flowchart LR
+  M["Manifest<br/>yml 声明 WHERE"] --> C["Contract<br/>版本化接口"]
+  C --> L["Loader<br/>实例化 · 校验 · 展开"]
+  L --> R["Registry<br/>运行时查询"]
+  P["preset"] -.->|只做名字引用| M
+</div>
+
+<table>
+  <tr><th style="width:16%">层</th><th>做什么</th><th>不做什么</th></tr>
+  <tr><td>Manifest</td><td>声明服务器在哪、用什么凭证名、哪些工具、是否幂等</td><td>不定义工具本体（MCP 在运行时发现）</td></tr>
+  <tr><td>Contract</td><td>冻结"一个 law"——例如知识 provider 只返回结构，不返回渲染文本</td><td>不关心实现语言/进程</td></tr>
+  <tr><td>Loader</td><td>kind 分发、引用完整性、<code>${VAR}</code> 展开、失败分类</td><td>不注册、不打印、不挂载</td></tr>
+  <tr><td>Registry</td><td>运行时按名字查已挂载 provider</td><td>不做配置判断</td></tr>
+</table>
+
+<h3>preset 是唯一收敛点</h3>
+<pre>kind: preset
+version: "1"
+name: my-agent
+knowledge: local-markdown      # 名字引用
+model: deepseek
+tools: [mcp-filesystem, slack] # 挂载顺序即此处顺序
+entry: cli
+# 可选（additive）：
+channels: { web: rest }        # 频道 → 入口适配器
+channelModels: { cli: deepseek }
+budgetUsd: 5
+maxConcurrentSessions: 2
+agents: [triage-analyst]       # 第五层引用
+workflows: [daily-triage]      # 第六层引用</pre>
+
+<div class="warn">
+  preset 里出现任何内联配置或凭证，schema 层直接拒绝；工具名必须能在 config 树中找到，
+  否则 <code>preset validate</code> 非零退出。
+</div>
+</div>
+
+<!-- ============================================================ -->
+<div class="card">
+<h2 id="4-contracts">4 契约层</h2>
+
+<table>
+  <tr><th style="width:14%">插座</th><th>接口</th><th>文件</th><th>唯一法则</th></tr>
+  <tr><td>Knowledge</td><td><code>KnowledgeProvider</code> 六动词</td><td><code>knowledge.ts</code></td><td>只出结构不出文本；draft 在 commit 前不可见</td></tr>
+  <tr><td>Tool</td><td><code>ToolProviderManifest</code> + <code>ToolMountPlan</code></td><td><code>tool.ts</code></td><td>manifest 说 WHERE，MCP 说 WHAT；跨接缝只走 JSON Schema</td></tr>
+  <tr><td>Model</td><td><code>ModelProviderManifest</code> + <code>ModelDialect</code></td><td><code>model.ts</code></td><td>alias 即租约；凭证是 env 变量名</td></tr>
+  <tr><td>Entry</td><td><code>EntryAdapter</code> 四动词 + <code>TranscriptEntry</code></td><td><code>entry.ts</code></td><td><code>confirm:false</code> 合法，核心自动把知识写降为只读</td></tr>
+</table>
+
+<h3>横切类型</h3>
+<div class="kv">
+  <div class="item"><div class="k">Preset</div><div class="v">四层名字引用 + channels / channelModels / budgetUsd / maxConcurrentSessions</div></div>
+  <div class="item"><div class="k">NeutralTool</div><div class="v">core 发出的进程内工具形状；adapter 负责翻译。JSON Schema 进，JSON data 出</div></div>
+  <div class="item"><div class="k">TranscriptEntry</div><div class="v">最小可重放集：role / text / toolName / isError / timestampMs / event</div></div>
+  <div class="item"><div class="k">Session key</div><div class="v"><code>web-</code> 前缀：浏览器会话 ↔ ledger 行的约定</div></div>
+</div>
+
+<div class="note">
+  <strong>版本策略：</strong>additive-only。新增字段不破坏消费者；改变语义 = major bump + spec 修订记录。
+  <code>TranscriptEntry.event</code> 就是 additive 的示例——不认识该值的消费者按原样渲染。
+</div>
+</div>
+
+<!-- ============================================================ -->
+<div class="card">
+<h2 id="5-turn">5 一轮 turn 的生命周期</h2>
+
+<div class="mermaid">
+sequenceDiagram
+  participant E as Entry（cli/rest）
+  participant S as serve 装配根
+  participant A as Adapter
+  participant K as Kernel
+  participant L as Ledger
+  E->>S: POST /api/chat 或 REPL prompt
+  S->>L: getByExternalKey / createSession
+  S->>S: 解析角色链 · 模型路由 · 工具围栏
+  S->>A: plansToMcpServers + 预批准列表
+  A->>K: query(prompt, resume, signal)
+  K-->>E: 事件流（assistant.text / tool.progress / todo.changed）
+  K->>K: 工具调用 → 门禁（canUseTool）→ 执行
+  K->>L: markStatus(running → idle) · 用量归因
+  E-->>E: SSE 帧 / 终端输出
+</div>
+
+<h3>关键不变量</h3>
+<table>
+  <tr><th style="width:24%">不变量</th><th>实现</th><th style="width:22%">代码</th></tr>
+  <tr><td>turn 状态在 DB 不在内存</td><td>每轮开始 <code>markStatus running</code>，结束落 <code>idle</code>；侧栏读 DB</td><td><code>core/session/ledger.ts</code></td></tr>
+  <tr><td>恢复来自存储的历史</td><td><code>resumeSdkSessionId</code> 从 ledger 行读取，不从内存 emitter 重放</td><td><code>cli/src/serve.ts</code></td></tr>
+  <tr><td>大结果落盘</td><td>&gt;10KB 的工具结果写入工作区 <code>tool-results/</code>，模型拿指针</td><td><code>core/governance/offload.ts</code></td></tr>
+  <tr><td>非幂等工具不自动重试</td><td>执行器按 <code>ToolMountPlan.idempotent</code> 分支</td><td><code>core/loader/retry.ts</code></td></tr>
+  <tr><td>预算门禁</td><td>累计 <code>usage.log</code> 成本越过 <code>budgetUsd</code>，下一轮先问人</td><td><code>cli/src/serve.ts</code></td></tr>
+  <tr><td>并发上限</td><td><code>maxConcurrentSessions</code>，超出 FIFO 排队而非失败</td><td><code>cli/src/concurrency.ts</code></td></tr>
+  <tr><td>中止全链路</td><td>AbortController 从入口传到内核；workflow 实例也可被中止（#365）</td><td><code>serve.ts</code> / <code>workflow/runner.ts</code></td></tr>
+  <tr><td>崩溃恢复</td><td>启动时 <code>sweepRunning()</code> 把遗留 running 行标为 aborted</td><td><code>ledger.ts</code></td></tr>
+</table>
+
+<h3>失败分类（可行动卡片）</h3>
+<p>结果 payload 带 subtype：<code>tool-missing</code> / <code>gate-denied</code> / <code>model-fallback</code> /
+<code>network</code>。入口按四类渲染独立卡片，而不是一条红杠（#264）。</p>
+</div>
+
+<!-- ============================================================ -->
+<div class="card">
+<h2 id="6-providers">6 三个 Provider 插座</h2>
+
+<h3 id="6-1-model">6.1 ModelProvider</h3>
+<table>
+  <tr><th style="width:18%">概念</th><th>说明</th></tr>
+  <tr><td>Manifest</td><td><code>config/models/*.yml</code>：provider + <code>baseUrlEnv</code> + <code>credentialsEnv</code> + alias 表</td></tr>
+  <tr><td>Dialect</td><td>厂商方言实现，tag ∈ <code>anthropic-compat</code> | <code>bedrock</code> | <code>openai-compat</code></td></tr>
+  <tr><td>Alias lease</td><td>alias（general/reasoner）映射到具体 model id；fallbackChain 只能引用本 manifest 内的 alias</td></tr>
+  <tr><td>路由优先级</td><td>请求覆盖 &gt; <code>channelModels</code>（频道/租户）&gt; preset 的 <code>model</code> 槽</td></tr>
+  <tr><td>健康与回落</td><td>dialect <code>healthCheck(lease, {env})</code>；主 manifest 全 alias 不健康时走 <code>fallbackModels</code>（跨端点，显式声明）</td></tr>
+  <tr><td>归因</td><td><code>usage.log</code> 逐轮记录 model/cost/tenant/agent</td></tr>
+</table>
+<pre># config/models/deepseek.yml —— 是租约，不是代码
+kind: model
+version: "1"
+name: deepseek
+provider: deepseek
+baseUrlEnv: AGENTOS_DEEPSEEK_ANTHROPIC_BASE_URL   # 变量名，不是 URL
+credentialsEnv: AGENTOS_DEEPSEEK_API_KEY
+models: { general: deepseek-chat, reasoner: deepseek-reasoner }
+fallbackChain: [general]</pre>
+
+<h3 id="6-2-tool">6.2 ToolProvider（MCP）</h3>
+<p>一个工具服务器 = 一条声明式注册项；工具定义在运行时通过 MCP <code>tools/list</code> 发现，绝不写进配置。</p>
+<table>
+  <tr><th style="width:18%">字段</th><th>语义</th><th style="width:26%">失败行为</th></tr>
+  <tr><td><code>transport</code></td><td><code>sdk</code> / <code>stdio</code> / <code>http</code>（discriminated union，多余字段拒绝）</td><td>schema 错误 = fail loud</td></tr>
+  <tr><td><code>command</code> / <code>endpoint</code></td><td>stdio 命令行（无 shell 解释）/ http URL；支持 <code>${VAR}</code></td><td>缺变量 = environment 错误 → 单 provider 降级 ⚠</td></tr>
+  <tr><td><code>auth</code></td><td><code>none</code> / <code>bearer-token-env</code> / <code>header-env</code>；只给变量名</td><td>租约不可解析 → 同一降级路径</td></tr>
+  <tr><td><code>allowedTools</code></td><td>白名单；缺席 = 挂载全部发现工具（drift 标未验证）</td><td>启动期 drift 检查</td></tr>
+  <tr><td><code>idempotent</code></td><td>默认值 + 按工具名覆盖；未声明 = 永不自动重试</td><td>执行器分支</td></tr>
+  <tr><td><code>envRouting</code></td><td>限定可挂载的环境标签；缺席 = 所有环境</td><td>不匹配 = 警告 + 不挂载</td></tr>
+  <tr><td><code>enabled</code></td><td><code>false</code> = 声明但不挂载，保留 diff 可见性</td><td>装载期过滤</td></tr>
+  <tr><td><code>sandbox</code></td><td><code>fsRoots</code> + <code>network.allow</code>；adapter 只授予声明根</td><td>未声明 = sandbox-unverified</td></tr>
+</table>
+<div class="warn">
+  <strong>drift 检查是测谎仪：</strong>声明了 <code>allowedTools</code> 就必须镜像 server 的真实工具集。
+  宁可缺席（让 drift 报未验证），也不要写一份会过期的假名单。
+</div>
+
+<h3 id="6-3-knowledge">6.3 KnowledgeProvider</h3>
+<table>
+  <tr><th style="width:16%">动词</th><th>语义</th></tr>
+  <tr><td><code>bootstrap</code></td><td>目录索引 + 最近更新（注入用）</td></tr>
+  <tr><td><code>search</code></td><td>返回 <code>SearchHit[]</code>；无命中返回 <code>[]</code>，不抛错</td></tr>
+  <tr><td><code>getPage</code></td><td>原文内容</td></tr>
+  <tr><td><code>listPages</code></td><td>索引列表（当前无生产调用方，契约保留）</td></tr>
+  <tr><td><code>writePage</code></td><td>两阶段：只写 draft，未 commit 对 search 不可见</td></tr>
+  <tr><td><code>commit</code></td><td>确认后落库并记账</td></tr>
+</table>
+<p>默认实现 <code>@agentos/knowledge-markdown</code>：<code>path</code> / <code>submodule</code> / <code>git-sync</code> 三种挂载；
+页面 frontmatter 支持 <code>owner / last_verified / stale_after / status</code>。规模甜蜜点是几十到几百份 md，不做 RAG。</p>
+</div>
+
+<!-- ============================================================ -->
+<div class="card">
+<h2 id="7-orchestration">7 编排面：角色 / Workflow / Project / Todo</h2>
+
+<h3>7.1 Agent 角色（<code>config/agents/*.yml</code>）</h3>
+<pre>kind: agent
+version: "1"
+name: triage-analyst
+baseAgent: docs-writer        # 可选：继承另一角色
+systemPrompt: |
+  ...
+tools: [slack_search_channels, todo_add]   # 运行时工具名白名单
+knowledge: local-markdown
+model: deepseek</pre>
+<table>
+  <tr><th style="width:22%">规则</th><th>语义</th></tr>
+  <tr><td>继承</td><td>systemPrompt 拼接（base 在前，冲突时 child 覆盖）；tools/knowledge/model 并集，child 覆盖同名</td></tr>
+  <tr><td>循环/悬空</td><td>validate 期拒绝（环、指向不存在的角色/工具/知识/模型）</td></tr>
+  <tr><td>工具围栏</td><td>角色 tools = 该 turn 的白名单，内核侧 canUseTool 硬执行；越界调用被拒并落审计</td></tr>
+  <tr><td>"自己"</td><td>无 agent 参数的 turn = 主内核 preset 行为，零回归；Web 默认选中"自己"</td></tr>
+  <tr><td>归因</td><td>transcript / usage / 审计携带 agent 标签；会话可回放角色上下文</td></tr>
+</table>
+
+<h3>7.2 Workflow（<code>config/workflows/*.yml</code>）</h3>
+<table>
+  <tr><th style="width:16%">步骤型</th><th>载荷</th></tr>
+  <tr><td><code>agent</code></td><td><code>{ agent, prompt }</code> —— 跑一个角色 turn</td></tr>
+  <tr><td><code>tool</code></td><td><code>{ tool, args }</code> —— 进程内工具</td></tr>
+  <tr><td><code>skill</code></td><td><code>{ skill, prompt? }</code> —— 经知识通道；<strong>当前无 headless runner</strong></td></tr>
+  <tr><td><code>kb_search</code></td><td><code>{ query }</code></td></tr>
+  <tr><td><code>review</code></td><td><code>{ agent, prompt?, mustInclude? }</code> —— 由已挂载角色裁决上一步；输出不含 APPROVE（可配置）即拒绝并停止</td></tr>
+</table>
+<table>
+  <tr><th style="width:16%">触发</th><th>语义</th><th style="width:24%">状态</th></tr>
+  <tr><td><code>manual</code></td><td>Web 按钮 / API</td><td><span class="tag ok">已实现</span></td></tr>
+  <tr><td><code>schedule</code></td><td>cron，分钟窗精度；无 cron 库，Node 内建调度</td><td><span class="tag ok">已实现</span></td></tr>
+  <tr><td><code>webhook</code></td><td><code>secretEnv</code> 指向 env 名，Bearer 校验</td><td><span class="tag ok">已实现</span></td></tr>
+</table>
+<p>并发上限 <code>maxConcurrentWorkflows</code>（#366）；中止可到达运行中的实例（#365）；每步落审计行。</p>
+<p>
+  <strong>Skills 挂载（stage C）：</strong><code>kind: skills</code> manifest 指向一个目录，启动时扫描其中的
+  <code>**/SKILL.md</code>（frontmatter <code>name</code>/<code>description</code>），preset 用 <code>skills: [名字]</code> 引用。
+  该 manifest 与目录本身<strong>不入库</strong>（<code>config/skills/local.yml</code> + <code>skills-base/</code> 均被 .gitignore），
+  路径支持绝对路径或 <code>${ENV}</code>；变量缺失只跳过该挂载并告警，不阻断启动。
+  <code>skill</code> 步骤按名字取正文作为该轮的系统提示。
+</p>
+<p>
+  <strong>输入 / 输出（stage B，additive）：</strong><code>category</code> 声明主题，用于控制台分组；
+  <code>input.source ∈ {none, manual}</code> —— manual 由运行端点传入，同时注入 <code>{input}</code>
+  并作为第一步的 <code>{prev}</code>（<code>{input}</code> 始终解析为原始输入）；
+  <code>output.sink ∈ {none, slack}</code> —— slack 在最后一步成功后，经<strong>已挂载的 Slack 工具</strong>投递到指定
+  channel；投递失败会把 run 标为 error 而不是静默丢弃。Slack 拉取型输入是下一个 additive 成员。
+</p>
+
+<h3>7.3 Project</h3>
+<p>模板（<code>config/projects/*.yml</code>，git 管理）vs 实例（<code>.agentos/</code>，Web 可建可写）。
+模板只声明 <code>agents / workflows / tools / knowledge / description</code>；实例持有标题与业务数据。
+边界：配置不可从 Web 改，实例数据可以。项目仪表盘聚合待办计数。</p>
+
+<h3>7.4 Todo</h3>
+<p>内核不解析 MCP 结果、不内置待办领域模型（#177）。模型在对话中总结可行动项并调用
+<code>todo_add / todo_update / todo_remove / todo_list</code>；存储在同一 sqlite 的独立表。
+<code>sourceKind ∈ {chat, mcp, manual}</code>，<code>sourceRef</code> 回链到产生它的会话。
+变更以 <code>todo.changed</code> 中立事件推送并可在回放中标记。</p>
+</div>
+
+<!-- ============================================================ -->
+<div class="card">
+<h2 id="8-config">8 配置面与本地化</h2>
+
+<h3>config 树</h3>
+<pre>config/
+├── presets/      # 业务收敛点（一个业务一个文件）
+├── models/       # ModelProvider manifest
+├── tools/        # ToolProvider manifest（MCP）
+├── knowledge/    # KnowledgeProvider manifest
+├── agents/       # 角色
+├── workflows/    # 编排
+└── projects/     # 模板</pre>
+
+<h3>校验与脚手架</h3>
+<pre>agentos preset validate config/presets/example.yml
+agentos agents scaffold my-role
+agentos workflows scaffold my-flow
+agentos projects scaffold my-project
+agentos agents export my-role --out share.yml</pre>
+<p>写出的骨架先经真实 loader 校验，通过才报告成功；名字非法非零退出，拒绝覆盖。</p>
+
+<h3>本地专属配置（不入库）</h3>
+<p>真实凭证与本地挂载清单放在被忽略的文件里，仓库只保留"名字 + env 变量名"：</p>
+<table>
+  <tr><th style="width:32%">文件</th><th>内容</th><th style="width:22%">忽略规则</th></tr>
+  <tr><td><code>config/presets/local.yml</code></td><td>本地挂载清单（引用哪些 MCP）</td><td><code>.gitignore</code> 显式 + <code>.dockerignore</code></td></tr>
+  <tr><td><code>.env.local</code></td><td>凭证值</td><td><code>.env*</code></td></tr>
+  <tr><td><code>~/.mcp-auth/</code></td><td>mcp-remote 缓存的 OAuth token</td><td>仓库外</td></tr>
+  <tr><td><code>knowledge-base/</code></td><td>技能与知识内容</td><td>除 README 外整体忽略</td></tr>
+</table>
+
+<div class="note">
+  <strong>为什么 stdio 而不是 http？</strong>两者都是 MCP，差别只在凭证寿命：
+  托管端点 OAuth token 会过期，bot token / API key 不会。无人值守选 stdio；
+  需要浏览器授权时用 <code>mcp-remote</code> 把托管端点包成 stdio，首次挂载弹一次浏览器。
+</div>
+</div>
+
+<!-- ============================================================ -->
+<div class="card">
+<h2 id="9-data">9 数据面与运维</h2>
+
+<table>
+  <tr><th style="width:30%">路径</th><th>内容</th></tr>
+  <tr><td><code>.agentos/sessions.db</code></td><td>ledger：会话 id、状态、标题、内核指针、角色标签、待办表</td></tr>
+  <tr><td><code>.agentos/workspaces/&lt;key&gt;/</code></td><td>每会话工作区 + <code>tool-results/</code> 大结果落盘</td></tr>
+  <tr><td><code>.agentos/kb-drafts/</code></td><td>未提交知识草稿（对 search 不可见）</td></tr>
+  <tr><td><code>.agentos/kb-receipts.jsonl</code></td><td>draft → commit 账本</td></tr>
+  <tr><td><code>.agentos/usage.log</code></td><td>逐轮归因元数据（模型/成本/租户/角色）</td></tr>
+  <tr><td><code>.agentos/escalations.log</code> · <code>audit.jsonl</code></td><td>人工升级与执行门禁记录（只记 id 与动作，不记正文）</td></tr>
+</table>
+
+<h3>命令</h3>
+<pre>agentos data export bundle.json   # 会话 + 日志 + 草稿（不含 transcript 正文）
+agentos data import bundle.json   # 幂等恢复（按 external key）
+agentos data gc [--keep-days N]   # 老化草稿/日志/工作区；只清 done 且超期 todo</pre>
+
+<p class="muted">日志脱敏：<code>cli/src/logs.ts</code> 在写盘前按 env 值替换密钥；元数据级日志不落 prompt / 回复 / 工具载荷。</p>
+</div>
+
+<!-- ============================================================ -->
+<div class="card">
+<h2 id="10-status">10 验收、状态与边界</h2>
+
+<h3>验收方式</h3>
+<table>
+  <tr><th style="width:22%">层</th><th>证据</th></tr>
+  <tr><td>契约</td><td><code>packages/conformance/</code>：每个实现跑同一套黑盒测试；插件可插拔是可验证承诺而非架构美学</td></tr>
+  <tr><td>单元/行为</td><td><code>vitest</code>：loader / ledger / routing / governance / workflow 各自行为测试</td></tr>
+  <tr><td>真实验收</td><td>需要外部条件的项集中在最后跑（线上模型、第三方 MCP、跨运行时、浏览器 E2E），未跑过不得标"已验证真实运行"</td></tr>
+</table>
+
+<h3>当前状态（2026-10-28）</h3>
+<div class="kv">
+  <div class="item"><div class="k">spec 承诺</div><div class="v">#1–#457 全部立案；v1.0 判据 = 1–307 全绿，v2.0 判据 = 1–457</div></div>
+  <div class="item"><div class="k">v4 收口</div><div class="v">141/150 关闭；余 9 点逐条写明原因（真实阶段 6、未建面 2、维护者决策 1）</div></div>
+  <div class="item"><div class="k">真实凭证项</div><div class="v">线上模型 turn、角色围栏、workflow 端到端、第三方 MCP、跨运行时——待跑</div></div>
+  <div class="item"><div class="k">刻意不做</div><div class="v">K8s、团队服务器、可视化编辑器、A2A、配置写 API</div></div>
+</div>
+
+<h3>已知边界</h3>
+<table>
+  <tr><th style="width:34%">边界</th><th>现状</th></tr>
+  <tr><td><code>skill</code> 步骤 headless 运行</td><td><span class="tag todo">未建面</span> 只走知识通道；CLI 明确报错而不是假装执行</td></tr>
+  <tr><td>MCP 大结果 offload</td><td><span class="tag pr">部分</span> sdk transport 已强制；内核侧 stdio/http 结果按 spec 记录继续收敛</td></tr>
+  <tr><td>跨运行时验收</td><td><span class="tag todo">未建面</span> 第二 runtime 未落地</td></tr>
+  <tr><td>多 Pod</td><td><span class="tag stub">边界</span> 嵌入式 sqlite，单写者模型</td></tr>
+</table>
+</div>
+
+<!-- ============================================================ -->
+<div class="card">
+<h2 id="11-extend">11 扩展指南：新增四种插件</h2>
+
+<h3>新增 ToolProvider</h3>
+<ol>
+  <li>在 <code>config/tools/&lt;name&gt;.yml</code> 写 manifest，匹配 <code>ToolProviderManifest</code>。</li>
+  <li>MCP stdio/http：零代码，loader 按 transport 拉起/连接。</li>
+  <li><code>sdk</code> transport：实现放在 <code>packages/adapters/**</code>（唯一允许 kernel import 的地方）。</li>
+  <li>诚实声明 <code>idempotent</code>：非幂等工具按设计失去自动重试。</li>
+  <li><code>${VAR}</code> 缺变量 = 硬错误，不会静默挂一个空配置。</li>
+  <li>校验：<code>agentos preset validate</code>；loader 行为测试：<code>pnpm --filter @agentos/core test</code>。</li>
+  <li><code>allowedTools</code> 必须镜像 server 真实工具集（离线探测），否则 drift 会报。</li>
+</ol>
+
+<h3>新增 ModelProvider</h3>
+<ol>
+  <li>已有厂商的新 alias/端点/价格：只加 <code>config/models/&lt;name&gt;.yml</code>，零代码。</li>
+  <li>新厂商方言：实现 <code>ModelDialect</code>（tag + resolveChannel + healthCheck + resolveModel）于 <code>packages/providers/model-&lt;vendor&gt;/</code>。</li>
+  <li>端点与凭证只以 env 变量名进入；内联密钥 schema 拒绝。</li>
+  <li>preset 的 <code>model:</code> 指向 manifest 名。</li>
+</ol>
+
+<h3>新增 KnowledgeProvider</h3>
+<ol>
+  <li>实现五/六动词；返回结构不返回渲染文本。</li>
+  <li>无命中返回 <code>[]</code>；未 commit 草稿必须不可见。</li>
+  <li>诚实声明 <code>capabilities</code>：<code>write:false</code> 必须让 <code>kb_write/kb_commit</code> 不进注册。</li>
+  <li>加 <code>KnowledgeManifest</code>；P3 一致性套件是入口闸门。</li>
+</ol>
+
+<h3>新增 EntryAdapter</h3>
+<ol>
+  <li>实现四动词 + <code>capabilities</code>；<code>confirm:false</code> 是合法声明（核心自动只读降级）。</li>
+  <li><code>render</code> 遇显示故障不抛；<code>confirm</code> 超时是 adapter 自己的责任。</li>
+  <li>preset 的 <code>entry:</code> 指向 adapter 名；频道路由走 <code>channels</code> 表。</li>
+</ol>
+
+<div class="note">
+  四条通用纪律：<strong>schema 跨边界只用 JSON Schema</strong>（zod v3/v4 不兼容，跨内核传 zod 会静默丢工具）；
+  <strong>凭证只进 env</strong>；<strong>配置只改 yml + git</strong>；<strong>失败分环境错误与配置谎言两类</strong>——
+  前者降级，后者 fail loud。
+</div>
+</div>
+
+</body>
+</html>

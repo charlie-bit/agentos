@@ -17,12 +17,17 @@
 
 export type Conn = "idle" | "connecting" | "streaming";
 
+/** The actionable failure classes carried by result.subtype (additive; unknown ⇒ "error"). */
+export type TurnErrorCategory = "tool-missing" | "gate-denied" | "model-fallback" | "network" | "error";
+
 export type Entry =
   | { kind: "user"; id: string; text: string }
-  | { kind: "assistant"; id: string; text: string; status: "streaming" | "done" | "error" }
-  | { kind: "tool"; id: string; name: string; input: string; status: "running" | "ok" | "error" }
+  | { kind: "assistant"; id: string; text: string; status: "streaming" | "done" | "error" | "aborted" }
+  | { kind: "tool"; id: string; name: string; input: string; status: "running" | "ok" | "error"; durationMs?: number; summary?: string }
   | { kind: "thinking"; id: string; count: number; open: boolean }
-  | { kind: "drift"; id: string; missing: string[]; undeclared: string[] };
+  | { kind: "drift"; id: string; missing: string[]; undeclared: string[]; unverified: string[] }
+  /** A turn failure with an actionable class (spec #264). */
+  | { kind: "error"; id: string; category: TurnErrorCategory; detail: string };
 
 /**
  * One history item as served by GET /api/sessions/:id/messages — the wire form
@@ -62,6 +67,8 @@ export interface Frame {
     message?: string;
     missing?: string[];
     undeclared?: string[];
+    /** Mounts with no allowlist: nothing to verify against (#226). */
+    unverified?: string[];
     subtype?: string;
     usage?: {
       input_tokens?: number;
@@ -79,11 +86,17 @@ export interface Frame {
     model?: string;
     /** tool.denied frame (④a execution gate): why the call was refused. */
     reason?: string;
+    /** tool.result pairing (spec #273): measured duration. */
+    durationMs?: number;
+    /** Bounded result text for the expanded card (#152/#274). */
+    summary?: string;
   } | null;
 }
 
 export interface State {
   entries: Entry[];
+  /** Mid-turn token deltas from usage.delta frames (spec #279), reset per turn. */
+  live: Usage;
   conn: Conn;
   usage: Usage;
   turns: number;
@@ -108,8 +121,11 @@ export type Action =
   | { t: "session_switched" }
   | { t: "hydrate"; items: HistoryItem[] };
 
+const zeroUsage = (): Usage => ({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 });
+
 export const initialState: State = {
   entries: [],
+  live: zeroUsage(),
   conn: "idle",
   usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 },
   turns: 0,
@@ -120,6 +136,10 @@ export const initialState: State = {
 };
 
 /* helpers ------------------------------------------------------------------ */
+
+const ERROR_CATEGORIES: readonly TurnErrorCategory[] = ["tool-missing", "gate-denied", "model-fallback", "network", "error"];
+const asCategory = (subtype: unknown): TurnErrorCategory =>
+  ERROR_CATEGORIES.includes(subtype as TurnErrorCategory) ? (subtype as TurnErrorCategory) : "error";
 
 const isNoise = (type: string): boolean => type.startsWith("kernel.system.") && type !== "kernel.system.drift";
 
@@ -142,7 +162,7 @@ export function reduce(s: State, a: Action): State {
       return { ...s, seq: s.seq + 1, entries: [...s.entries, { kind: "user", id, text: a.text }] };
     }
     case "stream_start":
-      return { ...s, conn: "connecting" };
+      return { ...s, conn: "connecting", live: zeroUsage() };
     case "stream_end": {
       // server closed the stream without a result frame (transport error):
       // don't strand open blocks.
@@ -231,11 +251,27 @@ export function reduce(s: State, a: Action): State {
             const e = s.entries[i];
             if (e?.kind === "tool" && e.status === "running") {
               const entries = [...s.entries];
-              entries[i] = { ...e, status: p.isError ? "error" : "ok" };
+              entries[i] = {
+                ...e,
+                status: p.isError ? "error" : "ok",
+                ...(typeof p.durationMs === "number" ? { durationMs: p.durationMs } : {}),
+                ...(typeof p.summary === "string" && p.summary.length > 0 ? { summary: p.summary } : {}),
+              };
               return { ...s, entries };
             }
           }
           return s; // result for nothing running: ignore, never corrupt
+        }
+        case "usage.delta": {
+          const u = p.usage as { input_tokens?: number; output_tokens?: number } | undefined;
+          return {
+            ...s,
+            live: {
+              ...s.live,
+              input: s.live.input + (u?.input_tokens ?? 0),
+              output: s.live.output + (u?.output_tokens ?? 0),
+            },
+          };
         }
         /**
          * Execution-side hard gate (④a): the kernel DENIED a call outside the
@@ -260,7 +296,10 @@ export function reduce(s: State, a: Action): State {
           return {
             ...s,
             seq: s.seq + 1,
-            entries: [...closed, { kind: "drift", id, missing: p.missing ?? [], undeclared: p.undeclared ?? [] }],
+            entries: [
+              ...closed,
+              { kind: "drift", id, missing: p.missing ?? [], undeclared: p.undeclared ?? [], unverified: p.unverified ?? [] },
+            ],
           };
         }
         case "confirm.request": {
@@ -270,19 +309,31 @@ export function reduce(s: State, a: Action): State {
         }
         case "result": {
           let entries = closeOpen(s);
-          if (p.isError === true) {
+          if (p.subtype === "aborted") {
+            // Stop is a settled outcome, not a failure (spec #255): mark the
+            // partial answer as aborted so the UI can say so plainly.
+            const last = entries[entries.length - 1];
+            if (last?.kind === "assistant") entries = [...entries.slice(0, -1), { ...last, status: "aborted" as const }];
+          } else if (p.isError === true) {
             const last = entries[entries.length - 1];
             entries =
               last?.kind === "assistant"
                 ? [...entries.slice(0, -1), { ...last, status: "error" as const }]
                 : entries;
+            // One actionable card per failure class (spec #264) — not one red bar.
+            entries = [
+              ...entries,
+              { kind: "error", id: `e${s.seq}_err`, category: asCategory(p.subtype), detail: String(p.message ?? "") },
+            ];
           }
           const u = p.usage;
           return {
             ...s,
             entries,
+            live: zeroUsage(), // authoritative totals landed: live deltas retire
             conn: "idle",
             turns: s.turns + 1,
+            seq: s.seq + 1,
             pending: null, // turn over: nothing left to confirm
             usage: {
               input: s.usage.input + (u?.input_tokens ?? 0),

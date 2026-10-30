@@ -5,6 +5,9 @@ import { cn } from "../lib/utils";
 import { Markdown } from "./Markdown";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./ui/collapsible";
 import { ScrollArea } from "./ui/scroll-area";
+import { SelectionMenu } from "./SelectionMenu";
+import { EmptyState } from "./EmptyState";
+import { emptyVariant, type EmptyVariant } from "../lib/empty-state";
 
 /** tool.call/tool.result lifecycle block: collapsed by default, open on error. */
 function ToolCallBlock({ e }: { e: Extract<Entry, { kind: "tool" }> }) {
@@ -12,13 +15,25 @@ function ToolCallBlock({ e }: { e: Extract<Entry, { kind: "tool" }> }) {
   return (
     <Collapsible defaultOpen={false} className="max-w-3xl rounded-lg border border-dashed border-border">
       <CollapsibleTrigger className="group flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs">
-        <ChevronRight className="h-3.5 w-3.5 text-muted transition-transform group-data-[state=open]:rotate-90" />
+        <ChevronRight className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-90" />
         <Icon className={cn("h-3.5 w-3.5", e.status === "error" && "text-err", e.status === "ok" && "text-ok", e.status === "running" && "animate-spin text-run")} />
         <span className="font-mono text-foreground">{e.name}</span>
-        <span className="truncate font-mono text-muted">{e.input.slice(0, 90)}</span>
+        <span className="truncate font-mono text-muted-foreground">{e.input.slice(0, 90)}</span>
+        {typeof e.durationMs === "number" && (
+          <span className="shrink-0 text-[10px] text-muted-foreground">{e.durationMs}ms</span>
+        )}
       </CollapsibleTrigger>
-      <CollapsibleContent className="px-3 pb-2">
-        <pre className="overflow-x-auto rounded bg-background p-2 font-mono text-[11px] text-muted">{e.input}</pre>
+      <CollapsibleContent className="space-y-1 px-3 pb-2">
+        <div className="text-[10px] uppercase tracking-wide text-muted-foreground">input</div>
+        <pre className="overflow-x-auto rounded bg-background p-2 font-mono text-[11px] text-muted-foreground">{e.input}</pre>
+        {e.summary && (
+          <>
+            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">result</div>
+            <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words rounded bg-background p-2 font-mono text-[11px] text-muted-foreground">
+              {e.summary}
+            </pre>
+          </>
+        )}
       </CollapsibleContent>
     </Collapsible>
   );
@@ -26,11 +41,46 @@ function ToolCallBlock({ e }: { e: Extract<Entry, { kind: "tool" }> }) {
 
 function ThinkingLine({ e }: { e: Extract<Entry, { kind: "thinking" }> }) {
   return (
-    <div className="flex items-center gap-1.5 text-[11px] text-muted" data-open={e.open}>
+    <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground" data-open={e.open}>
       {e.open ? <Brain className="h-3.5 w-3.5 animate-pulse" /> : <Brain className="h-3.5 w-3.5" />}
       <span>
         kernel noise: {e.count} frame{e.count === 1 ? "" : "s"} aggregated
       </span>
+    </div>
+  );
+}
+
+const ERROR_CARD: Record<Extract<Entry, { kind: "error" }>["category"], { title: string; hint: string; tone: string }> = {
+  "tool-missing": {
+    title: "tool unavailable",
+    hint: "A tool the turn expected is not mounted. Check /api/tools and the manifest's allowedTools.",
+    tone: "border-warn/60 text-warn",
+  },
+  "gate-denied": {
+    title: "blocked by the gate",
+    hint: "The kernel refused a call outside this deployment's tool surface. Confirm the tool is declared for this preset.",
+    tone: "border-warn/60 text-warn",
+  },
+  "model-fallback": {
+    title: "model degraded",
+    hint: "The preferred alias was unhealthy and routing fell back. Check the channel or the fallbackChain.",
+    tone: "border-warn/60 text-warn",
+  },
+  network: {
+    title: "network interrupted",
+    hint: "The model endpoint could not be reached. Retry when the connection is back; your partial answer is kept.",
+    tone: "border-err/60 text-err",
+  },
+  error: { title: "turn failed", hint: "No further classification available.", tone: "border-err/60 text-err" },
+};
+
+function ErrorCard({ e }: { e: Extract<Entry, { kind: "error" }> }) {
+  const card = ERROR_CARD[e.category];
+  return (
+    <div className={cn("flex max-w-3xl flex-col gap-0.5 rounded-lg border px-3 py-2 text-xs", card.tone)} role="alert">
+      <span className="font-semibold">{card.title}</span>
+      <span>{card.hint}</span>
+      {e.detail && <span className="font-mono text-[11px] opacity-70">{e.detail.slice(0, 300)}</span>}
     </div>
   );
 }
@@ -41,14 +91,25 @@ function DriftBanner({ e }: { e: Extract<Entry, { kind: "drift" }> }) {
       <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
       <span>
         <strong className="font-semibold">tool drift</strong> — missing: {e.missing.join(", ") || "—"} · undeclared:{" "}
-        {e.undeclared.join(", ") || "—"} <span className="text-muted">(warning only; the session continues)</span>
+        {e.undeclared.join(", ") || "—"}
+        {e.unverified.length > 0 && <> · unverified (no allowlist): {e.unverified.join(", ")}</>}{" "}
+        <span className="text-muted-foreground">(warning only; the session continues)</span>
       </span>
     </div>
   );
 }
 
 /** ChatStream = the RenderEvent vocabulary, rendered once each. */
-export function ChatStream({ state }: { state: State }) {
+export function ChatStream({
+  state,
+  onQuote,
+  empty,
+}: {
+  state: State;
+  onQuote: (text: string) => void;
+  /** Which first-run guidance to show when the transcript is empty (#268). */
+  empty?: EmptyVariant | null;
+}) {
   const anchor = useRef<HTMLDivElement>(null);
   const count = state.entries.length + (state.entries.at(-1)?.kind === "thinking" ? (state.entries.at(-1) as { count: number }).count : 0);
   useEffect(() => {
@@ -56,42 +117,50 @@ export function ChatStream({ state }: { state: State }) {
   }, [count]);
   return (
     <ScrollArea className="min-h-0 flex-1">
-      <div className="flex flex-col gap-2.5 px-4 py-3">
-        {state.entries.length === 0 && (
-          <div className="mt-[30vh] flex flex-col items-center gap-2 text-center text-sm text-muted">
-            <Braces className="h-6 w-6 opacity-40" />
-            <span>
-              Ask the assistant anything it can answer with the mounted tools.
-              {state.resumed && <span className="ml-1 text-ok">· session resumed (server-side history)</span>}
-            </span>
-          </div>
-        )}
-        {state.entries.map((e) => {
-          switch (e.kind) {
-            case "user":
-              return (
-                <div key={e.id} className="max-w-3xl self-end rounded-lg bg-primary/10 px-3 py-1.5 text-sm">
-                  {e.text}
-                </div>
-              );
-            case "assistant":
-              return (
-                <article key={e.id} className={cn("max-w-3xl text-sm", e.status === "error" && "text-err")}>
-                  <Markdown text={e.text} streaming={e.status === "streaming"} />
-                  {e.status === "streaming" && <span className="ml-0.5 animate-pulse text-primary">▌</span>}
-                  {e.status === "error" && <div className="text-[11px] text-err">turn ended in error</div>}
-                </article>
-              );
-            case "tool":
-              return <ToolCallBlock key={e.id} e={e} />;
-            case "thinking":
-              return <ThinkingLine key={e.id} e={e} />;
-            case "drift":
-              return <DriftBanner key={e.id} e={e} />;
-          }
-        })}
-        <div ref={anchor} />
-      </div>
+      <SelectionMenu onQuote={onQuote}>
+        <div className="flex flex-col gap-2.5 px-4 py-3">
+          {state.entries.length === 0 &&
+            (empty ? (
+              <EmptyState variant={empty} />
+            ) : (
+              <div className="mt-[30vh] flex flex-col items-center gap-2 text-center text-sm text-muted-foreground">
+                <Braces className="h-6 w-6 opacity-40" />
+                <span>
+                  Ask the assistant anything it can answer with the mounted tools.
+                  {state.resumed && <span className="ml-1 text-ok">· session resumed (server-side history)</span>}
+                </span>
+              </div>
+            ))}
+          {state.entries.map((e) => {
+            switch (e.kind) {
+              case "user":
+                return (
+                  <div key={e.id} className="max-w-3xl self-end rounded-lg bg-primary/10 px-3 py-1.5 text-sm">
+                    {e.text}
+                  </div>
+                );
+              case "assistant":
+                return (
+                  <article key={e.id} className={cn("max-w-3xl text-sm", e.status === "error" && "text-err")}>
+                    <Markdown text={e.text} streaming={e.status === "streaming"} />
+                    {e.status === "streaming" && <span className="ml-0.5 animate-pulse text-primary">▌</span>}
+                    {e.status === "error" && <div className="text-[11px] text-err">turn ended in error</div>}
+                    {e.status === "aborted" && <div className="text-[11px] text-warn">stopped — partial answer kept</div>}
+                  </article>
+                );
+              case "tool":
+                return <ToolCallBlock key={e.id} e={e} />;
+              case "thinking":
+                return <ThinkingLine key={e.id} e={e} />;
+              case "drift":
+                return <DriftBanner key={e.id} e={e} />;
+              case "error":
+                return <ErrorCard key={e.id} e={e} />;
+            }
+          })}
+          <div ref={anchor} />
+        </div>
+      </SelectionMenu>
     </ScrollArea>
   );
 }

@@ -1,0 +1,25 @@
+{
+  "name": "@agentos/model-openai-compat",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "OpenAI-compatible dialect runtime: any /v1/chat/completions endpoint leased by URL+key (public API contract). The first third-party dialect — proof that a vendor runtime is a package, not a core change.",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint src",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@agentos/contracts": "workspace:*",
+    "@agentos/core": "workspace:*"
+  }
+}

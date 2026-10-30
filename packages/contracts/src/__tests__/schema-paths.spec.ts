@@ -350,6 +350,10 @@ describe("KnowledgeManifest", () => {
         void draft;
         return { receiptId: "r", pageId: "p", createdAtMs: 0 };
       },
+      async commit(receipt, confirmation) {
+        void confirmation;
+        return { path: receipt.pageId, commit: "sha", appended: false };
+      },
     } satisfies import("../index.js").KnowledgeProvider;
     expectTypeOf(readOnly.capabilities.write).toMatchTypeOf<boolean>();
   });

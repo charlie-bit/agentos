@@ -14,12 +14,14 @@ import {
   allowedToolsFromPlans,
   fsRootsFromPlans,
   collectDrift,
+  withToolRetry,
   consumeStream,
   buildQueryOptions,
   shortModelName,
   type TurnInput,
 } from "../index.js";
 import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk";
+import type { NeutralTool } from "@agentos/contracts";
 
 const FAKE_ENV = {
   AGENTOS_SMOKE_BASE_URL: "https://channel.example/anthropic",
@@ -177,13 +179,13 @@ describe("drift wiring (P3)", () => {
     // HOTFIX amendment: a foreign key (mcp__other__x) now ALSO alarms via the
     // global pass; the old expectation encoded the leak-blindness this fixes.
     const drift = collectDrift([plan], ["mcp__fs__read_file", "mcp__fs__surprise", "mcp__other__x"]);
-    expect(drift).toEqual({ missing: ["fs/gone_tool"], undeclared: ["fs/surprise", "other/x"] });
+    expect(drift).toEqual({ missing: ["fs/gone_tool"], undeclared: ["fs/surprise", "other/x"], unverified: [] });
   });
 
   it("a clean init produces no drift event (normalize+collect stay quiet)", () => {
     const discovered = ["mcp__fs__read_file", "mcp__fs__gone_tool"];
     const drift = collectDrift([plan], discovered);
-    expect(drift).toEqual({ missing: [], undeclared: [] });
+    expect(drift).toEqual({ missing: [], undeclared: [], unverified: [] });
   });
 });
 
@@ -272,7 +274,7 @@ describe("collectDrift global pass (structural leak alarm)", () => {
   });
   it("declared keys behave exactly as before (no regression in the per-plan pass)", () => {
     const plan = { key: "fs", transport: "stdio" as const, stdio: { command: "x" }, allowedTools: ["read_file", "gone"] };
-    expect(collectDrift([plan], ["mcp__fs__read_file"])).toEqual({ missing: ["fs/gone"], undeclared: [] });
+    expect(collectDrift([plan], ["mcp__fs__read_file"])).toEqual({ missing: ["fs/gone"], undeclared: [], unverified: [] });
   });
 });
 
@@ -412,5 +414,107 @@ describe("fsRoots (D-0910-7): declared root set → kernel grant", () => {
     expect(fsRootsFromPlans([http], undefined)).toEqual([]);
     const opts = buildQueryOptions(turnBase({ toolMounts: [http] }), FAKE_ENV);
     expect(opts.additionalDirectories).toBeUndefined();
+  });
+});
+
+describe("drift contract: unverified is not clean (spec #226)", () => {
+  it("a mount with no allowlist reports its key as unverified", () => {
+    const plan = { key: "gateway", transport: "http" as const, http: { url: "https://x.example/rpc" } };
+    const drift = collectDrift([plan], ["mcp__gateway__any_tool"]);
+    expect(drift).toEqual({ missing: [], undeclared: [], unverified: ["gateway"] });
+  });
+
+  it("an init event on an unverified mount still surfaces a drift warning", async () => {
+    const opts = { toolMounts: [{ key: "gateway", transport: "http" as const, http: { url: "https://x.example/rpc" } }] };
+    const frames = [
+      { type: "system", subtype: "init", session_id: "s", tools: ["mcp__gateway__any_tool"] },
+      { type: "result", session_id: "s", subtype: "success", is_error: false, num_turns: 1 },
+    ] as unknown as SDKMessage[];
+    const stream = (async function* () {
+      for (const f of frames) yield f;
+    })();
+    const out = await consumeStream(stream, opts);
+    const driftEvent = out.events.find((e) => e.type === "kernel.system.drift");
+    expect(driftEvent).toBeDefined();
+    expect((driftEvent?.payload as { unverified: string[] }).unverified).toEqual(["gateway"]);
+  });
+});
+
+describe("withToolRetry — injected failing server (spec #205)", () => {
+  const tool = (name: string, impl: () => Promise<unknown>): NeutralTool => ({
+    name,
+    description: name,
+    inputSchema: { type: "object", properties: {} },
+    handler: impl,
+  });
+
+  it("idempotent tool: retried once; non-idempotent tool: zero retries", async () => {
+    let readCalls = 0;
+    let writeCalls = 0;
+    const tools = [
+      tool("read_page", async () => {
+        readCalls += 1;
+        if (readCalls === 1) throw new Error("transport down");
+        return { ok: true };
+      }),
+      tool("write_page", async () => {
+        writeCalls += 1;
+        throw new Error("transport down");
+      }),
+    ];
+    const retries: string[] = [];
+    const wrapped = withToolRetry(tools, {
+      idempotentFor: (name) => name === "read_page",
+      onRetry: (name) => retries.push(name),
+    });
+
+    await expect(wrapped[0]!.handler({})).resolves.toEqual({ ok: true });
+    expect(readCalls).toBe(2);
+    expect(retries).toEqual(["read_page"]);
+
+    await expect(wrapped[1]!.handler({})).rejects.toThrow("transport down");
+    expect(writeCalls).toBe(1); // never retried
+  });
+
+  it("no policy = no wrapping behavior (tools pass through unchanged)", async () => {
+    let calls = 0;
+    const tools = [
+      tool("t", async () => {
+        calls += 1;
+        throw new Error("x");
+      }),
+    ];
+    const wrapped = withToolRetry(tools, { idempotentFor: () => false });
+    await expect(wrapped[0]!.handler({})).rejects.toThrow("x");
+    expect(calls).toBe(1);
+  });
+});
+
+describe("todo capture prompt segment (spec #313)", () => {
+  it("names the four verbs without inventing domain behaviour", async () => {
+    const { BASE_SYSTEM_PROMPT } = await import("../index.js");
+    for (const verb of ["todo_add", "todo_list", "todo_update", "todo_remove"]) {
+      expect(BASE_SYSTEM_PROMPT).toContain(verb);
+    }
+    expect(BASE_SYSTEM_PROMPT).toContain("sourceKind");
+  });
+});
+
+describe("role tool fence (spec #336)", () => {
+  const plans = [{ key: "fs", transport: "stdio" as const, stdio: { command: "x" }, allowedTools: ["read_file", "write_file"] }];
+
+  it("outside-fence MCP calls are denied; Read always survives", async () => {
+    const { canUseToolFromPlans } = await import("../index.js");
+    const gate = canUseToolFromPlans(plans, ["read_file"]);
+    expect(gate("Read")).toBe(true);
+    expect(gate("mcp__fs__read_file")).toBe(true);
+    expect(gate("mcp__fs__write_file")).toBe(false);
+    expect(gate("mcp__other__anything")).toBe(false);
+  });
+
+  it("the pre-approval list is intersected with the fence", async () => {
+    const { allowedToolsFromPlans } = await import("../index.js");
+    expect(allowedToolsFromPlans(plans, ["read_file"])).toEqual(["mcp__fs__read_file"]);
+    expect(allowedToolsFromPlans(plans)).toEqual(["mcp__fs__read_file", "mcp__fs__write_file"]);
   });
 });

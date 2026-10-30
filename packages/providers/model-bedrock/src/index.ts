@@ -4,12 +4,8 @@
  * kernel owns the chain; this dialect only marks it (neutral vocabulary —
  * the kernel env name translation stays adapter-side).
  */
-import {
-  resolveModelAlias,
-  type ModelChannel,
-  type ModelLeaseLike,
-  type ProbeResult,
-} from "@agentos/core";
+import type { ModelChannel, ModelDialect, ModelHealthOptions, ModelLeaseSpec, ModelProbeResult } from "@agentos/contracts";
+import { resolveModelAlias } from "@agentos/core";
 
 /**
  * With an explicit baseUrl lease the generic url+key shape wins (selection
@@ -17,7 +13,7 @@ import {
  * on purpose). Without it: the native-chain marker, nothing else — no
  * credential value ever passes through this return.
  */
-export function resolveChannel(lease: ModelLeaseLike, env: NodeJS.ProcessEnv = process.env): ModelChannel {
+export function resolveChannel(lease: ModelLeaseSpec, env: NodeJS.ProcessEnv = process.env): ModelChannel {
   if (lease.baseUrlEnv !== undefined) {
     return {
       baseUrl: env[lease.baseUrlEnv],
@@ -36,17 +32,18 @@ export function resolveChannel(lease: ModelLeaseLike, env: NodeJS.ProcessEnv = p
  * presence catches are the ones that matter (empty env).
  */
 export async function healthCheck(
-  _lease: ModelLeaseLike,
-  env: NodeJS.ProcessEnv = process.env,
-): Promise<ProbeResult> {
+  _lease: ModelLeaseSpec,
+  opts: ModelHealthOptions = {},
+): Promise<ModelProbeResult> {
+  const env = opts.env ?? process.env;
   const present = Boolean(env.AWS_PROFILE || env.AWS_REGION || env.AWS_BEARER_TOKEN_BEDROCK);
   return present
     ? { ok: true }
     : { ok: false, reason: "no AWS credential chain in environment (set AWS_PROFILE, AWS_REGION, or AWS_BEARER_TOKEN_BEDROCK)" };
 }
 
-export const dialect = {
-  tag: "bedrock" as const,
+export const dialect: ModelDialect = {
+  tag: "bedrock",
   resolveChannel,
   healthCheck,
   resolveModel: (models: Readonly<Record<string, string>>, alias: string): string => resolveModelAlias(models, alias),

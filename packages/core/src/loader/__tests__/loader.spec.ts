@@ -126,21 +126,22 @@ describe("planTools — expansion, filters, degradation", () => {
 });
 
 describe("driftReport (pure)", () => {
-  it("empty declared = pass-through: both sides empty regardless of discovery", () => {
-    expect(driftReport([], ["anything", "grew"])).toEqual({ missing: [], undeclared: [] });
+  it("empty declared = pass-through, flagged unverified (#226)", () => {
+    expect(driftReport([], ["anything", "grew"])).toEqual({ missing: [], undeclared: [], unverified: true });
   });
 
   it("surfaces renamed/disappeared declared tools and unauthorized discoveries", () => {
     expect(driftReport(["read_file", "write_file"], ["read_file", "extra_tool"])).toEqual({
       missing: ["write_file"],
       undeclared: ["extra_tool"],
+      unverified: false,
     });
   });
 
   it("* wildcard authorizes anything, matches specific shapes", () => {
-    expect(driftReport(["read_*"], ["read_file", "read_lines"])).toEqual({ missing: [], undeclared: [] });
-    expect(driftReport(["read_*"], ["write_file"])).toEqual({ missing: [], undeclared: ["write_file"] });
-    expect(driftReport(["*"], ["whatever"])).toEqual({ missing: [], undeclared: [] });
+    expect(driftReport(["read_*"], ["read_file", "read_lines"])).toEqual({ missing: [], undeclared: [], unverified: false });
+    expect(driftReport(["read_*"], ["write_file"])).toEqual({ missing: [], undeclared: ["write_file"], unverified: false });
+    expect(driftReport(["*"], ["whatever"])).toEqual({ missing: [], undeclared: [], unverified: false });
   });
 });
 
@@ -158,5 +159,43 @@ describe('"edit the yml, change the tool set" — executable proof', () => {
     expect(before.errors).toEqual([]);
     expect(before.plans).toHaveLength(3); // filesystem, gateway, builtin
     expect(after.plans.map((p) => p.key).sort()).toEqual(["filesystem", "gateway"]);
+  });
+});
+
+describe("planTools — envRouting executor (spec #207)", () => {
+  const m = {
+    kind: "tool",
+    version: "1",
+    name: "prod-only",
+    transport: "stdio",
+    command: "npx -y example-server",
+    auth: { mode: "none" },
+    envRouting: ["prod"],
+    schemaExchange: "json-schema",
+  } as ToolProviderManifest;
+
+  it("mounts when the deployment env matches", () => {
+    const { plans, warnings } = planTools([m], { env: {}, environment: "prod" });
+    expect(plans.map((p) => p.key)).toEqual(["prod-only"]);
+    expect(warnings).toEqual([]);
+  });
+
+  it("stays unmounted in another environment, with a structured warning", () => {
+    const { plans, warnings, errors } = planTools([m], { env: {}, environment: "non-prod" });
+    expect(plans).toEqual([]);
+    expect(errors).toEqual([]);
+    expect(warnings[0]).toMatchObject({ key: "prod-only", path: "envRouting" });
+  });
+
+  it("reads AGENTOS_ENV when no explicit environment is given", () => {
+    expect(planTools([m], { env: { AGENTOS_ENV: "prod" } }).plans).toHaveLength(1);
+    expect(planTools([m], { env: { AGENTOS_ENV: "staging" } }).plans).toHaveLength(0);
+  });
+
+  it("absent envRouting mounts everywhere (no silent restriction)", () => {
+    const free = { ...m, name: "everywhere", envRouting: undefined } as ToolProviderManifest;
+    for (const environment of ["prod", "non-prod", undefined]) {
+      expect(planTools([free], { env: {}, ...(environment ? { environment } : {}) }).plans).toHaveLength(1);
+    }
   });
 });

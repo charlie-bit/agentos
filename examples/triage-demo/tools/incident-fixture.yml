@@ -1,0 +1,12 @@
+# Placeholder tool server (fictional product: "incident-fixture"). Declared,
+# not mounted: swap command + endpoint for a real MCP server to use it.
+kind: tool
+version: "1"
+name: incident-fixture
+enabled: false
+transport: stdio
+command: npx -y @example/incident-fixture-mcp
+auth: { mode: none }
+allowedTools: [list_incidents, get_incident]
+idempotent: { default: true }
+schemaExchange: json-schema

@@ -15,7 +15,11 @@
 import { randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
+import { renderDraftFile } from "@agentos/contracts";
+import { commitDraft } from "@agentos/core";
 import type {
+  CommitConfirmation,
+  CommitResult,
   KbDraft,
   KbHit,
   KbIndex,
@@ -37,6 +41,8 @@ export interface MarkdownProviderOptions {
   root: string;
   /** Where two-phase drafts land (OUTSIDE root — invisibility by location). */
   draftsDir: string;
+  /** Receipt ledger for the commit verb (defaults next to the drafts dir). */
+  receiptsLog?: string;
   /** recentUpdates Top-N for bootstrap (small). */
   recentTopN?: number;
   now?: () => number;
@@ -72,6 +78,7 @@ interface Page {
 export function createMarkdownProvider(opts: MarkdownProviderOptions): KnowledgeProvider {
   const root = resolve(opts.root);
   const draftsDir = resolve(opts.draftsDir);
+  const receiptsLog = resolve(opts.receiptsLog ?? join(opts.draftsDir, "..", "kb-receipts.jsonl"));
   const topN = opts.recentTopN ?? 5;
   const now = opts.now ?? Date.now;
 
@@ -172,6 +179,23 @@ export function createMarkdownProvider(opts: MarkdownProviderOptions): Knowledge
       return { entries };
     },
 
+    /**
+     * Beat 2 (spec #201): the provider owns persistence. The git+markdown
+     * implementation reuses the shared commit helper (already receipt-safe);
+     * a second provider is free to persist anywhere with zero git.
+     */
+    async commit(receipt: WriteReceipt, confirmation: CommitConfirmation): Promise<CommitResult> {
+      return commitDraft({
+        bookRoot: root,
+        draftsDir,
+        receiptsLog,
+        receiptId: receipt.receiptId,
+        pageId: receipt.pageId,
+        evidence: `provider commit (${confirmation.confirmedBy})`,
+        confirmation,
+      });
+    },
+
     async writePage(draft: KbDraft): Promise<WriteReceipt> {
       const receiptId = randomUUID();
       const pageId = draft.targetPageId ?? `${(draft.scope ? `${draft.scope}/` : "") + slug(draft.title)}.md`;
@@ -179,12 +203,8 @@ export function createMarkdownProvider(opts: MarkdownProviderOptions): Knowledge
       // targetPageId (caller-supplied) is sanitized later, at commit time.
       const file = join(draftsDir, `${receiptId}.md`);
       mkdirSync(dirname(file), { recursive: true });
-      const header = [
-        `<!-- agentos draft ${receiptId} -->`,
-        `<!-- target: ${draft.targetPageId ?? "NEW " + pageId} -->`,
-        "",
-      ].join("\n");
-      writeFileSync(file, header + draft.body, "utf8");
+      // Format owned by contracts (spec #224) — the committer strips it there.
+      writeFileSync(file, renderDraftFile(receiptId, draft.targetPageId ?? `NEW ${pageId}`, draft.body), "utf8");
       return { receiptId, pageId, createdAtMs: now() };
     },
   };

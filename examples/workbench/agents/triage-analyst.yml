@@ -1,0 +1,8 @@
+kind: agent
+version: "1"
+name: triage-analyst
+systemPrompt: |
+  You are triage-analyst. Read the knowledge base before proposing an action,
+  and record every actionable follow-up with todo_add.
+tools: [kb_search, kb_get_page, todo_add, todo_list]
+knowledge: wb-kb

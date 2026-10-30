@@ -76,6 +76,75 @@ describe("ledger lifecycle", () => {
   });
 });
 
+describe("session title", () => {
+  it("defaults to null, then can be set and read back", () => {
+    const led = freshLedger();
+    const row = led.createSession({ entry: "e", externalKey: "k", preset: "p" });
+    expect(row.title).toBeNull();
+    led.setTitle(row.id, "Ledger outage 09-11");
+    expect(led.getByExternalKey("k")?.title).toBe("Ledger outage 09-11");
+    led.close();
+  });
+
+  it("empty or whitespace-only clears the title back to null", () => {
+    const led = freshLedger();
+    const row = led.createSession({ entry: "e", externalKey: "k", preset: "p" });
+    led.setTitle(row.id, "named");
+    led.setTitle(row.id, "   ");
+    expect(led.getByExternalKey("k")?.title).toBeNull();
+    led.close();
+  });
+
+  it("trims and caps length, unknown id fails loudly", () => {
+    const led = freshLedger();
+    const row = led.createSession({ entry: "e", externalKey: "k", preset: "p" });
+    led.setTitle(row.id, "  padded  ");
+    expect(led.getByExternalKey("k")?.title).toBe("padded");
+    led.setTitle(row.id, "x".repeat(500));
+    expect(led.getByExternalKey("k")?.title).toHaveLength(200);
+    expect(() => led.setTitle("no-such-id", "t")).toThrow(/session not found/);
+    led.close();
+  });
+
+  it("existing rows from before the title column existed still open fine", () => {
+    const dir = mkdtempSync(join(tmpdir(), "agentos-ledger-"));
+    tempDirs.push(dir);
+    const path = join(dir, "sessions.db");
+    const first = openLedger(path);
+    const row = first.createSession({ entry: "e", externalKey: "pre-migration", preset: "p" });
+    first.close();
+    // Re-opening the same file simulates the ALTER TABLE migration path on an
+    // already-existing sessions table — must not throw, title stays readable.
+    const second = openLedger(path);
+    expect(second.getByExternalKey("pre-migration")?.title).toBeNull();
+    second.setTitle(row.id, "renamed after migration");
+    expect(second.getByExternalKey("pre-migration")?.title).toBe("renamed after migration");
+    second.close();
+  });
+});
+
+describe("deleteSession", () => {
+  it("removes the row; a second delete or any op on it fails loudly", () => {
+    const led = freshLedger();
+    const row = led.createSession({ entry: "e", externalKey: "gone", preset: "p" });
+    led.deleteSession(row.id);
+    expect(led.getByExternalKey("gone")).toBeUndefined();
+    expect(() => led.deleteSession(row.id)).toThrow(/session not found/);
+    expect(() => led.touch(row.id)).toThrow(/session not found/);
+    led.close();
+  });
+
+  it("deleting one row leaves the others untouched", () => {
+    const led = freshLedger();
+    const a = led.createSession({ entry: "e", externalKey: "a", preset: "p" });
+    const b = led.createSession({ entry: "e", externalKey: "b", preset: "p" });
+    led.deleteSession(a.id);
+    expect(led.getByExternalKey("a")).toBeUndefined();
+    expect(led.getByExternalKey("b")?.id).toBe(b.id);
+    led.close();
+  });
+});
+
 describe("ledgerPathFromEnv", () => {
   it("prefers AGENTOS_SESSION_DB verbatim", () => {
     expect(ledgerPathFromEnv({ AGENTOS_SESSION_DB: "/somewhere/led.db" })).toBe("/somewhere/led.db");
@@ -85,5 +154,153 @@ describe("ledgerPathFromEnv", () => {
     const p = ledgerPathFromEnv({});
     expect(p.endsWith(join(".agentos", "sessions.db"))).toBe(true);
     expect(p.startsWith("/")).toBe(true);
+  });
+});
+
+describe("boot sweep (spec #253)", () => {
+  it("marks stale running rows aborted and leaves settled rows alone", () => {
+    const ledger = freshLedger();
+    ledger.createSession({ entry: "rest", externalKey: "ghost", preset: "p" });
+    const done = ledger.createSession({ entry: "rest", externalKey: "done", preset: "p" });
+    ledger.markStatus(done.id, "idle");
+
+    expect(ledger.sweepRunning()).toBe(1);
+    expect(ledger.getByExternalKey("ghost")?.status).toBe("aborted");
+    expect(ledger.getByExternalKey("done")?.status).toBe("idle");
+    // idempotent: a second boot finds nothing to sweep
+    expect(ledger.sweepRunning()).toBe(0);
+    ledger.close();
+  });
+});
+
+describe("todo verbs (spec #310)", () => {
+  const item = (over: Partial<import("@agentos/contracts").TodoItem> = {}) => ({
+    id: "t1",
+    title: "Chase retry storm",
+    status: "todo" as const,
+    sourceKind: "chat" as const,
+    createdAt: 1,
+    updatedAt: 1,
+    ...over,
+  });
+
+  it("persists across a close/reopen (DB state, not memory) and upserts in place", () => {
+    const dir = mkdtempSync(join(tmpdir(), "agentos-todo-"));
+    tempDirs.push(dir);
+    const dbPath = join(dir, "sessions.db");
+    const a = openLedger(dbPath);
+    a.todoWrite(item({ priority: "P0", dueAt: 100 }));
+    // upsert is a full replace: callers (todo_update) pass the merged item
+    a.todoWrite(item({ status: "doing", priority: "P0", dueAt: 100, updatedAt: 2 }));
+    expect(a.todoList()).toHaveLength(1);
+    a.close();
+
+    const b = openLedger(dbPath);
+    const rows = b.todoList();
+    expect(rows[0]).toMatchObject({ id: "t1", status: "doing", priority: "P0", dueAt: 100, updatedAt: 2 });
+    b.close();
+  });
+
+  it("filters by status/project/due window and orders doing > todo > blocked > done", () => {
+    const led = freshLedger();
+    led.todoWrite(item({ id: "a", status: "done" }));
+    led.todoWrite(item({ id: "b", status: "blocked" }));
+    led.todoWrite(item({ id: "c", status: "doing", project: "proj-1", dueAt: 50 }));
+    led.todoWrite(item({ id: "d", status: "todo", project: "proj-1", dueAt: 500 }));
+    expect(led.todoList().map((t) => t.id).slice(0, 2)).toEqual(["c", "d"]);
+    expect(led.todoList({ project: "proj-1" }).map((t) => t.id)).toEqual(["c", "d"]);
+    expect(led.todoList({ dueBefore: 100 }).map((t) => t.id)).toEqual(["c"]);
+    expect(led.todoList({ status: "blocked" }).map((t) => t.id)).toEqual(["b"]);
+  });
+
+  it("delete is truthful about what existed", () => {
+    const led = freshLedger();
+    led.todoWrite(item());
+    expect(led.todoDelete("t1")).toBe(true);
+    expect(led.todoDelete("t1")).toBe(false);
+    expect(led.todoList()).toEqual([]);
+  });
+});
+
+describe("session role tag (spec #340)", () => {
+  it("persists the agent label across reopen and clears on null", () => {
+    const dir = mkdtempSync(join(tmpdir(), "agentos-agenttag-"));
+    tempDirs.push(dir);
+    const dbPath = join(dir, "sessions.db");
+    const a = openLedger(dbPath);
+    const row = a.createSession({ entry: "rest", externalKey: "web-r", preset: "p" });
+    a.setAgent(row.id, "analyst");
+    a.close();
+    const b = openLedger(dbPath);
+    expect(b.getByExternalKey("web-r")?.agent).toBe("analyst");
+    b.setAgent(row.id, null);
+    expect(b.getByExternalKey("web-r")?.agent).toBeNull();
+    b.close();
+  });
+});
+
+describe("workflow instance state (spec #364)", () => {
+  it("persists status transitions and step outcomes across reopen", () => {
+    const dir = mkdtempSync(join(tmpdir(), "agentos-wfrun-"));
+    tempDirs.push(dir);
+    const dbPath = join(dir, "sessions.db");
+    const a = openLedger(dbPath);
+    a.workflowRunCreate({ id: "run-1", workflow: "daily-brief", status: "running", trigger: "schedule", project: "proj-1", startedAtMs: 10, endedAtMs: null, steps: [], resumeFrom: null, error: null, sessionKey: null });
+    a.workflowRunUpdate("run-1", { status: "error", endedAtMs: 20, error: "step 2 failed", resumeFrom: 2, steps: [{ index: 0, status: "ok" }] });
+    a.close();
+
+    const b = openLedger(dbPath);
+    const row = b.workflowRunGet("run-1");
+    expect(row).toMatchObject({ status: "error", resumeFrom: 2, error: "step 2 failed", project: "proj-1" });
+    expect(row?.steps).toEqual([{ index: 0, status: "ok" }]);
+    expect(b.workflowRunList({ workflow: "daily-brief" })).toHaveLength(1);
+    expect(b.workflowRunList({ status: "done" })).toEqual([]);
+    expect(b.workflowRunList({ project: "other" })).toEqual([]);
+    b.close();
+  });
+
+  it("updating an unknown run fails loudly", () => {
+    const led = freshLedger();
+    expect(() => led.workflowRunUpdate("ghost", { status: "done" })).toThrow(/not found/);
+    led.close();
+  });
+});
+
+describe("scheduler lastRun persistence (spec #368)", () => {
+  it("survives reopen so an already-fired window is not re-fired", () => {
+    const dir = mkdtempSync(join(tmpdir(), "agentos-lastrun-"));
+    tempDirs.push(dir);
+    const dbPath = join(dir, "sessions.db");
+    const a = openLedger(dbPath);
+    expect(a.schedulerGetLastRun("daily")).toBeUndefined();
+    a.schedulerSetLastRun("daily", 1_000, 0);
+    a.schedulerSetLastRun("daily", 2_000, 2); // upsert
+    a.close();
+    const b = openLedger(dbPath);
+    expect(b.schedulerGetLastRun("daily")).toEqual({ lastRunMs: 2_000, missed: 2 });
+    b.close();
+  });
+});
+
+describe("project instances (spec #389/#390 storage law)", () => {
+  it("stores only template + title; rename and delete are truthful; survives reopen", () => {
+    const dir = mkdtempSync(join(tmpdir(), "agentos-proj-"));
+    tempDirs.push(dir);
+    const dbPath = join(dir, "sessions.db");
+    const a = openLedger(dbPath);
+    a.projectInstanceCreate({ id: "p1", template: "web-revamp", title: "Q2", createdAtMs: 1, updatedAtMs: 1 });
+    a.projectInstanceCreate({ id: "p2", template: "other", title: "X", createdAtMs: 2, updatedAtMs: 2 });
+    a.close();
+
+    const b = openLedger(dbPath);
+    expect(b.projectInstanceList().map((r) => r.id)).toEqual(["p2", "p1"]); // newest first
+    expect(b.projectInstanceList({ template: "web-revamp" }).map((r) => r.id)).toEqual(["p1"]);
+    expect(b.projectInstanceRename("p1", "Q3").title).toBe("Q3");
+    expect(() => b.projectInstanceRename("ghost", "x")).toThrow(/not found/);
+    expect(b.projectInstanceDelete("p2")).toBe(true);
+    expect(b.projectInstanceDelete("p2")).toBe(false);
+    // the stored row has no template-definition fields at all (#390 by construction)
+    expect(Object.keys(b.projectInstanceGet("p1")!).sort()).toEqual(["createdAtMs", "id", "template", "title", "updatedAtMs"]);
+    b.close();
   });
 });

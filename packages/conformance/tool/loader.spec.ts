@@ -71,3 +71,28 @@ describe("contract behaviors of the assembly line", () => {
     expect(spawnSurfaces.some((s) => s.includes("conformance-fake-token"))).toBe(false);
   });
 });
+
+describe("envRouting is executed at mount time (spec #207)", () => {
+  const prodOnly: ToolProviderManifest = {
+    kind: "tool",
+    version: "1",
+    name: "prod-only",
+    transport: "stdio",
+    command: "npx -y example-server",
+    auth: { mode: "none" },
+    envRouting: ["prod"],
+    schemaExchange: "json-schema",
+  } as ToolProviderManifest;
+
+  it("mounts only in a declared environment; unmounted elsewhere with a warning", () => {
+    expect(planTools([prodOnly], { env: {}, environment: "prod" }).plans.map((p) => p.key)).toEqual(["prod-only"]);
+    const off = planTools([prodOnly], { env: {}, environment: "non-prod" });
+    expect(off.plans).toEqual([]);
+    expect(off.errors).toEqual([]);
+    expect(off.warnings.some((w) => w.path === "envRouting")).toBe(true);
+  });
+
+  it("no environment selected means a restricted manifest stays out", () => {
+    expect(planTools([prodOnly], { env: {} }).plans).toEqual([]);
+  });
+});

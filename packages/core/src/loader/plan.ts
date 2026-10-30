@@ -20,6 +20,8 @@ export interface PlanOptions {
   env?: NodeJS.ProcessEnv;
   /** Registered sdk factories (name -> opaque object; loader never invokes them). */
   sdkFactories?: Record<string, unknown>;
+  /** Deployment environment label; defaults to env.AGENTOS_ENV. */
+  environment?: string;
 }
 
 export interface MountWarning {
@@ -43,7 +45,12 @@ function expandEnv(value: string, env: NodeJS.ProcessEnv, at: string, errors: Ma
   return value.replace(VAR, (whole, name: string) => {
     const v = env[name];
     if (v === undefined || v === "") {
-      errors.push({ path: at, message: `\${${name}} is not set in the environment`, hint: "export the var or fix the manifest" });
+      errors.push({
+        path: at,
+        category: "environment",
+        message: `\${${name}} is not set in the environment`,
+        hint: "export the var or fix the manifest",
+      });
       return whole;
     }
     return v;
@@ -56,8 +63,26 @@ export function planTools(manifests: readonly ToolProviderManifest[], opts: Plan
   const errors: ManifestError[] = [];
   const warnings: MountWarning[] = [];
 
+  const currentEnv = opts.environment ?? env.AGENTOS_ENV;
+
   for (const m of manifests) {
     if (m.enabled === false) continue; // declared, deliberately unmounted — kept in config for diff visibility
+
+    // envRouting executor (spec #207): the field is a MOUNT concern, so the
+    // loader is the one that acts on it. Absent = every environment. A
+    // restricted manifest with no environment selected stays unmounted and
+    // says so — silently mounting into an unknown env would defeat the point.
+    if (m.envRouting !== undefined && (currentEnv === undefined || !m.envRouting.includes(currentEnv))) {
+      warnings.push({
+        key: m.name,
+        path: "envRouting",
+        message:
+          currentEnv === undefined
+            ? `restricted to [${m.envRouting.join(", ")}] and no environment is selected (${"AGENTOS_ENV"}) — not mounted`
+            : `restricted to [${m.envRouting.join(", ")}], current env is "${currentEnv}" — not mounted`,
+      });
+      continue;
+    }
 
     const errorsBefore = errors.length;
     let candidate: Record<string, unknown>;
@@ -75,6 +100,7 @@ export function planTools(manifests: readonly ToolProviderManifest[], opts: Plan
         if (value === undefined || value === "") {
           errors.push({
             path: `${m.name}.auth.env`,
+            category: "environment",
             message: varName ? `\${${varName}} not resolvable — cannot mount` : "auth.env missing",
             hint: "credentials are leased by env-var name; export it or set enabled:false",
           });
@@ -102,10 +128,19 @@ export function planTools(manifests: readonly ToolProviderManifest[], opts: Plan
 
     if (m.allowedTools !== undefined) candidate.allowedTools = m.allowedTools;
     if (m.idempotent !== undefined) candidate.idempotent = m.idempotent;
+    // Sandbox declaration (spec #301): roots may carry ${VAR} like commands do.
+    if (m.sandbox !== undefined) {
+      candidate.sandbox = {
+        ...(m.sandbox.fsRoots
+          ? { fsRoots: m.sandbox.fsRoots.map((r) => expandEnv(r, env, `${m.name}.sandbox.fsRoots`, errors)) }
+          : {}),
+        ...(m.sandbox.network ? { network: { allow: [...m.sandbox.network.allow] } } : {}),
+      };
+    }
 
     const checked = toolMountPlanSchema.safeParse(candidate);
     if (checked.success) plans.push(checked.data);
-    else for (const e of formatIssues(checked.error.issues)) errors.push({ ...e, path: `${m.name}.${e.path}` });
+    else for (const e of formatIssues(checked.error.issues)) errors.push({ ...e, path: `${m.name}.${e.path}`, category: "schema" });
   }
 
   return { plans, errors, warnings };

@@ -43,7 +43,26 @@ export interface TranscriptEntry {
   readonly isError?: boolean;
   /** Unix epoch ms from the stored history; absent when the record carried none. */
   readonly timestampMs?: number;
+  /**
+   * Additive neutral marker (spec #311): a known change event this entry
+   * represents. Today only "todo.changed" exists — a todo_* tool call replayed
+   * from history. Absent for ordinary entries; consumers that do not know the
+   * value must render the entry exactly as before.
+   */
+  readonly event?: "todo.changed";
 }
+
+/**
+ * The authoritative registry of entry adapters shipped in this repo (spec
+ * #228). Entry adapters are code, not manifests, so preset validation needs
+ * one list — it used to be kept separately in preset-validate (["cli"]) and
+ * serve (["cli","rest"]), and a preset naming "rest" validated in one place
+ * and failed in the other. Community adapters extend the list at their own
+ * composition root; this is the set the CLI itself knows how to mount.
+ */
+export const ENTRY_ADAPTER_NAMES = ["cli", "rest"] as const;
+
+export type EntryAdapterName = (typeof ENTRY_ADAPTER_NAMES)[number];
 
 /** Mapping between the client-side session and the agent session it drives. */
 export interface SessionBinding {

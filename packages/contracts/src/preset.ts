@@ -20,6 +20,50 @@ export const presetSchema = manifestEnvelopeSchema.extend({
   tools: z.array(z.string().min(1)),
   /** Name of the entry manifest binding the client-facing channel. */
   entry: z.string().min(1),
+  /**
+   * Middle routing layer (spec #208): channel/tenant label → model manifest
+   * name OR alias. Priority is request override > channel entry > this
+   * preset's `model` slot. Absent = every channel uses the slot. Labels are
+   * the mounted entry names (cli / rest) and, for deployments that hand one
+   * preset to several tenants, tenant labels.
+   */
+  channelModels: z.record(z.string().min(1), z.string().min(1)).optional(),
+  /**
+   * Channel → entry-adapter routing table (spec #212). A channel is an
+   * inbound surface ("cli", "web"); the value names the code-registered
+   * EntryAdapter that serves it, i.e. one channel belongs to exactly one
+   * kernel (anti-pattern ③). Absent = the serving mode's own adapter serves
+   * the channel (serve --chat → cli, serve --web → rest); an explicit route
+   * to a DIFFERENT adapter is refused at boot. Adding a second route is a
+   * config edit, not a code path.
+   */
+  channels: z.record(z.string().min(1), z.string().min(1)).optional(),
+  /**
+   * Hard spend threshold (spec #163): once cumulative usage.log cost for this
+   * deployment reaches this many USD, a new turn asks a human before running.
+   * Absent = no budget gate. Data, not a service — git is the audit trail.
+   */
+  budgetUsd: z.number().positive().optional(),
+  /**
+   * Single-machine resource governance (spec #164): maximum concurrently
+   * running turns; further turns queue (FIFO) instead of failing.
+   */
+  maxConcurrentSessions: z.number().int().min(1).max(64).optional(),
+  /** Same resource-governance idea for workflow instances (#366): queue, never fail. */
+  maxConcurrentWorkflows: z.number().int().min(1).max(64).optional(),
+  /**
+   * Cross-endpoint fallback (spec #26): model manifest names tried IN ORDER
+   * when every alias of the primary manifest is unhealthy. Alias-level
+   * fallback stays inside a manifest (fallbackChain); this field is the
+   * explicit, declared escape across endpoints — never an implicit one.
+   */
+  fallbackModels: z.array(z.string().min(1)).optional(),
+  /** Fifth reference layer (spec #333): agent roles this business may run. */
+  agents: z.array(z.string().min(1)).optional(),
+  /** Sixth reference layer (spec #358): workflows this business may run. */
+  workflows: z.array(z.string().min(1)).optional(),
+  /** Skill mounts (stage C): names of skills manifests scanned at startup. */
+  skills: z.array(z.string().min(1)).optional(),
 });
 
 export type Preset = z.infer<typeof presetSchema>;

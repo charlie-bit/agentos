@@ -4,7 +4,7 @@
 
 AgentOS 是**可插拔的 Agent 执行框架**：一个 Harness 内核承载 agent 循环、会话和沙箱；三层 Provider 契约（Model / Tool / Knowledge）让模型、工具、知识库随时更换——**换业务 = 换 preset 文件，不动任何代码**。
 
-[English](README.md) · [中文文档](.docs/)
+[English](README.md) · [文档](docs/index.md) · [安全策略](SECURITY.md) · [变更日志](CHANGELOG.md) · [贡献指南](CONTRIBUTING.md)
 
 ---
 
@@ -33,7 +33,37 @@ AgentOS 是**可插拔的 Agent 执行框架**：一个 Harness 内核承载 age
 
 ---
 
+### 个人工作台
+
+五个面共用同一个内核,而且每一个都是配置或数据——没有任何一个需要改内核:
+
+| 面 | 所在 | web 可写? |
+|----|------|-----------|
+| 待办 | `.agentos/` 数据(+ 模型调用的 `todo_*` 工具) | 可写 |
+| 角色 | `config/agents/*.yml` | 不可——yml + git |
+| Workflow | `config/workflows/*.yml`(+ `config/projects` 模板) | 仅可触发 |
+| 项目 | 模板在 `config/projects/*.yml`,实例在 `.agentos/` | 实例:仅标题/数据 |
+| 外部 agent | `config/tools/*.yml`(MCP 是唯一路径) | 不可 |
+
 ## 架构概览
+
+### 产品面（v4）
+
+```mermaid
+flowchart LR
+  subgraph Config["config/*.yml —— git 所有，web 只读"]
+    A[角色 agents] --> M[启动期挂载]
+    W[workflow] --> M
+    P[项目模板] --> M
+    T[工具与知识] --> M
+  end
+  M --> K[内核 turn + 工具围栏]
+  K --> D[".agentos/ —— 数据"]
+  D --> I[项目实例 / 待办 / 运行记录]
+  I --> C[五区控制台:Home · Chats · Todos · Workflows · Projects]
+  C -.->|只读披露| Config
+```
+
 
 ![AgentOS 架构图](.docs/architecture-diagram.png)
 
@@ -71,13 +101,16 @@ interface KnowledgeProvider {
 一个工具服务器 = 注册表一条声明式 entry，运行时按 transport 挂载。
 
 ```yaml
-# tool-entry.yaml
-name: datadog-monitoring
-transport: stdio          # sdk | stdio | http
-auth: token-env:DATADOG_TOKEN
-allowedTools: ["dd_*"]
-envRouting: non-prod      # non-prod | prod
-idempotent: true          # 必填 - 决定是否可重试
+# config/tools/datadog.yml —— schema: packages/contracts/src/tool.ts
+kind: tool
+version: "1"
+name: datadog
+transport: http                 # sdk | stdio | http
+endpoint: https://${DATADOG_MCP_HOST}/rpc
+auth: { mode: bearer-token-env, env: DATADOG_TOKEN }   # 只写 env 变量名
+allowedTools: ["dd_*"]          # 可选；缺席 = 放行全部发现工具（drift 标记为未验证）
+envRouting: ["non-prod"]        # 可选数组；缺席 = 所有环境挂载
+idempotent: { default: false, overrides: { dd_search_logs: true } }  # 可选；缺席 = 永不重试
 schemaExchange: json-schema
 ```
 
@@ -87,14 +120,18 @@ schemaExchange: json-schema
 
 三层优先级路由（请求覆盖 → 频道/租户配置 → 全局默认），带降级链。
 
-```ts
-interface ModelProvider {
-  provider: 'openai' | 'anthropic' | 'ollama' | 'local'
-  models: Record<string, string>       // sonnet/haiku 等别名 → 真实 model id
-  fallbackChain: string[]              // 健康探活短路
-  usageAttr: { provider, model, tenant } // 用量归因标签
-  // 路由状态 ∈ DB（多 pod 安全）
-}
+```yaml
+# config/models/deepseek.yml —— 是租约，不是代码
+kind: model
+version: "1"
+name: deepseek
+provider: deepseek
+dialect: anthropic-compat        # 可选运行时方言（anthropic-compat | bedrock | openai-compat）
+baseUrlEnv: AGENTOS_DEEPSEEK_ANTHROPIC_BASE_URL   # env 变量名，不是 URL
+credentialsEnv: AGENTOS_DEEPSEEK_API_KEY          # env 变量名，不是 key
+models: { general: deepseek-chat, reasoner: deepseek-reasoner }
+fallbackChain: [general]         # 本 manifest 内的别名
+usageAttr: { costCenter: platform-eng }           # 归因标签 → usage.log
 ```
 
 ---
@@ -110,12 +147,16 @@ Manifest（静态声明） → Contract（版本化接口） → Loader（实例
 preset 是四层的唯一汇合点：一个业务的 preset 只做**引用**，不写任何实现。
 
 ```yaml
-# preset-example.yml —— 一业务一份；换业务 = 换这一个文件
-knowledge: { provider: weknora, workspaceId: w-123, tokenEnv: WEKNORA_TOKEN }
-model:      { provider: anthropic, policy: default }
-tools:      [ datadog-monitoring, github-actions ]
-entry:      { slack: { channel: "#engineering", confirmUI: blockkit } }
-# 凭证永不进 manifest，只留 tokenEnv 引用
+# config/presets/example.yml —— 一业务一份；换业务 = 换这一个文件
+kind: preset
+version: "1"
+name: example
+knowledge: local-markdown       # 引用 config/ 中的 manifest 名字，零内联配置
+model: deepseek
+tools: [mcp-filesystem, datadog ]
+entry: cli                      # 代码注册的 adapter 名（cli | rest）
+# channelModels: { rest: deepseek }   # 可选中间层：频道/租户 → 模型
+# 凭证永不进 manifest，只留 env 变量名引用（baseUrlEnv / credentialsEnv / auth.env）
 ```
 
 ### EntryAdapter — 入口层（最后补，非先行）
@@ -135,14 +176,14 @@ entry:      { slack: { channel: "#engineering", confirmUI: blockkit } }
 
 ### 落地顺序
 
-| Step | 做什么 | 验收 | 为什么在这 |
-|------|--------|------|-----------|
-| 0 | Manifest 元 schema + 四契约文本 | 每份契约能描述一个已有系统 | 纸面收敛，零风险 |
-| 1 | 已有项目的 MCP 注册表改 manifest 驱动 | 改造前后工具集零差异 | 有参照物，机制最容易显形 |
-| 2 | 引入第二个项目作为外来第一条 manifest 接入 | 幂等声明生效、非幂等工具被保护 | 立刻被第二个真实方压测 |
-| 3 | 抽取两个 ModelProvider 实现（如 OpenAI / Ollama） | 一次请求内换 provider，路由/降级正常 | 纯抽取，机制已广泛运行 |
-| 4 | EntryAdapter 两个实现：Slack + REST | 同一 preset 两端跑同一次对话 | 两实现原则契约定稿 |
-| 5 | knowledge-core + 多 provider + 跨运行时 conformance | 同一 preset 在两个运行时各跑通全流程 | 依赖前四步格式稳定 |
+| Step | 做什么 | 状态 | 验收 | 为什么在这 |
+|------|--------|------|------|-----------|
+| 0 | Manifest 元 schema + 四契约 | **已交付** | 每份契约能描述一个已有系统 | 纸面收敛，零风险 |
+| 1 | MCP 注册表改 manifest 驱动 | **已交付** | 改造前后工具集零差异 | 有参照物，机制最容易显形 |
+| 2 | 第二个外部项目经 manifest 接入 | **计划中**（#304） | 幂等声明生效、非幂等工具被保护 | 仍需一个真实第二方压测 |
+| 3 | 第三方 ModelProvider 方言 | **已交付** | 一次请求内换 provider，路由/降级正常 | `model-anthropic-compat` / `model-bedrock` / `model-openai-compat` |
+| 4 | EntryAdapter 两个实现：CLI + REST | **已交付** | 同一 preset 两端跑同一次对话 | Slack 是已拒绝边界（#171），CLI/REST 是参考实现对 |
+| 5 | 跨运行时 conformance | **计划中**（#144/#298） | 同一 preset 在两个运行时各跑通全流程 | 依赖前四步格式稳定 |
 
 ### 三个反模式（已否决）
 
@@ -228,7 +269,37 @@ LangGraph · CrewAI · AutoGen · 自定义框架
 | 2 | **Schema 以 JSON Schema 交换** | 中 | 不同版本的 schema 不兼容会静默丢全部工具 |
 | 3 | **idempotent 必填** | 中 | 非幂等工具在自动重试下执行不可逆操作 |
 | 4 | **注册表配置驱动** | 纪律 | 多 pod 下禁用 module-level 状态 |
-| 5 | **大结果治理进契约** | 纪律 | >10KB 结果落盘，只回指针 |
+| 5 | **大结果治理进契约** | 纪律 | >10KB 结果落盘、只回指针——对 agentos 自有（sdk transport）工具由 `packages/core/src/governance/offload.ts` 强制执行；内核侧 stdio/http 结果在 #301 落地前仍是内联 |
+| 6 | **多 pod 纪律（四条）** | 纪律 | ① 禁止 module-level 共享状态；② 会话状态只存在 ledger；③ 恢复靠重放已存转录，不靠内存 emitter；④ 数据库是唯一事实源。抄的是多 pod 系统换来的纪律，不是它的架构 |
+
+### 什么时候才该换 ledger 数据库
+
+默认是内嵌 `node:sqlite`——零外部依赖启动。所有 ledger 访问都走同一个接口（`packages/core/src/session/ledger.ts`），换驱动是实现替换，不是重写。只有下列触发条件**真的出现**时才换（与 RAG 四触发同构）：
+
+| 触发条件 | 为什么 sqlite 不够 |
+|----------|--------------------|
+| **并发写冲突**出现（写者排队/阻塞在单文件上） | 内嵌模型就是同一时刻一个写者 |
+| **多实例部署**（不止一个进程服务同一批会话） | 没有跨进程协调与故障转移 |
+| **> 1 万会话**且历史查询重 | 无索引服务器时全表扫描越来越贵 |
+
+这三条都不是框架需求，而是部署事实。一条都不成立时上 Postgres 是只有成本没有理由。
+
+---
+
+## 数据目录
+
+所有运行时产物从第一天起就只落一个根目录——`.agentos/`（#135）。不做镜像、不做同步：这个布局本身就是部署状态，迁移 = 拷贝。
+
+| 路径 | 内容 |
+|------|------|
+| `sessions.db` | ledger（id / 状态 / 标题 / 内核指针） |
+| `workspaces/<key>/` | 每会话工作区 + `tool-results/` 落盘文件 |
+| `kb-drafts/` | 未提交知识草稿（对搜索不可见） |
+| `kb-receipts.jsonl` | 草稿 → 提交台账 |
+| `usage.log` | 每轮用量归因元数据 |
+| `escalations.log`、`audit.jsonl` | 人工移交 + 执行门禁记录 |
+
+此树中的日志只记元数据；永不写入的内容见 `SECURITY.md`。
 
 ---
 
@@ -236,27 +307,43 @@ LangGraph · CrewAI · AutoGen · 自定义框架
 
 ### 环境要求
 
-- Node.js ≥ 20
-- TypeScript ≥ 5.4
+- **Node.js ≥ 22.5** —— ledger 使用内置 `node:sqlite` 驱动，该能力从 22.5 起存在（根 package.json 的 `engines` 写作 `>=22`）
+- **pnpm ≥ 9** —— 本仓库是 pnpm workspace，`npm install` 不会链接 workspace 包
 
 ### 安装
 
 ```bash
 git clone https://github.com/charlie-bit/agentos.git
 cd agentos
-npm install
+pnpm install
+pnpm build          # 先让 workspace 包产出 dist/，之后才能运行
 ```
+
+### 安装(npm)
+
+```bash
+npm i -g agentos              # 全局 CLI
+# 或免安装运行:
+npx agentos preset validate config/presets/example.yml
+```
+
+> 打包（spec #145/#299）：CLI 在构建期打包——workspace 包内联，`serve` 为懒加载 chunk，内核 SDK 是唯一声明的运行时依赖。`node scripts/pack-cli-check.mjs` 会 pack、解包到干净目录并在无 checkout 的情况下运行 `preset validate`（可入 CI）。
 
 ### 开发
 
 ```bash
-# 运行测试
-npm test
+# 全 workspace
+pnpm -r test
+pnpm -r typecheck
+pnpm -r lint
 
-# 类型检查
-npm run typecheck
+# 单个包
+pnpm --filter @agentos/core test
+
+# 校验随仓库发布的 preset（无副作用）
+node cli/main.mjs preset validate config/presets/example.yml
 ```
 
 ### 贡献
 
-详见 [CONTRIBUTING.md](./skills/CONTRIBUTING.md)。
+详见 [CONTRIBUTING.md](./CONTRIBUTING.md)——provider 实现、preset 编写与边界承诺（`skills/CONTRIBUTING.md` 属于 vendored 第三方插件树，不是本仓指南）。

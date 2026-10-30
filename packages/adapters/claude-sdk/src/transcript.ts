@@ -20,7 +20,7 @@
  * warning on the optional sink. This function does not throw. Losing the
  * scrollback must never cost the user their live session.
  */
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync, unlinkSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import type { TranscriptEntry } from "@agentos/contracts";
@@ -227,10 +227,14 @@ export function readTranscript(
         push({ role, text: block.text, ...stamp });
       } else if (block.type === "tool_use" && typeof block.name === "string") {
         const failed = typeof block.id === "string" ? outcomes.get(block.id) : undefined;
+        // Todo mutations replay as neutral change markers (spec #311): the
+        // fact that a todo moved is history; the todo itself lives in the DB.
+        const isTodoChange = /(^|__)todo_(add|update|remove)$/.test(block.name);
         push({
           role: "tool",
           text: JSON.stringify(block.input ?? null).slice(0, maxInput),
           toolName: block.name,
+          ...(isTodoChange ? { event: "todo.changed" as const } : {}),
           ...(failed === undefined ? {} : { isError: failed }),
           ...stamp,
         });
@@ -240,4 +244,37 @@ export function readTranscript(
   }
   if (capped) warn({ code: "entry-cap-reached", detail: String(maxEntries) });
   return entries;
+}
+
+export interface DeleteTranscriptOptions {
+  /** Only pass a value the ledger holds; a null pointer means no transcript. */
+  sdkSessionId: string;
+  /** The session workspace cwd (the fast-path project dir is derived from it). */
+  workspaceDir?: string;
+  env?: NodeJS.ProcessEnv;
+  homeDir?: string;
+}
+
+/**
+ * Delete one session's transcript from the kernel store.
+ *
+ * Cleanup, not a guarantee: a missing file (the session never took a turn, or
+ * the kernel already rotated it) returns false instead of throwing, because a
+ * delete that half-failed still must not fail the user's delete. The caller
+ * owns the ledger row; this function owns only the kernel's copy.
+ */
+export function deleteTranscript(options: DeleteTranscriptOptions): boolean {
+  const id = options.sdkSessionId;
+  // Same path-segment guard as the reader: an id is data from the ledger, but
+  // the ledger is not the only writer in a long-lived deployment.
+  if (typeof id !== "string" || id.length === 0 || /[/\\]/.test(id) || id.includes("..")) return false;
+  const root = storeRoot(options.env ?? process.env, options.homeDir ?? homedir());
+  const file = findTranscriptFile(id, options.workspaceDir, root, () => {});
+  if (file === null) return false;
+  try {
+    unlinkSync(file);
+    return true;
+  } catch {
+    return false;
+  }
 }

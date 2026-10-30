@@ -1,9 +1,9 @@
 /**
- * Active-model resolution: the two-layer priority chain
- *   request override (--model) > preset.model slot
- * (the mature-product pattern is request > channel/tenant > global; the
- * middle layer is the preset slot here, deployment-time, so no per-channel
- * table yet — that arrives with entry multi-tenancy).
+ * Active-model resolution: the three-layer priority chain (spec #208)
+ *   request override (--model) > channelModels[channel] > preset.model slot
+ * The middle layer is configuration (preset.channelModels), so a channel —
+ * the mounted entry name, or a tenant label in shared-preset deployments —
+ * can pin its own model without touching the global default.
  * An override may name a MANIFEST or an ALIAS (alias resolves to the manifest
  * that leases it). Failure is a humanized structured error that lists what
  * was available — guessing at model names is not a routing feature.
@@ -17,7 +17,26 @@ export interface ActiveModel {
   alias?: string;
   /** Resolved real model id; undefined = not overridden (kernel decides). */
   modelId?: string;
-  source: "preset" | "override";
+  source: "preset" | "channel" | "override";
+}
+
+/**
+ * Cross-endpoint fallback order (spec #26): declared names that actually
+ * resolve to model manifests, deduped, primary excluded. Unknown names are
+ * the validator's business (reference integrity), not routing's.
+ */
+export function fallbackManifestOrder(
+  primary: string,
+  declared: readonly string[] = [],
+  models: readonly ModelProviderManifest[] = [],
+): string[] {
+  const known = new Set(models.map((m) => m.name));
+  const out: string[] = [];
+  for (const name of declared) {
+    if (name === primary || !known.has(name) || out.includes(name)) continue;
+    out.push(name);
+  }
+  return out;
 }
 
 export type ResolveActiveResult = { ok: true; active: ActiveModel } | { ok: false; errors: ManifestError[] };
@@ -25,12 +44,33 @@ export type ResolveActiveResult = { ok: true; active: ActiveModel } | { ok: fals
 export function resolveActiveModel(args: {
   presetModel: string;
   override?: string;
+  /** Channel/tenant label selecting the middle layer (spec #208). */
+  channel?: string;
+  /** preset.channelModels: label → manifest name or alias. */
+  channelModels?: Readonly<Record<string, string>>;
   models: readonly ModelProviderManifest[];
 }): ResolveActiveResult {
   const byName = new Map(args.models.map((m) => [m.name, m]));
   const fail = (path: string, message: string, hint: string): ResolveActiveResult => ({ ok: false, errors: [{ path, message, hint }] });
 
   if (args.override === undefined || args.override === "") {
+    // Middle layer: a channel/tenant label may pin its own model. It is
+    // configuration, so an unresolvable label fails loudly instead of
+    // silently falling back to the preset slot.
+    const channelRef = args.channel === undefined ? undefined : args.channelModels?.[args.channel];
+    if (channelRef !== undefined) {
+      // A channel entry resolves exactly like an override: manifest name OR
+      // alias (both are legitimate config references).
+      const channelResult = resolveActiveModel({ presetModel: args.presetModel, override: channelRef, models: args.models });
+      if (!channelResult.ok) {
+        return {
+          ok: false,
+          errors: channelResult.errors.map((e) => ({ ...e, path: `channelModels.${args.channel}`, hint: "fix the channel override (manifest name or alias)" })),
+        };
+      }
+      const active = { ...channelResult.active, source: "channel" as const };
+      return { ok: true, active };
+    }
     const manifest = byName.get(args.presetModel);
     if (!manifest) {
       return fail("model", `preset references model manifest ${JSON.stringify(args.presetModel)}, which was not loaded`, `available: ${args.models.map((m) => m.name).join(", ") || "none"}`);

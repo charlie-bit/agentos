@@ -8,12 +8,15 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/t
 /** cumulative result-frame usage + attribution + escalation telemetry. */
 export function UsageBar({
   usage,
+  live,
   escalations,
   sessionId,
   onEscalated,
   modelShort,
 }: {
   usage: Usage;
+  /** Mid-turn deltas (spec #279); zero when idle. */
+  live?: Usage;
   escalations: number;
   sessionId: string;
   onEscalated: (count: number) => void;
@@ -32,16 +35,16 @@ export function UsageBar({
   const num = (n: number) => n.toLocaleString();
   return (
     <TooltipProvider delayDuration={200}>
-      <footer className="flex items-center gap-3 border-t border-border px-4 py-1.5 text-[11px] text-muted">
-        <span className="font-mono">
-          in {num(usage.input)} · out {num(usage.output)}
+      <footer className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border px-4 py-1.5 text-[11px] text-muted-foreground">
+        <span className="min-w-0 font-mono">
+          in {num(usage.input + (live?.input ?? 0))} · out {num(usage.output + (live?.output ?? 0))}
           {usage.cacheRead > 0 && <> · cache_rd {num(usage.cacheRead)}</>}
           {usage.cacheWrite > 0 && <> · cache_wr {num(usage.cacheWrite)}</>} · ≈${usage.cost.toFixed(4)}
         </span>
         {/* Attribution line (④a): WHO answered and HOW it is billed. Short name
             only — gateway/route/window suffixes are operations-side facts. */}
         {modelShort !== null && (
-          <span className="font-mono text-muted" title="answered by the model channel configured for this deployment">
+          <span className="font-mono text-muted-foreground" title="answered by the model channel configured for this deployment">
             · by {modelShort}
           </span>
         )}

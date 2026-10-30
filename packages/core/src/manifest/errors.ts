@@ -11,9 +11,19 @@
  */
 import type { z } from "zod";
 
+/** How the defect should be treated by a composition root (spec #204). */
+export type ErrorCategory = "schema" | "environment" | "reference";
+
 export interface ManifestError {
   /** Dotted field path; "$document" when the whole file is unusable. Never empty. */
   path: string;
+  /**
+   * Optional classification. "environment" = a resolvable-at-deploy-time
+   * problem (missing env var / credential lease) that may degrade ONE provider
+   * without aborting the whole boot; "schema" = the config lies and stays
+   * fail-loud; "reference" = dangling/duplicate name. Absent = unknown.
+   */
+  category?: ErrorCategory;
   /** One-line statement of what is wrong, written for a human reading config. */
   message: string;
   /** Optional actionable fix. */
@@ -42,6 +52,10 @@ function hintFor(path: string, code: string): string | undefined {
 }
 
 export function formatIssues(issues: readonly Issue[]): ManifestError[] {
+  return formatIssuesRaw(issues).map((e) => ({ ...e, category: e.category ?? "schema" }));
+}
+
+function formatIssuesRaw(issues: readonly Issue[]): ManifestError[] {
   const out: ManifestError[] = [];
   for (const issue of issues) {
     const dotted = issue.path.join(".");

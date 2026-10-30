@@ -1,0 +1,30 @@
+# Slack MCP without a browser: the reference Slack server over stdio.
+# Credentials are read by the SERVER from the environment: SLACK_BOT_TOKEN +
+# SLACK_TEAM_ID (bot token; the bot must be invited to the channels it reads).
+#
+# Mount this INSTEAD of slack.yml when there is no browser in the loop, or when
+# a long-lived credential is preferred over an OAuth session.
+# Reads are retry-safe; the three mutations are carved out explicitly.
+kind: tool
+version: "1"
+name: slack-key
+transport: stdio
+command: npx -y @modelcontextprotocol/server-slack@2025.4.25
+auth:
+  mode: none
+allowedTools:
+  - slack_list_channels
+  - slack_get_channel_history
+  - slack_get_thread_replies
+  - slack_get_users
+  - slack_get_user_profile
+  - slack_post_message
+  - slack_reply_to_thread
+  - slack_add_reaction
+idempotent:
+  default: true
+  overrides:
+    slack_post_message: false
+    slack_reply_to_thread: false
+    slack_add_reaction: false
+schemaExchange: json-schema

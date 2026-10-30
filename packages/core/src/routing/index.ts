@@ -6,7 +6,7 @@ export {
   type ModelChannel,
   type ModelLeaseLike,
 } from "./channel.js";
-export { resolveActiveModel, type ActiveModel, type ResolveActiveResult } from "./active.js";
+export { fallbackManifestOrder, resolveActiveModel, type ActiveModel, type ResolveActiveResult } from "./active.js";
 export { HealthGate, type GateOptions, type PickResult, type Probe, type ProbeResult } from "./health.js";
 export {
   appendAttribution,
@@ -15,3 +15,9 @@ export {
   type Attribution,
   type UsageCounts,
 } from "./attribution.js";
+export {
+  aggregateUsage,
+  type UsageAggregate,
+  type UsageAggregateRow,
+  type UsageQuery,
+} from "./usage.js";

@@ -6,14 +6,18 @@ export {
   plansToMcpServers,
   allowedToolsFromPlans,
   fsRootsFromPlans,
+  sandboxUnverified,
   canUseToolFromPlans,
   collectDrift,
   createInProcessServer,
+  withToolRetry,
+  type RetryPolicy,
   buildQueryOptions,
   consumeStream,
   runTurn,
   normalize,
   shortModelName,
+  BASE_SYSTEM_PROMPT,
   type ModelLease,
   type ResolvedChannel,
   type TurnInput,
@@ -22,7 +26,9 @@ export {
 
 export {
   readTranscript,
+  deleteTranscript,
   projectDirName,
   type ReadTranscriptOptions,
+  type DeleteTranscriptOptions,
   type TranscriptWarning,
 } from "./transcript.js";

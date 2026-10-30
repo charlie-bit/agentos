@@ -52,13 +52,8 @@ if (!preset || !model) fail("preset or its model manifest not found");
 
 // ---- 2. the assembly line: manifests -> plans (P3 rides this path) ---------
 process.env.AGENTOS_FS_ROOT = repoRoot; // deployment decides the mount root, not code
-// The demo gateway (mcp-remote-example) leases a bearer token; it points at an
-// unreachable example.com endpoint by design. The loader refuses to plan an
-// entry whose lease is unresolvable (fail loud), so the smoke HARNESS supplies
-// a placeholder — kernel marks the dead server failed at init, the plan has no
-// allowlist (drift pass-through), nothing else changes. Real deployments
-// export the real token; a fake never leaves this process.
-process.env.AGENTOS_EXAMPLE_MCP_TOKEN ??= "smoke-placeholder-not-real";
+// The doc placeholder gateway (mcp-remote-example) is declared enabled:false,
+// so the loader drops it without any credential sugar (spec #227).
 const toolManifests = manifests.filter((m) => m.kind === "tool");
 const { plans, errors: planErrors, warnings } = planTools(toolManifests);
 if (planErrors.length) fail(`plan errors:\n  ${planErrors.map((e) => `${e.path}: ${e.message}`).join("\n  ")}`);

@@ -6,10 +6,11 @@
 import { join } from "node:path";
 import { parseArgs } from "node:util";
 import { runPresetValidate, type CliResult } from "./preset-validate.js";
-import { runServe } from "./serve.js";
 import { runKbGate } from "./kb-gate.js";
 import { runKbLint } from "./kb-lint.js";
 import { runKbStale } from "./kb-stale.js";
+import { runDataExport, runDataGc, runDataImport } from "./data.js";
+import { runAgentsExport, runAgentsScaffold, runProjectsScaffold, runWorkflowsScaffold } from "./agents.js";
 
 const USAGE = [
   "agentos — pluggable agent platform (P5)",
@@ -18,12 +19,22 @@ const USAGE = [
   "  agentos preset validate <file-or-dir>       load + reference-check manifests",
   "  agentos serve --chat [--preset <path>] [--session <key>] [--continue] [--verbose]",
   "                                              interactive REPL (needs a model channel env)",
-  "  agentos serve --web [--port 8787] [--preset <path>]",
+  "  agentos serve --web [--port 8787] [--host 0.0.0.0] [--preset <path>] [--no-token]",
   "                                              SSE server + web console on 127.0.0.1",
   "  both accept --model <alias|manifest-name> (request-level, beats preset slot)",
   "  agentos kb gate                             P7b trigger: escalations vs window",
   "  agentos kb lint <dir> [--json] [--strict]  frontmatter conformance (exit 1 = errors)",
   "  agentos kb stale [<dir>]                    re-verification queue (most overdue first)",
+  "  agentos projects validate <file-or-dir>      load + reference-check project templates",
+  "  agentos projects scaffold <name>            write a template skeleton yml",
+  "  agentos workflows validate <file-or-dir>      load + reference-check workflows",
+  "  agentos workflows scaffold <name>            write a five-step skeleton yml",
+  "  agentos agents validate <file-or-dir>         load + reference-check agent roles",
+  "  agentos agents scaffold <name>                write a skeleton role yml",
+  "  agentos agents export <name> [--out <file>]   print/write a role yml (share or back up)",
+  "  agentos data export <file.json>             bundle sessions + logs + drafts (no transcripts)",
+  "  agentos data import <file.json>             restore a bundle (idempotent by external key)",
+  "  agentos data gc [--keep-days N] [--dry-run] age out drafts/logs/workspaces",
 ];
 
 export async function run(argv: readonly string[]): Promise<CliResult> {
@@ -58,6 +69,44 @@ export async function run(argv: readonly string[]): Promise<CliResult> {
       if (sub === "stale") return runKbStale(args);
       return { exitCode: 2, lines: ["✗ unknown kb subcommand (try: kb gate | kb lint | kb stale)", ...USAGE.slice(2)] };
     }
+    case "agents": {
+      const [sub, ...args] = rest;
+      if (sub === "scaffold") return runAgentsScaffold(args);
+      if (sub === "export") return runAgentsExport(args);
+      if (sub === "validate") {
+        const target = args[0];
+        if (!target || target.startsWith("-")) return { exitCode: 2, lines: ["✗ agents validate requires <file-or-dir>"] };
+        return runPresetValidate(target); // same loader path: agent kind is routed (#332)
+      }
+      return { exitCode: 2, lines: ["✗ unknown agents subcommand (try: agents validate | scaffold | export)"] };
+    }
+    case "workflows": {
+      const [sub, ...args] = rest;
+      if (sub === "scaffold") return runWorkflowsScaffold(args);
+      if (sub === "validate") {
+        const target = args[0];
+        if (!target || target.startsWith("-")) return { exitCode: 2, lines: ["✗ workflows validate requires <file-or-dir>"] };
+        return runPresetValidate(target);
+      }
+      return { exitCode: 2, lines: ["✗ unknown workflows subcommand (try: workflows validate | scaffold)"] };
+    }
+    case "projects": {
+      const [sub, ...args] = rest;
+      if (sub === "scaffold") return runProjectsScaffold(args);
+      if (sub === "validate") {
+        const target = args[0];
+        if (!target || target.startsWith("-")) return { exitCode: 2, lines: ["✗ projects validate requires <file-or-dir>"] };
+        return runPresetValidate(target);
+      }
+      return { exitCode: 2, lines: ["✗ unknown projects subcommand (try: projects validate | scaffold)"] };
+    }
+    case "data": {
+      const [sub, ...args] = rest;
+      if (sub === "export") return runDataExport(args);
+      if (sub === "import") return runDataImport(args);
+      if (sub === "gc") return runDataGc(args);
+      return { exitCode: 2, lines: ["✗ unknown data subcommand (try: data export | import | gc)", ...USAGE.slice(2)] };
+    }
     case "serve": {
       const { values } = parseArgs({
         args: rest,
@@ -65,11 +114,13 @@ export async function run(argv: readonly string[]): Promise<CliResult> {
           chat: { type: "boolean" },
           web: { type: "boolean" },
           port: { type: "string" },
+          host: { type: "string" },
           preset: { type: "string", default: "config/presets/example.yml" },
           session: { type: "string" },
           model: { type: "string" },
           continue: { type: "boolean" },
           verbose: { type: "boolean" },
+          "no-token": { type: "boolean" },
         },
         strict: true,
       });
@@ -79,6 +130,9 @@ export async function run(argv: readonly string[]): Promise<CliResult> {
       if (values.chat && values.web) {
         return { exitCode: 2, lines: ["✗ --chat and --web are mutually exclusive", ...USAGE.slice(2)] };
       }
+      // Lazily loaded (spec #299): the packed artifact must run preset validate
+      // / kb / data WITHOUT the kernel SDK present; only `serve` needs it.
+      const { runServe } = await import("./serve.js");
       const exitCode = await runServe({
         preset: values.preset ?? "config/presets/example.yml",
         session: values.session,
@@ -87,6 +141,8 @@ export async function run(argv: readonly string[]): Promise<CliResult> {
         verbose: values.verbose,
         web: values.web,
         port: values.port === undefined ? undefined : Number(values.port),
+        ...(values.host ? { host: values.host } : {}),
+        ...(values["no-token"] ? { noToken: true } : {}),
       });
       return { exitCode, lines: [] }; // already streamed by the composition root
     }

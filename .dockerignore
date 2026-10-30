@@ -1,0 +1,15 @@
+**/node_modules
+**/dist
+.git
+.agentos
+# local credentials and local-only config never enter the build context
+**/.env*
+**/*.local
+config/presets/local.yml
+config/skills/local.yml
+skills-base
+.docs
+.reference
+test-results
+playwright-report
+.DS_Store

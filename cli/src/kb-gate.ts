@@ -46,7 +46,7 @@ function loadEscalations(path: string): Escalation[] {
   return out;
 }
 
-function loadGate(configDir: string, now: () => number): { minPerWeek: number; windowDays: number; source: string } {
+function loadGate(configDir: string): { minPerWeek: number; windowDays: number; source: string } {
   const dir = join(configDir, "knowledge");
   if (existsSync(dir)) {
     const { loaded } = loadManifestDir(dir);
@@ -58,7 +58,6 @@ function loadGate(configDir: string, now: () => number): { minPerWeek: number; w
       }
     }
   }
-  void now;
   return { ...DEFAULT_GATE, source: "default (manifest carries no escalationGate)" };
 }
 
@@ -68,7 +67,7 @@ export function runKbGate(
   now: () => number = Date.now,
   includePaths: readonly string[] = [],
 ): CliResult {
-  const gate = loadGate(resolve(configDir), now);
+  const gate = loadGate(resolve(configDir));
   const all = [...loadEscalations(escalationsPath), ...includePaths.flatMap((p) => loadEscalations(p))];
   const since = now() - gate.windowDays * DAY;
   const inWindow = all.filter((e) => e.ts >= since);

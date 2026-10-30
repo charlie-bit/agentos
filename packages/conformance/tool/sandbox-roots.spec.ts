@@ -105,3 +105,43 @@ describe("canUseTool hard gate (④a): execution mirrors the advertisement", () 
     expect(gate("mcp__mcp-filesystem__read_file")).toBe(true);
   });
 });
+
+describe("sandbox declaration is the single authorization source (spec #301)", () => {
+  it("declared fsRoots (after ${VAR} expansion) reach additionalDirectories; argv is ignored", async () => {
+    const { planTools } = await import("@agentos/core");
+    const { fsRootsFromPlans, buildQueryOptions } = await import("@agentos/adapter-claude-sdk");
+    const manifest = {
+      kind: "tool",
+      version: "1",
+      name: "srv",
+      transport: "stdio",
+      command: "npx -y some-server /should/not/be/granted",
+      auth: { mode: "none" },
+      sandbox: { fsRoots: ["${SANDBOX_ROOT}"], network: { allow: ["api.example.invalid"] } },
+      schemaExchange: "json-schema",
+    } as const;
+    const { plans, errors } = planTools([manifest as never], { env: { SANDBOX_ROOT: "/declared/root" } });
+    expect(errors).toEqual([]);
+    expect(plans[0]?.sandbox?.fsRoots).toEqual(["/declared/root"]);
+
+    const roots = fsRootsFromPlans(plans, "/workspace");
+    expect(roots).toContain("/declared/root");
+    expect(roots).toContain("/workspace");
+    expect(roots).not.toContain("/should/not/be/granted");
+
+    const opts = buildQueryOptions(
+      { model: { provider: "v" }, prompt: "p", toolMounts: plans, workspaceDir: "/workspace" },
+      {},
+    ) as { additionalDirectories?: string[] };
+    expect(opts.additionalDirectories).toEqual(expect.arrayContaining(["/declared/root", "/workspace"]));
+    expect(opts.additionalDirectories).not.toContain("/should/not/be/granted");
+  });
+
+  it("a manifest with no sandbox is reported as unverified, not silently guessed", async () => {
+    const { sandboxUnverified } = await import("@agentos/adapter-claude-sdk");
+    const plan = { key: "legacy", transport: "stdio" as const, stdio: { command: "x", args: ["/guess"] } };
+    expect(sandboxUnverified([plan])).toEqual(["legacy"]);
+    const declared = { key: "ok", transport: "stdio" as const, stdio: { command: "x" }, sandbox: { fsRoots: ["/r"] } };
+    expect(sandboxUnverified([declared])).toEqual([]);
+  });
+});

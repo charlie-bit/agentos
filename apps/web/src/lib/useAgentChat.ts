@@ -4,12 +4,15 @@
  * through the ledger pointer — the client just changes which key it sends).
  */
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
-import { chat, getMessages, sessionId as initialSessionId } from "./api";
+import { abortSession, chat, getMessages, SESSION_KEY, sessionId as initialSessionId } from "./api";
 import { initialState, reduce, type Frame } from "./chat-reducer";
+import { withRetry } from "./retry";
 
 export function useAgentChat() {
   const [state, dispatch] = useReducer(reduce, initialState);
   const [sessionId, setSessionId] = useState<string>(initialSessionId());
+  /** Scope picked in a project/role panel; applies to the next turn (#403). */
+  const [scope, setScope] = useState<{ agent?: string; project?: string }>({});
   const busy = useRef(false);
 
   /**
@@ -42,23 +45,45 @@ export function useAgentChat() {
       busy.current = true;
       dispatch({ t: "send", text });
       dispatch({ t: "stream_start" });
-      const onFrame = (frame: Frame) => dispatch({ t: "frame", frame });
+      let received = false;
+      const onFrame = (frame: Frame) => {
+        received = true;
+        dispatch({ t: "frame", frame });
+      };
       try {
-        await chat(sessionId, text, onFrame);
+        // Retry only when the stream died before delivering anything (#282):
+        // a half-consumed stream is replayed from history, never re-sent.
+        await withRetry(() => chat(sessionId, text, onFrame, scope), received ? [] : undefined);
       } catch {
-        onFrame({ type: "result", payload: { subtype: "network-error", isError: true } });
+        onFrame({ type: "result", payload: { subtype: "network", isError: true, message: "stream interrupted" } });
+        try {
+          const { entries } = await getMessages(sessionId);
+          if (entries?.length) dispatch({ t: "hydrate", items: entries });
+        } catch {
+          /* history is a nicety: the failure card already told the user */
+        }
       } finally {
         dispatch({ t: "stream_end" });
         busy.current = false;
       }
       return true;
     },
-    [sessionId],
+    [sessionId, scope],
   );
+
+  /**
+   * Stop the current turn (spec #255). The server aborts and ends the stream;
+   * the reader above then observes `done` and dispatches stream_end, which
+   * marks anything still streaming as aborted.
+   */
+  const stop = useCallback(async () => {
+    if (!busy.current) return;
+    await abortSession(sessionId).catch(() => undefined);
+  }, [sessionId]);
 
   const pickSession = useCallback((browserId: string) => {
     try {
-      localStorage.setItem("agentos.web.session", browserId);
+      localStorage.setItem(SESSION_KEY, browserId);
     } catch {
       /* ephemeral */
     }
@@ -66,5 +91,19 @@ export function useAgentChat() {
     dispatch({ t: "session_switched" });
   }, []);
 
-  return { state, send, sessionId, pickSession, resolveConfirm: () => dispatch({ t: "confirm_resolved" }) };
+  /** Fresh browser id => fresh ledger row. Nothing exists server-side until the
+   * first send, which is exactly how a first-time visitor behaves. */
+  const newSession = useCallback(() => pickSession(crypto.randomUUID()), [pickSession]);
+
+  return {
+    state,
+    send,
+    scope,
+    setScope,
+    sessionId,
+    pickSession,
+    newSession,
+    stop,
+    resolveConfirm: () => dispatch({ t: "confirm_resolved" }),
+  };
 }

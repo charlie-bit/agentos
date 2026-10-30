@@ -41,4 +41,9 @@ idempotent:
     list_directory_with_sizes: true
     directory_tree: true
     list_allowed_directories: true
+# Sandbox declaration (spec #301): the ONLY root this mount may touch. The
+# adapter grants exactly this set instead of inferring from argv.
+sandbox:
+  fsRoots:
+    - ${AGENTOS_FS_ROOT}
 schemaExchange: json-schema

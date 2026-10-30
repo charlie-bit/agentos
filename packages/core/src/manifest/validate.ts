@@ -12,12 +12,15 @@
  * adapter names (cli/P1b-2 will feed it from its registry), not against manifests.
  */
 import type { LoadedManifest } from "./load.js";
-import type { ManifestError } from "./errors.js";
+import type { ErrorCategory, ManifestError } from "./errors.js";
 
 /** A manifest-layer finding: ManifestError plus the file it came from. */
 export interface ValidationError extends ManifestError {
   source: string;
 }
+
+/** Validate-phase findings are reference defects by definition (spec #204). */
+const REF: ErrorCategory = "reference";
 
 export interface ValidateOptions {
   /** Registered entry-adapter names from code. Absent = none registered. */
@@ -37,6 +40,7 @@ export function validatePresetRefs(
     if (first) {
       errors.push({
         source,
+        category: REF,
         path: "name",
         message: `duplicate manifest name ${JSON.stringify(manifest.name)} — already declared in ${first.source}`,
         hint: "every manifest name must be unique; slots resolve by name",
@@ -63,6 +67,74 @@ export function validatePresetRefs(
   }
 
   // 3. Preset four slots must resolve to declared, kind-matching manifests.
+  const agentByName = new Map<string, { baseAgent?: string; source: string }>();
+  for (const { source, manifest } of loaded) {
+    if (manifest.kind === "agent") agentByName.set(manifest.name, { ...(manifest.baseAgent ? { baseAgent: manifest.baseAgent } : {}), source });
+  }
+  for (const { source, manifest } of loaded) {
+    if (manifest.kind !== "agent") continue;
+    if (manifest.baseAgent !== undefined) {
+      if (!agentByName.has(manifest.baseAgent)) {
+        errors.push({ source, category: REF, path: "baseAgent", message: `references agent ${JSON.stringify(manifest.baseAgent)}, which no config/agents manifest declares`, hint: "external agents are MCP tools (#418); baseAgent only names a local role" });
+      } else {
+        // cycle detection: walk the base chain from this agent
+        const seen = new Set<string>([manifest.name]);
+        let cursor: string | undefined = manifest.baseAgent;
+        while (cursor !== undefined) {
+          if (seen.has(cursor)) {
+            errors.push({ source, category: REF, path: "baseAgent", message: `baseAgent chain forms a cycle (${[...seen, cursor].join(" → ")})` });
+            break;
+          }
+          seen.add(cursor);
+          cursor = agentByName.get(cursor)?.baseAgent;
+        }
+      }
+    }
+    const check = (slot: "knowledge" | "model") => {
+      const ref = manifest[slot];
+      if (ref === undefined) return;
+      const kind = slot;
+      const found = byName.get(ref);
+      if (!found) errors.push({ source, category: REF, path: slot, message: `references ${JSON.stringify(ref)}, which no manifest declares` });
+      else if (found.kind !== kind) errors.push({ source, category: REF, path: slot, message: `references ${JSON.stringify(ref)} as a ${kind}, but it is a ${JSON.stringify(found.kind)} manifest` });
+    };
+    check("knowledge");
+    check("model");
+    // agent.tools are BARE TOOL NAMES inside mounted providers (#336, e.g.
+    // kb_search / todo_add) — runtime fence entries, not manifest references,
+    // so they are not statically resolvable here. knowledge/model/baseAgent
+    // remain manifest references and are checked above.
+  }
+
+  for (const { source, manifest } of loaded) {
+    if (manifest.kind !== "workflow") continue;
+    manifest.steps.forEach((step, i) => {
+      if (step.type === "agent" && !byName.has(step.agent)) {
+        errors.push({ source, category: REF, path: `steps.${i}.agent`, message: `references agent ${JSON.stringify(step.agent)}, which no config/agents manifest declares`, hint: "external agents are MCP tools; workflow agent steps name local roles" });
+      }
+      if (step.type === "review" && !byName.has(step.agent)) {
+        errors.push({ source, category: REF, path: `steps.${i}.agent`, message: `references reviewer ${JSON.stringify(step.agent)}, which no config/agents manifest declares`, hint: "a review step is a mounted role, not a prompt" });
+      }
+    });
+  }
+
+  for (const { source, manifest } of loaded) {
+    if (manifest.kind !== "project") continue;
+    const checks: Array<["agents" | "workflows" | "tools" | "knowledge", string]> = [
+      ["agents", "agent"],
+      ["workflows", "workflow"],
+      ["tools", "tool"],
+      ["knowledge", "knowledge"],
+    ];
+    for (const [slot, kind] of checks) {
+      (manifest[slot] ?? []).forEach((ref, i) => {
+        const found = byName.get(ref);
+        if (!found) errors.push({ source, category: REF, path: `${slot}.${i}`, message: `references ${JSON.stringify(ref)}, which no manifest declares` });
+        else if (found.kind !== kind) errors.push({ source, category: REF, path: `${slot}.${i}`, message: `references ${JSON.stringify(ref)} as a ${kind}, but it is a ${JSON.stringify(found.kind)} manifest` });
+      });
+    }
+  }
+
   const entryNames = new Set(opts.entryNames ?? []);
   for (const { source, manifest } of loaded) {
     if (manifest.kind !== "preset") continue;
@@ -85,6 +157,11 @@ export function validatePresetRefs(
     };
     checkManifestRef("knowledge", manifest.knowledge);
     checkManifestRef("model", manifest.model);
+    (manifest.skills ?? []).forEach((ref, i) => {
+      const found = byName.get(ref);
+      if (!found) errors.push({ source, category: REF, path: `skills.${i}`, message: `references ${JSON.stringify(ref)}, which no skills manifest declares` });
+      else if (found.kind !== "skills") errors.push({ source, category: REF, path: `skills.${i}`, message: `references ${JSON.stringify(ref)} as a skills mount, but it is a ${JSON.stringify(found.kind)} manifest` });
+    });
 
     const seen = new Set<string>();
     manifest.tools.forEach((ref, i) => {
@@ -110,9 +187,53 @@ export function validatePresetRefs(
       }
     });
 
+    (manifest.workflows ?? []).forEach((ref, i) => {
+      const found = byName.get(ref);
+      if (!found) errors.push({ source, category: REF, path: `workflows.${i}`, message: `references workflow ${JSON.stringify(ref)}, which no config/workflows manifest declares` });
+      else if (found.kind !== "workflow") errors.push({ source, category: REF, path: `workflows.${i}`, message: `references ${JSON.stringify(ref)} as a workflow, but it is a ${JSON.stringify(found.kind)} manifest` });
+    });
+
+    (manifest.agents ?? []).forEach((ref, i) => {
+      const found = byName.get(ref);
+      if (!found) errors.push({ source, category: REF, path: `agents.${i}`, message: `references agent ${JSON.stringify(ref)}, which no config/agents manifest declares` });
+      else if (found.kind !== "agent") errors.push({ source, category: REF, path: `agents.${i}`, message: `references ${JSON.stringify(ref)} as an agent, but it is a ${JSON.stringify(found.kind)} manifest` });
+    });
+
+    (manifest.fallbackModels ?? []).forEach((ref, i) => {
+      const found = byName.get(ref);
+      if (!found) {
+        errors.push({
+          source,
+          category: REF,
+          path: `fallbackModels.${i}`,
+          message: `references model manifest ${JSON.stringify(ref)}, which no manifest declares`,
+        });
+      } else if (found.kind !== "model") {
+        errors.push({
+          source,
+          category: REF,
+          path: `fallbackModels.${i}`,
+          message: `references ${JSON.stringify(ref)} as a model, but that name is a ${JSON.stringify(found.kind)} manifest`,
+        });
+      }
+    });
+
+    for (const [channel, target] of Object.entries(manifest.channels ?? {})) {
+      if (!entryNames.has(target)) {
+        errors.push({
+          source,
+          category: REF,
+          path: `channels.${channel}`,
+          message: `routes channel ${JSON.stringify(channel)} to entry adapter ${JSON.stringify(target)}, which is not registered`,
+          hint: "channel targets are code-registered entry names (see ENTRY_ADAPTER_NAMES)",
+        });
+      }
+    }
+
     if (!entryNames.has(manifest.entry)) {
       errors.push({
         source,
+        category: REF,
         path: "entry",
         message: `references ${JSON.stringify(manifest.entry)}, which is not a registered entry adapter`,
         hint: "entry adapters come from code registration (validate entryNames option), not from config manifests",

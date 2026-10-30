@@ -6,8 +6,16 @@ export {
   type CommitDraftArgs,
   type CommitDraftResult,
 } from "./writeback.js";
-export { renderIndex, renderOverview } from "./render.js";
-export { buildKbTools, KB_POINTER_LINE, type KbToolContext } from "./tools.js";
+export { MAX_INDEX_ENTRIES, renderIndex, renderOverview } from "./render.js";
+export {
+  OFFLOAD_THRESHOLD_BYTES,
+  offloadIfLarge,
+  type OffloadOptions,
+  type OffloadOutcome,
+  type OffloadPointer,
+} from "./offload.js";
+export { buildKbTools, KB_POINTER_LINE, kbPointerLine, type KbToolContext } from "./tools.js";
+export { buildTodoTools, type TodoToolContext } from "./todo-tools.js";
 export {
   splitFrontmatter,
   validatePageFrontmatter,

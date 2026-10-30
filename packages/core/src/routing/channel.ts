@@ -7,27 +7,14 @@
  * never persisted, never on an event stream — same hygiene law as ToolMountPlan.
  */
 
-/** The manifest subset every dialect consumes. */
-export interface ModelLeaseLike {
-  provider: string;
-  baseUrlEnv?: string;
-  credentialsEnv?: string;
-}
+/**
+ * The manifest subset every dialect consumes — the contract's ModelLeaseSpec
+ * (spec #202: exactly one provider-runtime type in the repo).
+ */
+export type ModelLeaseLike = import("@agentos/contracts").ModelLeaseSpec;
+export type ModelChannel = import("@agentos/contracts").ModelChannel;
 
-export interface ModelChannel {
-  /** Anthropic-compatible endpoint URL, when leased via env. */
-  baseUrl?: string;
-  /** Credential value for that URL, read from env at this boundary only. */
-  authToken?: string;
-  /**
-   * Vendor-native credential chain marker (e.g. "bedrock"): no url/key here —
-   * the kernel's documented switch owns the chain. Mutually exclusive with a
-   * leased baseUrl in practice (selection encodes that rule).
-   */
-  nativeChain?: string;
-}
-
-export type DialectTag = "anthropic-compat" | "bedrock";
+export type DialectTag = "anthropic-compat" | "bedrock" | "openai-compat";
 
 /**
  * Dialect selection — one rule, one home:
@@ -37,6 +24,11 @@ export type DialectTag = "anthropic-compat" | "bedrock";
  * a relocation, not a policy change.)
  */
 export function selectDialect(lease: ModelLeaseLike): DialectTag {
+  // An explicit manifest declaration wins (additive field, #210): it is the
+  // only way a non-Anthropic dialect can be reached without guessing.
+  if (lease.dialect === "anthropic-compat" || lease.dialect === "bedrock" || lease.dialect === "openai-compat") {
+    return lease.dialect;
+  }
   return !lease.baseUrlEnv && lease.provider === "aws-bedrock" ? "bedrock" : "anthropic-compat";
 }
 

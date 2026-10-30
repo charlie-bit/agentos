@@ -8,7 +8,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
-import { projectDirName, readTranscript, type TranscriptWarning } from "../index.js";
+import { projectDirName, readTranscript, deleteTranscript, type TranscriptWarning } from "../index.js";
 
 const dirs: string[] = [];
 afterAll(() => {
@@ -213,5 +213,48 @@ describe("readTranscript: lookup and safety", () => {
     ]);
     const out = readTranscript(SID, workspaceDir, { homeDir: home, env: {}, maxToolInputChars: 50 });
     expect(out[0]?.text.length).toBe(50);
+  });
+});
+
+describe("todo.changed replay marker (spec #311)", () => {
+  it("todo_* tool calls replay with the additive event; ordinary tools do not", () => {
+    const dir = mkdtempSync(join(tmpdir(), "agentos-tr-todo-"));
+    const home = join(dir, ".claude");
+    const cwd = "/w";
+    mkdirSync(join(home, "projects", projectDirName(cwd)), { recursive: true });
+    const file = join(home, "projects", projectDirName(cwd), "s-todo.jsonl");
+    writeFileSync(
+      file,
+      [
+        JSON.stringify({ type: "assistant", message: { content: [{ type: "tool_use", id: "a", name: "todo_add", input: { title: "x" } }] }, timestamp: "2026-01-01T00:00:00Z" }),
+        JSON.stringify({ type: "assistant", message: { content: [{ type: "tool_use", id: "b", name: "kb_search", input: { q: "y" } }] }, timestamp: "2026-01-01T00:00:01Z" }),
+        JSON.stringify({ type: "user", message: { content: [{ type: "tool_result", tool_use_id: "a", is_error: false }] } }),
+      ].join("\n"),
+    );
+    const entries = readTranscript("s-todo", cwd, { env: {}, homeDir: dir });
+    const todo = entries.find((e) => e.toolName === "todo_add");
+    const kb = entries.find((e) => e.toolName === "kb_search");
+    expect(todo?.event).toBe("todo.changed");
+    expect(kb?.event).toBeUndefined();
+    rmSync(dir, { recursive: true, force: true });
+  });
+});
+
+describe("deleteTranscript: session deletion leaves no orphan conversation", () => {
+  it("removes the kernel's jsonl; a second call is a no-op", () => {
+    const { home, workspaceDir } = store([userText("hello")]);
+    expect(deleteTranscript({ sdkSessionId: SID, workspaceDir, env: {}, homeDir: home })).toBe(true);
+    expect(deleteTranscript({ sdkSessionId: SID, workspaceDir, env: {}, homeDir: home })).toBe(false);
+  });
+
+  it("refuses an id that could escape the store", () => {
+    const { home, workspaceDir } = store([userText("hello")]);
+    expect(deleteTranscript({ sdkSessionId: "../../etc/passwd", workspaceDir, env: {}, homeDir: home })).toBe(false);
+  });
+
+  it("a session that never took a turn has no file to delete", () => {
+    const home = mkdtempSync(join(tmpdir(), "agentos-transcript-empty-"));
+    dirs.push(home);
+    expect(deleteTranscript({ sdkSessionId: SID, env: {}, homeDir: home })).toBe(false);
   });
 });

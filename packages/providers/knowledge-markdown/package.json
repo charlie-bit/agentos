@@ -18,6 +18,7 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@agentos/contracts": "workspace:*"
+    "@agentos/contracts": "workspace:*",
+    "@agentos/core": "workspace:*"
   }
 }

@@ -78,6 +78,19 @@ export interface WriteReceipt {
   readonly createdAtMs: number;
 }
 
+/** Human-confirmation credential — structural, never a boolean flag (spec #201). */
+export interface CommitConfirmation {
+  readonly confirmedBy: string;
+  readonly confirmedAtMs: number;
+}
+
+/** Outcome of beat 2: where the page landed and which commit carries it. */
+export interface CommitResult {
+  readonly path: string;
+  readonly commit: string;
+  readonly appended: boolean;
+}
+
 /** The knowledge socket. Behavior contract; implementations are mounted by manifest. */
 export interface KnowledgeProvider {
   readonly name: string;
@@ -96,13 +109,31 @@ export interface KnowledgeProvider {
   search(q: string, opts?: SearchOpts): Promise<KbHit[]>;
   /** Unknown id throws (not a null page): absence of a page is exceptional at call sites. */
   getPage(id: PageId): Promise<KbPage>;
-  /** Full index; scope narrows to a subtree. */
+  /**
+   * Full index; scope narrows to a subtree.
+   *
+   * Consumer note (spec #246): production paths read the index through
+   * `bootstrap()` (the rendered guide) and `search()`; `listPages` today has
+   * no production caller — its consumers are the conformance suite and a
+   * future scope picker. It stays on the contract because the six-verb shape
+   * is what a second provider implements (see #201).
+   */
   listPages(scope?: Scope): Promise<KbIndex>;
   /**
    * First beat of the two-phase write: creates a draft and returns a receipt.
    * Writes not yet committed must NOT appear in search/bootstrap results.
    */
   writePage(draft: KbDraft): Promise<WriteReceipt>;
+  /**
+   * Second beat of the two-phase write (spec #201): persist a draft behind a
+   * human-confirmation credential. The provider owns its own persistence —
+   * git+markdown is ONE implementation, not the contract. Core keeps only the
+   * policy shell (receipts, audit, gate) and calls this verb.
+   *
+   * Implementations must be idempotent-by-receipt: a receipt already
+   * committed is refused, never written twice (#214).
+   */
+  commit(receipt: WriteReceipt, confirmation: CommitConfirmation): Promise<CommitResult>;
 }
 
 /** Mount type is a deployment detail swappable per preset; the contract only ever asks for "a readable file source". */
@@ -163,3 +194,36 @@ export const knowledgeManifestSchema = manifestEnvelopeSchema.extend({
 });
 
 export type KnowledgeManifest = z.infer<typeof knowledgeManifestSchema>;
+
+/**
+ * Draft file format — ONE definition for both sides of the two-phase write.
+ * The writer (a KnowledgeProvider's writePage) and the committer
+ * (core/governance's commitDraft) used to agree only by comment, and a header
+ * format change on one side silently committed metadata into the page body.
+ * Now the shape lives here and both sides call these functions.
+ *
+ *     <!-- agentos draft <receiptId> -->
+ *     <!-- target: <pageId | "NEW <pageId>"> -->
+ *     <blank line>
+ *     <body>
+ */
+export const DRAFT_HEADER_TAG = "agentos draft";
+
+/** Compose the on-disk draft: machine-readable provenance, then the body verbatim. */
+export function renderDraftFile(receiptId: string, target: string, body: string): string {
+  return `<!-- ${DRAFT_HEADER_TAG} ${receiptId} -->\n<!-- target: ${target} -->\n\n${body}`;
+}
+
+/**
+ * Return the page body from a draft file. Fence-detected (not line-counted),
+ * so an absent/foreign header degrades to "the whole file is the body" rather
+ * than eating the first two lines of real content.
+ */
+export function stripDraftHeader(raw: string): string {
+  const lines = raw.split("\n");
+  if (!(lines[0] ?? "").includes(`<!-- ${DRAFT_HEADER_TAG} `)) return raw;
+  let i = 1;
+  if ((lines[i] ?? "").startsWith("<!-- target:")) i += 1;
+  if ((lines[i] ?? "").trim() === "") i += 1;
+  return lines.slice(i).join("\n");
+}

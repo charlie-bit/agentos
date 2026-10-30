@@ -1,0 +1,11 @@
+# Placeholder log-search server over http; bearer token by env NAME only.
+kind: tool
+version: "1"
+name: logs-fixture
+enabled: false
+transport: http
+endpoint: https://logs.fixture.invalid/rpc
+auth: { mode: bearer-token-env, env: AGENTOS_DEMO_LOGS_TOKEN }
+allowedTools: [search_logs]
+idempotent: { default: false, overrides: { search_logs: true } }
+schemaExchange: json-schema

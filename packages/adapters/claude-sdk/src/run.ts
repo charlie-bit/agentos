@@ -23,9 +23,10 @@
 import { appendFileSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 import type { ModelProviderManifest, NeutralTool, RenderEvent, ToolMountPlan } from "@agentos/contracts";
-import { driftReport, selectDialect } from "@agentos/core";
+import { driftReport, offloadIfLarge, selectDialect } from "@agentos/core";
 import { dialect as anthropicCompat } from "@agentos/model-anthropic-compat";
 import { dialect as bedrock } from "@agentos/model-bedrock";
+import { dialect as openaiCompat } from "@agentos/model-openai-compat";
 import { createSdkMcpServer, query, type SDKMessage } from "@anthropic-ai/claude-agent-sdk";
 import { z } from "zod";
 
@@ -49,8 +50,13 @@ export interface ResolvedChannel {
  * adapter-local shape. Precedence rule unchanged (url lease beats bedrock).
  */
 export function resolveChannel(model: ModelLease, env: NodeJS.ProcessEnv = process.env): ResolvedChannel {
+  const tag = selectDialect(model);
   const channel =
-    selectDialect(model) === "bedrock" ? bedrock.resolveChannel(model, env) : anthropicCompat.resolveChannel(model, env);
+    tag === "bedrock"
+      ? bedrock.resolveChannel(model, env)
+      : tag === "openai-compat"
+        ? openaiCompat.resolveChannel(model, env)
+        : anthropicCompat.resolveChannel(model, env);
   return { baseUrl: channel.baseUrl, authToken: channel.authToken, useBedrock: channel.nativeChain === "bedrock" };
 }
 
@@ -103,8 +109,12 @@ export function plansToMcpServers(
  * name. Plans without an allowlist contribute nothing here — their tools
  * fall to runtime permission behavior (P5 governance tightens this).
  */
-export function allowedToolsFromPlans(plans: readonly ToolMountPlan[]): string[] {
-  return plans.flatMap((p) => (p.allowedTools ?? []).map((t) => `mcp__${p.key}__${t}`));
+export function allowedToolsFromPlans(
+  plans: readonly ToolMountPlan[],
+  allowlist?: readonly string[],
+): string[] {
+  const fence = allowlist === undefined ? undefined : new Set(allowlist);
+  return plans.flatMap((p) => (p.allowedTools ?? []).filter((t) => fence === undefined || fence.has(t)).map((t) => `mcp__${p.key}__${t}`));
 }
 
 /**
@@ -128,14 +138,28 @@ export function fsRootsFromPlans(
   plans: readonly ToolMountPlan[],
   workspaceDir?: string,
 ): string[] {
-  const roots = new Set<string>();
+  const declared: string[] = [];
+  const inferred: string[] = [];
   for (const plan of plans) {
+    if (plan.sandbox?.fsRoots !== undefined) {
+      declared.push(...plan.sandbox.fsRoots.filter((r) => isAbsolute(r)));
+      continue; // a declared plan is never widened by argv guessing (#301)
+    }
     for (const arg of plan.stdio?.args ?? []) {
-      if (isAbsolute(arg)) roots.add(arg);
+      if (isAbsolute(arg)) inferred.push(arg);
     }
   }
+  const roots = new Set<string>([...declared, ...inferred]);
   if (workspaceDir !== undefined) roots.add(workspaceDir);
   return [...roots];
+}
+
+/**
+ * Which plans declare no sandbox at all (spec #301). Callers can surface
+ * "this mount's file surface was inferred, not declared" honestly.
+ */
+export function sandboxUnverified(plans: readonly ToolMountPlan[]): string[] {
+  return plans.filter((p) => p.sandbox?.fsRoots === undefined).map((p) => p.key);
 }
 
 /**
@@ -148,12 +172,20 @@ export function fsRootsFromPlans(
  * a structured DENY (never a throw — the turn survives, the lie surfaces as
  * a `tool.denied` RenderEvent so the user SEES the refusal, not a hang).
  */
-export function canUseToolFromPlans(plans: readonly ToolMountPlan[]): (toolName: string) => boolean {
+export function canUseToolFromPlans(
+  plans: readonly ToolMountPlan[],
+  /** Role fence (spec #336): bare tool names allowed for this turn. */
+  allowlist?: readonly string[],
+): (toolName: string) => boolean {
   const mountKeys = new Set(plans.map((p) => p.key));
+  const fence = allowlist === undefined ? undefined : new Set(allowlist);
   return (toolName: string): boolean => {
     if (toolName === "Read") return true;
     const m = /^mcp__([^_].*?)__/.exec(toolName);
-    return m?.[1] !== undefined && mountKeys.has(m[1]);
+    if (m?.[1] === undefined || !mountKeys.has(m[1])) return false;
+    if (fence === undefined) return true;
+    const bare = toolName.slice(`mcp__${m[1]}__`.length);
+    return fence.has(bare);
   };
 }
 
@@ -166,9 +198,10 @@ export function canUseToolFromPlans(plans: readonly ToolMountPlan[]): (toolName:
 export function collectDrift(
   plans: readonly ToolMountPlan[],
   discoveredFullNames: readonly string[],
-): { missing: string[]; undeclared: string[] } {
+): { missing: string[]; undeclared: string[]; unverified: string[] } {
   const missing: string[] = [];
   const undeclared: string[] = [];
+  const unverified: string[] = [];
   const planKeys = new Set(plans.map((p) => p.key));
   for (const plan of plans) {
     const prefix = `mcp__${plan.key}__`;
@@ -176,6 +209,8 @@ export function collectDrift(
     const report = driftReport(plan.allowedTools ?? [], bare);
     missing.push(...report.missing.map((t) => `${plan.key}/${t}`));
     undeclared.push(...report.undeclared.map((t) => `${plan.key}/${t}`));
+    // No allowlist = nothing to verify against; say so rather than "clean".
+    if (report.unverified) unverified.push(plan.key);
   }
   // Hotfix global pass: ANY discovered mcp__<key>__ tool whose key is not a
   // mounted plan is undeclared — the structural alarm for host leakage:
@@ -187,7 +222,7 @@ export function collectDrift(
       undeclared.push(`${m[1]}/${name.slice(`mcp__${m[1]}__`.length)}`);
     }
   }
-  return { missing, undeclared };
+  return { missing, undeclared, unverified };
 }
 
 export interface TurnInput {
@@ -195,6 +230,10 @@ export interface TurnInput {
   prompt: string;
   /** SDK session id to continue; absent = fresh conversation. */
   resumeSdkSessionId?: string;
+  /** Role tool fence (spec #336): bare tool names allowed this turn; absent = full mount surface. */
+  toolAllowlist?: string[];
+  /** Cancellation (spec #254): aborting stops the kernel turn; partial output stays where the consumer put it. */
+  signal?: AbortSignal;
   /** Neutral mount plans from core/loader — the ONLY way tools reach the kernel now. */
   toolMounts: readonly ToolMountPlan[];
   /** Instances for sdk-plan factories, keyed by factoryName. */
@@ -276,14 +315,33 @@ export async function consumeStream(
     }
   };
 
+  // Pair tool.call -> tool.result so the card can show name + duration (#273).
+  const openCalls: Array<{ name: string; at: number }> = [];
   for await (const message of stream) {
     sdkSessionId = message.session_id ?? sdkSessionId;
-    emit(normalize(message));
+    const normalized = normalize(message);
+    const enriched = normalized.map((event) => {
+      if (event.type === "tool.call") {
+        openCalls.push({ name: String((event.payload as { tool?: unknown }).tool ?? "?"), at: Date.now() });
+        return event;
+      }
+      if (event.type === "tool.result" && openCalls.length > 0) {
+        const call = openCalls.shift();
+        if (call) {
+          return {
+            ...event,
+            payload: { ...(event.payload as Record<string, unknown>), tool: call.name, durationMs: Date.now() - call.at },
+          } satisfies RenderEvent;
+        }
+      }
+      return event;
+    });
+    emit(enriched);
     if (message.type === "system" && message.subtype === "init") {
       // Drift is a WARNING event, not a hard stop: fewer tools must still run
       // the chain (absent-degrade philosophy); the web console surfaces it.
       const drift = collectDrift(opts.toolMounts, message.tools ?? []);
-      if (drift.missing.length + drift.undeclared.length > 0) {
+      if (drift.missing.length + drift.undeclared.length + drift.unverified.length > 0) {
         emit([{ type: "kernel.system.drift", payload: drift, timestampMs: Date.now() }]);
       }
     }
@@ -339,20 +397,72 @@ function toZodShape(schema: NeutralTool["inputSchema"]): Record<string, z.ZodTyp
  * Handler results are JSON-stringified into a text block; tool output
  * semantics stay in the neutral handlers, never here.
  */
+export interface RetryPolicy {
+  /** Branch source: the mount plan's idempotent declaration (spec #205). */
+  idempotentFor: (toolName: string) => boolean;
+  /** Observability hook; a throwing hook never affects the call. */
+  onRetry?: (toolName: string, error: unknown) => void;
+}
+
+/**
+ * Transport-layer retry executor (spec #205): wrap each neutral tool so a
+ * THROWN call is retried exactly once when the plan says the tool is
+ * idempotent, and never otherwise. Successful and domain-error answers pass
+ * through untouched.
+ */
+export function withToolRetry(tools: readonly NeutralTool[], policy: RetryPolicy): NeutralTool[] {
+  return tools.map((t) => ({
+    ...t,
+    handler: async (input: Record<string, unknown>) => {
+      const attempt = () => t.handler(input);
+      const idempotent = policy.idempotentFor(t.name);
+      try {
+        return await attempt();
+      } catch (error) {
+        if (!idempotent) throw error;
+        try {
+          policy.onRetry?.(t.name, error);
+        } catch {
+          /* observability must not affect the call */
+        }
+        return await attempt(); // exactly one extra attempt
+      }
+    },
+  }));
+}
+
+export interface InProcessServerOptions {
+  /** Retry executor policy (spec #205). Absent = no retry wrapping. */
+  retry?: RetryPolicy;
+  /**
+   * Session workspace for large-result offload (spec #206). Absent = results
+   * return inline (callers without a workspace keep the old behavior).
+   */
+  workspaceDir?: string;
+}
+
 export function createInProcessServer(
   tools: readonly NeutralTool[],
   serverName = "agentos-kb",
+  options: InProcessServerOptions = {},
 ): { type: "sdk"; name: string; instance: unknown } {
+  const effective = options.retry ? withToolRetry(tools, options.retry) : tools;
   return createSdkMcpServer({
     name: serverName,
     version: "0.1.0",
-    tools: tools.map((t) => ({
+    tools: effective.map((t) => ({
       name: t.name,
       description: t.description,
       inputSchema: toZodShape(t.inputSchema),
       handler: async (args: Record<string, unknown>): Promise<{ content: { type: "text"; text: string }[] }> => {
         const result = await t.handler(args ?? {});
-        return { content: [{ type: "text" as const, text: JSON.stringify(result ?? null) }] };
+        // >10KB never rides inline (spec #206): write to the session workspace,
+        // hand the model a pointer it can Read.
+        const out =
+          options.workspaceDir === undefined
+            ? { value: result }
+            : offloadIfLarge(result, { workspaceDir: options.workspaceDir, toolName: t.name });
+        return { content: [{ type: "text" as const, text: JSON.stringify(out.value ?? null) }] };
       },
     })),
   }) as unknown as { type: "sdk"; name: string; instance: unknown };
@@ -396,7 +506,8 @@ export function shortModelName(modelId?: string): string | undefined {
   return trimmed.length > 0 ? trimmed : lastSegment;
 }
 
-const BASE_SYSTEM_PROMPT = [
+/** Exported so a composition root (cli serve --web) can surface it read-only, e.g. in a status/config view. */
+export const BASE_SYSTEM_PROMPT = [
   "You are an AgentOS assistant. Use the filesystem tools to inspect files when asked about the project.",
   // Product identity (D-0910-6). The kernel underneath is one vendor's CLI, and
   // an un-instructed model happily introduces itself as that vendor's product —
@@ -405,6 +516,9 @@ const BASE_SYSTEM_PROMPT = [
   // policy (see shortModelName): spoken answers get a short name or nothing.
   "You are the AgentOS assistant. You are not, and must never claim to be, any specific vendor's product or service (including Claude, Claude Code, or Anthropic services), regardless of which model powers you.",
   "If asked which model you are: answer with at most the short model name (for example qwen3.8-flash), or say that it is provided by the model channel configured for this deployment. Never disclose gateway names, cloud routing prefixes, context-window suffixes, or other deployment details. If you do not know, say so — never guess.",
+  // Todo capture (spec #313): the verbs, not a behaviour change. The model
+  // decides; the kernel never parses results into a domain model (#177).
+  "When the conversation or a tool result contains an actionable follow-up, record it with todo_add (title, and sourceKind/sourceRef when you know them) instead of only mentioning it in prose. todo_list, todo_update and todo_remove keep the list accurate.",
   "Your only capabilities are the Read tool plus the MCP tools mounted in this session. You cannot run shell commands, write or edit files, fetch or search the web, spawn subagents, or schedule tasks. When asked what you can do, name only the tools actually present in this session — never claim a capability you do not have.",
 ].join("\n");
 
@@ -460,7 +574,14 @@ export function buildQueryOptions(
   env: NodeJS.ProcessEnv = process.env,
 ): QueryOptions {
   const channel = resolveChannel(input.model, env);
-  const derived = input.allowedTools ?? allowedToolsFromPlans(input.toolMounts);
+  // Bridge the caller's AbortSignal onto the kernel's own controller.
+  let abortController: AbortController | undefined;
+  if (input.signal !== undefined) {
+    abortController = new AbortController();
+    if (input.signal.aborted) abortController.abort();
+    else input.signal.addEventListener("abort", () => abortController?.abort(), { once: true });
+  }
+  const derived = input.allowedTools ?? allowedToolsFromPlans(input.toolMounts, input.toolAllowlist);
   const fsRoots = fsRootsFromPlans(input.toolMounts, input.workspaceDir);
   return {
     systemPrompt:
@@ -487,13 +608,14 @@ export function buildQueryOptions(
     // the smoke path (no workspaceDir) is untouched, byte-compatible.
     ...(fsRoots.length > 0 ? { additionalDirectories: fsRoots } : {}),
     ...(input.resumeSdkSessionId ? { resume: input.resumeSdkSessionId } : {}),
+    ...(abortController ? { abortController } : {}),
     env: { ...env, ...sdkEnvDelta(channel), ...modelEnv(input.modelId) },
   };
 }
 
 export async function runTurn(input: TurnInput): Promise<TurnOutput> {
   const opts = buildQueryOptions(input);
-  const gate = canUseToolFromPlans(input.toolMounts);
+  const gate = canUseToolFromPlans(input.toolMounts, input.toolAllowlist);
   // Execution-side hard gate (④a, see canUseToolFromPlans): a call outside
   // the menu mirror gets a structured deny — never a throw. Each denial also
   // lands one JSONL line in .agentos/audit.jsonl (usage.log's sibling dir):
@@ -552,6 +674,13 @@ export function normalize(message: SDKMessage): RenderEvent[] {
       return [{ type: `kernel.system.${message.subtype}`, payload: {}, timestampMs: ts }];
     case "assistant": {
       const out: RenderEvent[] = [];
+      // Live token accounting (spec #279): the kernel reports usage per
+      // assistant message; emitting deltas lets the console move mid-turn
+      // instead of waiting for the result frame.
+      const usage = (message.message as { usage?: { input_tokens?: number; output_tokens?: number } } | undefined)?.usage;
+      if (usage && (typeof usage.input_tokens === "number" || typeof usage.output_tokens === "number")) {
+        out.push({ type: "usage.delta", payload: { ...usage }, timestampMs: ts });
+      }
       for (const block of message.message.content ?? []) {
         if (block.type === "text") out.push({ type: "assistant.text", payload: { text: block.text }, timestampMs: ts });
         else if (block.type === "tool_use")
@@ -563,9 +692,24 @@ export function normalize(message: SDKMessage): RenderEvent[] {
       const content = message.message?.content;
       if (!Array.isArray(content)) return [];
       const out: RenderEvent[] = [];
-      for (const block of content as { type?: string; is_error?: boolean }[]) {
-        if (block?.type === "tool_result")
-          out.push({ type: "tool.result", payload: { isError: block.is_error === true }, timestampMs: ts });
+      for (const block of content as Array<{ type?: string; is_error?: boolean; content?: unknown }>) {
+        if (block?.type === "tool_result") {
+          // Summary for the card (#152/#274): bounded text, never the full
+          // payload — large results already offloaded to a pointer.
+          const raw = Array.isArray(block.content)
+            ? block.content
+                .map((c) => (typeof c === "object" && c !== null && "text" in c ? String((c as { text?: unknown }).text ?? "") : ""))
+                .join(" ")
+            : typeof block.content === "string"
+              ? block.content
+              : "";
+          const summary = raw.replace(/\s+/g, " ").trim().slice(0, 300);
+          out.push({
+            type: "tool.result",
+            payload: { isError: block.is_error === true, ...(summary.length > 0 ? { summary } : {}) },
+            timestampMs: ts,
+          });
+        }
       }
       return out;
     }

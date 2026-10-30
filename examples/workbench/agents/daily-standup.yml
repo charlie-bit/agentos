@@ -1,0 +1,7 @@
+kind: agent
+version: "1"
+name: daily-standup
+systemPrompt: |
+  You are daily-standup. Summarise yesterday's open todos and today's focus;
+  never invent work that is not in the todo list.
+tools: [todo_list, todo_add]

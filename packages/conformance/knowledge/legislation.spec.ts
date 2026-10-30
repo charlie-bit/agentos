@@ -11,7 +11,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
-import { validatePageFrontmatter } from "@agentos/core";
+import { buildKbTools, renderOverview, validatePageFrontmatter } from "@agentos/core";
 import { runKbGate } from "../../../cli/dist/kb-gate.js";
 import { runKbLint } from "../../../cli/dist/kb-lint.js";
 import { runKbStale } from "../../../cli/dist/kb-stale.js";
@@ -224,5 +224,51 @@ describe("gate file semantics (D-0910-8): canonical alone, backups opt-in", () =
     const r = runKbGate(dir, join(dir, "no-such.log"), now);
     expect(r.exitCode).toBe(0);
     expect(r.lines.join("\n")).toMatch(/in window: 0\/3/);
+  });
+});
+
+describe("bootstrap guide stays inside its token budget (#225)", () => {
+  it("500 pages render <= 2K tokens (chars/4) with a truncation pointer", () => {
+    const entries = Array.from({ length: 500 }, (_, i) => ({
+      id: `topics/dir/page-${String(i).padStart(4, "0")}.md`,
+      title: `Page ${i}`,
+      timestampMs: 1_700_000_000_000 + i,
+    }));
+    const guide = renderOverview({ index: { entries }, recentUpdates: entries.slice(-5) });
+    expect(Math.ceil(guide.length / 4)).toBeLessThanOrEqual(2000);
+    expect(guide).toContain("more pages");
+    expect(guide).not.toContain("page-0250.md"); // index tail is summarized, not dumped
+  });
+});
+
+describe("no tool signature carries an environment parameter (spec #114 negative)", () => {
+  it("every neutral tool inputSchema property is free of env/environment names", () => {
+    // Environment is a MOUNT concern (envRouting); a tool signature that asks
+    // the model for env is the anti-pattern this suite exists to forbid.
+    const provider = {
+      name: "fake",
+      capabilities: { search: true, write: true },
+      bootstrap: async () => ({ index: { entries: [] }, recentUpdates: [] }),
+      search: async () => [],
+      getPage: async () => ({ id: "x", title: "x", body: "" }),
+      listPages: async () => ({ entries: [] }),
+      writePage: async () => ({ receiptId: "r", pageId: "p", createdAtMs: 0 }),
+      commit: async () => ({ path: "p", commit: "sha", appended: false }),
+    };
+    const tools = buildKbTools({
+      provider,
+      confirmCapable: true,
+      bookRoot: "/tmp",
+      draftsDir: "/tmp/drafts",
+      receiptsLog: "/tmp/receipts.jsonl",
+      workspaceOverviewFile: "/tmp/ov.md",
+      confirm: async () => ({ approved: false }),
+      tenant: { tenantId: "t" },
+    });
+    for (const tool of tools) {
+      for (const key of Object.keys(tool.inputSchema.properties)) {
+        expect(key, `${tool.name}.${key}`).not.toMatch(/^(env|environment|envName|targetEnv)$/i);
+      }
+    }
   });
 });

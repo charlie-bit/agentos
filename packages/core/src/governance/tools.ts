@@ -7,7 +7,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import type { ConfirmResult, KnowledgeProvider, NeutralTool } from "@agentos/contracts";
-import { commitDraft, appendDraftLedger, type CommitConfirmation } from "./writeback.js";
+import { appendDraftLedger } from "./writeback.js";
 import { renderOverview } from "./render.js";
 
 export interface KbToolContext {
@@ -19,6 +19,8 @@ export interface KbToolContext {
   receiptsLog: string;
   /** Where the rendered bootstrap guide is (re)written by kb_overview. */
   workspaceOverviewFile: string;
+  /** Role knowledge fence (#337): search is restricted to this scope subtree. */
+  searchScope?: string;
   /** Out-of-band human gate (chat: readline; web: SSE modal). */
   confirm: (req: { prompt: string; subject: Record<string, unknown> }) => Promise<ConfirmResult>;
   tenant: { tenantId: string };
@@ -50,7 +52,10 @@ export function buildKbTools(ctx: KbToolContext): NeutralTool[] {
       description: "Lexical search over the knowledge base. Empty list means no hits, not failure.",
       inputSchema: { type: "object", properties: { q: str, limit: num }, required: ["q"] },
       handler: async (input) => ({
-        hits: await ctx.provider.search(String(input.q ?? ""), input.limit === undefined ? undefined : { limit: Number(input.limit) }),
+        hits: await ctx.provider.search(String(input.q ?? ""), {
+          ...(input.limit === undefined ? {} : { limit: Number(input.limit) }),
+          ...(ctx.searchScope !== undefined ? { scope: ctx.searchScope } : {}),
+        }),
       }),
     },
     {
@@ -100,19 +105,12 @@ export function buildKbTools(ctx: KbToolContext): NeutralTool[] {
           // pageId must come from the receipt ledger, not the model: read it back.
           const pageId = pageIdFromLedger(ctx.receiptsLog, receiptId);
           if (pageId === undefined) return { committed: false, reason: `unknown receiptId ${receiptId}` };
-          const confirmation: CommitConfirmation = {
-            confirmedBy: answer.decidedBy ?? "human",
-            confirmedAtMs: answer.timestampMs ?? Date.now(),
-          };
-          const result = commitDraft({
-            bookRoot: ctx.bookRoot,
-            draftsDir: ctx.draftsDir,
-            receiptsLog: ctx.receiptsLog,
-            receiptId,
-            pageId,
-            evidence,
-            confirmation,
-          });
+          // Persistence belongs to the provider (spec #201): governance keeps
+          // the gate, the receipt lookup and the audit line only.
+          const result = await ctx.provider.commit(
+            { receiptId, pageId, createdAtMs: Date.now() },
+            { confirmedBy: answer.decidedBy ?? "human", confirmedAtMs: answer.timestampMs ?? Date.now() },
+          );
           return { committed: true, ...result };
         },
       },
@@ -139,5 +137,14 @@ function pageIdFromLedger(receiptsLog: string, receiptId: string): string | unde
   return undefined;
 }
 
-/** Public prompt line pointing a session at the rendered guide. */
-export const KB_POINTER_LINE = "Project knowledge: read ./kb-overview.md first (already generated); then kb_search for detail, kb_get_page to open a page.";
+/**
+ * Public prompt line pointing a session at the rendered guide — ONE definition
+ * (spec #245). The composition root passes the absolute path it actually
+ * wrote; the bare constant remains for callers that use the default location.
+ */
+export function kbPointerLine(overviewPath = "./kb-overview.md"): string {
+  return `Project knowledge guide: Read ${overviewPath} first (already generated); then use kb_search for detail and kb_get_page to open a page.`;
+}
+
+/** Default-location pointer line (same text as kbPointerLine()). */
+export const KB_POINTER_LINE = kbPointerLine();

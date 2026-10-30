@@ -4,7 +4,7 @@
 
 AgentOS is a **pluggable Agent execution framework**: one Harness kernel for the agent loop, session management, and sandboxing; three Provider contracts (Model / Tool / Knowledge) that can be swapped at any time — **switch your stack by editing one preset file, zero code changes required**.
 
-[Chinese docs](README_zh-CN.md) · [Design docs](.docs/)
+[Chinese docs](README_zh-CN.md) · [Docs](docs/index.md) · [Security](SECURITY.md) · [Changelog](CHANGELOG.md) · [Contributing](CONTRIBUTING.md)
 
 ---
 
@@ -33,7 +33,38 @@ AgentOS is a **pluggable Agent execution framework**: one Harness kernel for the
 
 ---
 
+### The personal workbench
+
+Five surfaces sit on the same kernel, and every one of them is configuration
+or data — never new kernel code:
+
+| Surface | Lives in | Writable from the web? |
+|---------|----------|------------------------|
+| Todos | `.agentos/` data (+ `todo_*` tools the model calls) | yes |
+| Roles | `config/agents/*.yml` | no — yml + git |
+| Workflows | `config/workflows/*.yml` (+ `config/projects` templates) | run only |
+| Projects | templates in `config/projects/*.yml`, instances in `.agentos/` | instances: title/data only |
+| External agents | `config/tools/*.yml` (MCP is the only path) | no |
+
 ## Architecture Overview
+
+### Product surface (v4)
+
+```mermaid
+flowchart LR
+  subgraph Config["config/*.yml — git, read-only in the web"]
+    A[agents/roles] --> M[Mount at startup]
+    W[workflows] --> M
+    P[projects/templates] --> M
+    T[tools + knowledge] --> M
+  end
+  M --> K[Kernel turn + tool fence]
+  K --> D[".agentos/ — data"]
+  D --> I[project instances / todos / runs]
+  I --> C[five-zone console: Home · Chats · Todos · Workflows · Projects]
+  C -.->|read-only disclosure| Config
+```
+
 
 ![AgentOS Architecture Diagram](.docs/architecture-diagram.png)
 
@@ -66,18 +97,26 @@ interface KnowledgeProvider {
 | `provider-weknora` | Post-trigger | RAG + Wiki UI + multi-tenant (activated at hundreds-of-pages scale) |
 | `provider-mcp` | Planned | Any KB server via MCP protocol |
 
+> `listPages` currently has no production caller (the rendered guide uses
+> `bootstrap`, agents use `search`); it stays on the contract as part of the
+> six-verb shape a second provider implements — conformance covers it today
+> (spec #246).
+
 ### ToolProvider — MCP pluggability
 
 One tool server = one declarative registry entry, mounted at runtime by transport.
 
 ```yaml
-# tool-entry.yaml
-name: datadog-monitoring
-transport: stdio          # sdk | stdio | http
-auth: token-env:DATADOG_TOKEN
-allowedTools: ["dd_*"]
-envRouting: non-prod      # non-prod | prod
-idempotent: true          # required - determines retry safety
+# config/tools/datadog.yml — schema: packages/contracts/src/tool.ts
+kind: tool
+version: "1"
+name: datadog
+transport: http                 # sdk | stdio | http
+endpoint: https://${DATADOG_MCP_HOST}/rpc
+auth: { mode: bearer-token-env, env: DATADOG_TOKEN }   # env-var NAME only
+allowedTools: ["dd_*"]          # optional; absent = every discovered tool (drift-unverified)
+envRouting: ["non-prod"]        # optional array; absent = mounts in every environment
+idempotent: { default: false, overrides: { dd_search_logs: true } }  # optional; absent = never retried
 schemaExchange: json-schema
 ```
 
@@ -87,14 +126,18 @@ schemaExchange: json-schema
 
 Three-tier priority routing (request override → channel/tenant config → global default), with fallback chain.
 
-```ts
-interface ModelProvider {
-  provider: 'openai' | 'anthropic' | 'ollama' | 'local'
-  models: Record<string, string>       // aliases (sonnet/haiku…) → real model id
-  fallbackChain: string[]              // health-probe short-circuit
-  usageAttr: { provider, model, tenant } // usage attribution labels
-  // routing state ∈ DB (multi-pod safe)
-}
+```yaml
+# config/models/deepseek.yml — a lease, not code
+kind: model
+version: "1"
+name: deepseek
+provider: deepseek
+dialect: anthropic-compat        # optional runtime dialect (anthropic-compat | bedrock | openai-compat)
+baseUrlEnv: AGENTOS_DEEPSEEK_ANTHROPIC_BASE_URL   # env-var NAME, never the URL
+credentialsEnv: AGENTOS_DEEPSEEK_API_KEY          # env-var NAME, never the key
+models: { general: deepseek-chat, reasoner: deepseek-reasoner }
+fallbackChain: [general]         # aliases inside THIS manifest
+usageAttr: { costCenter: platform-eng }           # attribution labels → usage.log
 ```
 
 ---
@@ -110,12 +153,16 @@ Manifest (static declaration) → Contract (versioned interface) → Loader (ins
 The preset is the single convergence point for all four layers: it only **references** providers, never implements them.
 
 ```yaml
-# preset-example.yml — one per business; switching business = changing this file
-knowledge: { provider: weknora, workspaceId: w-123, tokenEnv: WEKNORA_TOKEN }
-model:      { provider: anthropic, policy: default }
-tools:      [ datadog-monitoring, github-actions ]
-entry:      { slack: { channel: "#engineering", confirmUI: blockkit } }
-# Credentials never enter manifest, only tokenEnv reference
+# config/presets/example.yml — one per business; switching business = changing this file
+kind: preset
+version: "1"
+name: example
+knowledge: local-markdown       # names of manifests in config/, never inline config
+model: deepseek
+tools: [mcp-filesystem, datadog ]
+entry: cli                      # code-registered adapter name (cli | rest)
+# channelModels: { rest: deepseek }   # optional middle layer: channel/tenant → model
+# Credentials never enter a manifest, only env-var NAME references (baseUrlEnv / credentialsEnv / auth.env)
 ```
 
 ### EntryAdapter — Entry layer (add last, not first)
@@ -135,14 +182,14 @@ Each contract ships with a set of black-box tests that every implementation must
 
 ### Implementation Order
 
-| Step | What | Acceptance | Why here |
-|------|------|------------|----------|
-| 0 | Manifest meta schema + four contracts (text only) | Each contract describes a real existing system | Paper convergence, zero risk |
-| 1 | Convert existing project's MCP registry to manifest-driven | Zero difference in tool set before/after | Reference exists, mechanism easiest to see |
-| 2 | Introduce a second project as the first external manifestonboard | Idempotent declarations work, non-idempotent tools protected | Immediately pressure-tested by a second real consumer |
-| 3 | Extract two ModelProvider implementations (e.g., OpenAI / Ollama) | Swap providers within a single request, routing works | Pure extraction, mechanism widely proven |
-| 4 | Two EntryAdapter implementations: Slack + REST | Same preset runs the same conversation from both ends | Two-implementation principle → contract finalization |
-| 5 | knowledge-core + multiple providers + cross-runtime conformance | Same preset passes full flow in two different runtimes | Depends on steps 1–4 format stability |
+| Step | What | Status | Acceptance | Why here |
+|------|------|--------|------------|----------|
+| 0 | Manifest meta schema + four contracts | **shipped** | Each contract describes a real existing system | Paper convergence, zero risk |
+| 1 | MCP registry driven by manifests | **shipped** | Zero difference in tool set before/after | Reference exists, mechanism easiest to see |
+| 2 | A second, external project joins via manifest only | **planned** (#304) | Idempotent declarations work, non-idempotent tools protected | Still needs a real second consumer to be pressure-tested |
+| 3 | Third-party ModelProvider dialects | **shipped** | Swap providers within a single request, routing works | `model-anthropic-compat`, `model-bedrock`, `model-openai-compat` |
+| 4 | Two EntryAdapter implementations: CLI + REST | **shipped** | Same preset runs the same conversation from both ends | Slack is a rejected boundary (#171) — CLI/REST are the reference pair |
+| 5 | Cross-runtime conformance | **planned** (#144/#298) | Same preset passes full flow in two different runtimes | Depends on steps 1–4 format stability |
 
 ### Three Anti-patterns (Rejected)
 
@@ -228,7 +275,44 @@ Three approaches, **Route C recommended**:
 | 2 | **Schema exchange via JSON Schema** | Medium | Incompatible schema versions silently drop all tools |
 | 3 | **idempotent required** | Medium | Non-idempotent tools under auto-retry execute irreversible operations |
 | 4 | **Registry configuration-driven** | Discipline | Module-level state forbidden in multi-pod |
-| 5 | **Large result governance in contract** | Discipline | >10KB results offload, return pointer only |
+| 5 | **Large result governance in contract** | Discipline | >10KB results offload to the session workspace and the model gets a pointer — enforced in `packages/core/src/governance/offload.ts` for agentos-owned (sdk-transport) tools; kernel-side stdio/http results are still inline until #301 lands |
+| 6 | **Multi-pod discipline** (four clauses) | Discipline | ① no module-level shared state; ② session state lives ONLY in the ledger; ③ resume replays from the stored transcript, never from an in-memory emitter; ④ the database is the single source of truth. Borrowed from a multi-pod system as disciplines, not as architecture |
+
+### When to swap the ledger database
+
+The default is embedded `node:sqlite` — zero external services. Every ledger
+access goes through one interface (`packages/core/src/session/ledger.ts`), so
+replacing the driver is an implementation swap, not a rewrite. Swap only when
+a trigger is actually present (same shape as the four RAG triggers):
+
+| Trigger | Why sqlite stops being enough |
+|---------|-------------------------------|
+| **Concurrent write conflicts** appear (writers queuing/blocking on the single file) | One writer at a time is the embedded model |
+| **Multi-instance deployment** (more than one process serving the same sessions) | No cross-process coordination or failover |
+| **> 10,000 sessions** with history-heavy queries | Full scans get expensive without an index server |
+
+None of these is a framework requirement — each is a deployment fact. Until
+one is true, adding Postgres is cost without a reason.
+
+---
+
+## Data directory
+
+Every runtime artifact lives under one root — `.agentos/` — from day one
+(#135). Nothing is mirrored, nothing syncs: this layout IS the deployment's
+state, and moving it is a copy.
+
+| Path | Contents |
+|------|----------|
+| `sessions.db` | the ledger (ids, status, titles, kernel pointers) |
+| `workspaces/<key>/` | per-session scratch + `tool-results/` offload files |
+| `kb-drafts/` | uncommitted knowledge drafts (invisible to search) |
+| `kb-receipts.jsonl` | draft → commit ledger |
+| `usage.log` | per-turn attribution metadata |
+| `escalations.log`, `audit.jsonl` | human-handoff + execution-gate records |
+
+Logs in this tree are metadata-only; `SECURITY.md` records what is never
+written.
 
 ---
 
@@ -236,27 +320,49 @@ Three approaches, **Route C recommended**:
 
 ### Requirements
 
-- Node.js ≥ 20
-- TypeScript ≥ 5.4
+- **Node.js ≥ 22.5** — the ledger uses the built-in `node:sqlite` driver, which
+  exists from 22.5 (`engines` in the root package.json says `>=22`)
+- **pnpm ≥ 9** — this is a pnpm workspace; `npm install` will not link the
+  workspace packages
 
 ### Install
 
 ```bash
 git clone https://github.com/charlie-bit/agentos.git
 cd agentos
-npm install
+pnpm install
+pnpm build          # workspace packages emit dist/ before anything runs
 ```
+
+### Install (npm)
+
+```bash
+npm i -g agentos              # global CLI
+# or run without installing:
+npx agentos preset validate config/presets/example.yml
+```
+
+> Packaging (spec #145/#299): the CLI is bundled at build time — workspace
+> packages are inlined, `serve` is a lazy chunk, and the kernel SDK is the
+> single declared runtime dependency. `node scripts/pack-cli-check.mjs` packs,
+> extracts into a clean directory and runs `preset validate` without a
+> checkout (CI-friendly).
 
 ### Development
 
 ```bash
-# Run tests
-npm test
+# Everything, across the workspace
+pnpm -r test
+pnpm -r typecheck
+pnpm -r lint
 
-# Type check
-npm run typecheck
+# One package
+pnpm --filter @agentos/core test
+
+# Validate the shipped preset (no side effects)
+node cli/main.mjs preset validate config/presets/example.yml
 ```
 
 ### Contributing
 
-See [CONTRIBUTING.md](./skills/CONTRIBUTING.md).
+See [CONTRIBUTING.md](./CONTRIBUTING.md) — providers, presets, and the boundary commitments (`skills/CONTRIBUTING.md` belongs to a vendored third-party tree, not this project).

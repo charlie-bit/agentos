@@ -233,3 +233,61 @@ describe("④a tool.denied (execution-gate frame → visible refused block)", ()
     expect(s.entries.filter((e) => e.kind === "tool").map((t) => t.name)).toEqual(["read_file", "Write"]);
   });
 });
+
+describe("abort result (spec #255)", () => {
+  it("subtype aborted marks the open assistant entry as aborted, not error", () => {
+    const out = run(initialState, [
+      { t: "send", text: "go" },
+      frame("assistant.text", { text: "partial" }),
+      frame("result", { subtype: "aborted", isError: true }),
+    ]);
+    const last = out.entries.at(-1);
+    expect(last).toMatchObject({ kind: "assistant", text: "partial", status: "aborted" });
+    expect(out.conn).toBe("idle");
+  });
+});
+
+describe("error taxonomy rendering (spec #264)", () => {
+  it("each classified subtype produces its own error entry; partial text stays", () => {
+    for (const category of ["tool-missing", "gate-denied", "model-fallback", "network"] as const) {
+      const out = run(initialState, [
+        { t: "send", text: "go" },
+        frame("assistant.text", { text: "partial" }),
+        frame("result", { subtype: category, isError: true, message: "detail" }),
+      ]);
+      const err = out.entries.find((e) => e.kind === "error");
+      expect(err, category).toMatchObject({ kind: "error", category, detail: "detail" });
+      expect(out.entries.some((e) => e.kind === "assistant" && e.text === "partial")).toBe(true);
+    }
+  });
+
+  it("an unknown subtype degrades to the generic error card, never disappears", () => {
+    const out = run(initialState, [frame("result", { subtype: "weird-future-kind", isError: true })]);
+    expect(out.entries.find((e) => e.kind === "error")).toMatchObject({ category: "error" });
+  });
+
+  it("an aborted result is NOT an error card", () => {
+    const out = run(initialState, [frame("result", { subtype: "aborted", isError: true })]);
+    expect(out.entries.some((e) => e.kind === "error")).toBe(false);
+  });
+});
+
+describe("live usage + tool duration (spec #273/#279)", () => {
+  it("usage.delta accumulates mid-turn and retires when the authoritative result lands", () => {
+    let s = run(initialState, [frame("usage.delta", { usage: { input_tokens: 10, output_tokens: 2 } })]);
+    s = reduce(s, frame("usage.delta", { usage: { input_tokens: 5, output_tokens: 1 } }) as Action);
+    expect(s.live).toMatchObject({ input: 15, output: 3 });
+    const done = run(s, [frame("result", { subtype: "success", usage: { input_tokens: 40, output_tokens: 8 } })]);
+    expect(done.live).toMatchObject({ input: 0, output: 0 });
+    expect(done.usage).toMatchObject({ input: 40, output: 8 });
+  });
+
+  it("tool.result carries the measured duration onto the running block", () => {
+    const out = run(initialState, [
+      frame("tool.call", { tool: "kb_search", input: { q: "x" } }),
+      frame("tool.result", { isError: false, tool: "kb_search", durationMs: 42 }),
+    ]);
+    const tool = out.entries.find((e) => e.kind === "tool");
+    expect(tool).toMatchObject({ name: "kb_search", status: "ok", durationMs: 42 });
+  });
+});

@@ -1,0 +1,6 @@
+kind: knowledge
+version: "1"
+name: handbook-kb
+provider: markdown
+mount: { type: path, path: ./knowledge/handbook }
+escalationGate: { minPerWeek: 2, windowDays: 14 }

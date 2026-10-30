@@ -1,8 +1,13 @@
 # Generic remote MCP server over HTTP with a bearer token read from the
-# environment. The endpoint URL is a public documentation placeholder.
+# environment. The endpoint is a public documentation placeholder, so this
+# manifest is DECLARED BUT NOT MOUNTED (enabled: false, spec #227): mounting a
+# fake endpoint would only be possible with a fake token, which is exactly the
+# sugar the loader refuses to inject. Enable it and point endpoint/auth.env at
+# a real server to use it as an http-transport example.
 kind: tool
 version: "1"
 name: mcp-remote-example
+enabled: false
 transport: http
 endpoint: https://mcp.example.com/rpc
 auth:

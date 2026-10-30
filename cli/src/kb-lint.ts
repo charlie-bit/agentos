@@ -11,9 +11,10 @@
  * gitignored directory, which must lint green with an honest "0 pages" line —
  * the hook point for the book repo's remote-ization).
  */
-import { readdirSync, readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import { validatePageFrontmatter, type FrontmatterIssue } from "@agentos/core";
+import { markdownFiles } from "./kb-scan.js";
 import type { CliResult } from "./preset-validate.js";
 
 export interface KbLintOptions {
@@ -22,27 +23,79 @@ export interface KbLintOptions {
   now?: Date;
 }
 
-function mdFiles(dir: string): string[] {
-  const out: string[] = [];
-  let entries;
-  try {
-    entries = readdirSync(dir, { withFileTypes: true });
-  } catch {
-    return out;
-  }
-  for (const e of entries) {
-    if (e.name === "README.md" || e.name.startsWith(".")) continue;
-    const p = join(dir, e.name);
-    if (e.isDirectory()) out.push(...mdFiles(p));
-    else if (/\.md$/i.test(e.name)) out.push(p);
-  }
-  return out.sort();
+/** One dead relative link (spec #234): the page, the target as written, and why. */
+export interface LinkIssue {
+  page: string;
+  target: string;
+  message: string;
 }
 
 export interface KbLintReport {
   page: string;
   errors: FrontmatterIssue[];
   warnings: FrontmatterIssue[];
+}
+
+const LINK = /!?\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g;
+
+/**
+ * Relative-link existence over a book directory (spec #234). README.md is
+ * INCLUDED here even though frontmatter validation skips it: its index links
+ * are the book's map, and a map pointing at missing pages is a defect. Only
+ * local targets are judged — http(s), mailto, in-page anchors and absolute
+ * paths are other systems' business.
+ */
+export function lintLinks(dir: string): LinkIssue[] {
+  const issues: LinkIssue[] = [];
+  const pages = objectsToCheck(dir);
+  for (const page of pages) {
+    let raw: string;
+    try {
+      raw = readFileSync(page, "utf8");
+    } catch {
+      continue;
+    }
+    for (const match of raw.matchAll(LINK)) {
+      const target = (match[1] ?? "").trim();
+      if (target.length === 0) continue;
+      if (/^(https?:|mailto:|tel:|#|\/)/i.test(target)) continue;
+      const withoutAnchor = target.split("#")[0] ?? "";
+      if (withoutAnchor.length === 0) continue;
+      const resolved = resolve(dirname(page), withoutAnchor);
+      if (!existsSync(resolved)) {
+        issues.push({
+          page,
+          target,
+          message: `relative link target does not exist (resolved to ${resolved})`,
+        });
+      }
+    }
+  }
+  return issues;
+}
+
+/** Every markdown file in the book, README included (link check scope). */
+function objectsToCheck(dir: string): string[] {
+  const rootStat = statSync(dir, { throwIfNoEntry: false });
+  if (!rootStat) return [];
+  if (rootStat.isFile()) return /\.md$/i.test(dir) ? [dir] : [];
+  const out: string[] = [];
+  const walk = (current: string): void => {
+    let entries;
+    try {
+      entries = readdirSync(current, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const e of entries) {
+      if (e.name.startsWith(".")) continue;
+      const p = join(current, e.name);
+      if (e.isDirectory()) walk(p);
+      else if (/\.md$/i.test(e.name)) out.push(p);
+    }
+  };
+  walk(dir);
+  return out.sort();
 }
 
 /** Lint a directory and return per-page reports (sorted by path). Pure: no output, no fs writes. */
@@ -61,7 +114,7 @@ export function lintBook(dir: string, opts: KbLintOptions = {}): { reports: KbLi
     reports.push({ page: dir, ...judge(readFileSync(dir, "utf8"), opts, now) });
     return { reports, unreadable: [] };
   }
-  for (const file of mdFiles(dir)) {
+  for (const file of markdownFiles(dir)) {
     let raw: string;
     try {
       raw = readFileSync(file, "utf8");
@@ -95,6 +148,7 @@ export function runKbLint(argv: readonly string[]): CliResult {
   if (!dir) return { exitCode: 2, lines: ["✗ kb lint requires <dir>"] };
 
   const { reports, unreadable } = lintBook(dir, { json, strict });
+  const links = lintLinks(resolve(dir));
 
   if (json) {
     // machine-readable: one JSON object, page reports + summary counts
@@ -105,9 +159,10 @@ export function runKbLint(argv: readonly string[]): CliResult {
       errors: reports.reduce((n, r) => n + r.errors.length, 0),
       warnings: reports.reduce((n, r) => n + r.warnings.length, 0),
       unreadable,
+      links,
       reports,
     };
-    return { exitCode: payload.errors > 0 ? 1 : 0, lines: [JSON.stringify(payload)] };
+    return { exitCode: payload.errors > 0 || links.length > 0 ? 1 : 0, lines: [JSON.stringify(payload)] };
   }
 
   const lines: string[] = [];
@@ -118,10 +173,11 @@ export function runKbLint(argv: readonly string[]): CliResult {
     for (const w of r.warnings) lines.push(`⚠ ${r.page}: ${w.path}: ${w.message}`);
   }
   for (const u of unreadable) lines.push(`✗ ${u}: unreadable (missing or no permission)`);
+  for (const l of links) lines.push(`✗ ${l.page}: link:${l.target}: ${l.message}`);
   lines.push(
     reports.length === 0
       ? `○ linted ${dir}: 0 pages (directory is empty or has no .md besides README) — lint itself ran clean`
-      : `○ linted ${dir}: ${reports.length} page(s), ${totalErrors} error(s), ${totalWarnings} warning(s)`,
+      : `○ linted ${dir}: ${reports.length} page(s), ${totalErrors} error(s), ${totalWarnings} warning(s), ${links.length} dead link(s)`,
   );
-  return { exitCode: totalErrors > 0 || unreadable.length > 0 ? 1 : 0, lines };
+  return { exitCode: totalErrors > 0 || unreadable.length > 0 || links.length > 0 ? 1 : 0, lines };
 }

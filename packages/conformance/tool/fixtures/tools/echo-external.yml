@@ -1,0 +1,12 @@
+# Pure-yml onboarding of a real external stdio server (spec #138/#297): the
+# command points at this repo's dependency-free fixture process.
+kind: tool
+version: "1"
+name: echo-external
+transport: stdio
+command: node scripts/fixtures/echo-mcp-server.mjs
+auth: { mode: none }
+allowedTools: [echo, bump]
+idempotent: { default: false, overrides: { echo: true } }
+sandbox: { fsRoots: ["/tmp"] }
+schemaExchange: json-schema
