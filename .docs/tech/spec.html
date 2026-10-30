@@ -1,847 +1,1164 @@
 <!DOCTYPE html>
 <html lang="zh">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AgentOS · 平台技术规格（200 点）</title>
-<style>
-  :root {
-    --bg:#0d1117; --card:#161b22; --border:#30363d; --text:#c9d1d9; --heading:#f0f6fc;
-    --accent:#58a6ff; --green:#3fb950; --yellow:#d29922; --red:#f85149;
-    --purple:#bc8cff; --orange:#d18616; --cyan:#39d2c0; --muted:#8b949e;
-  }
-  * { box-sizing:border-box; margin:0; padding:0; }
-  html, body { overflow-x:hidden; }
-  body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;
-         background:var(--bg); color:var(--text); line-height:1.65;
-         padding:2rem; max-width:1280px; margin:0 auto; width:100%; }
-  h1 { color:var(--heading); font-size:1.8rem; margin-bottom:.3rem; }
-  h2 { color:var(--accent); font-size:1.3rem; margin:2rem 0 1rem;
-       border-bottom:1px solid var(--border); padding-bottom:.4rem; }
-  h3 { color:var(--heading); font-size:1rem; margin:1.2rem 0 .6rem; }
-  h4 { color:var(--purple); font-size:.92rem; margin:1rem 0 .5rem; }
-  .subtitle { color:var(--muted); margin-bottom:1.2rem; font-size:.9rem; }
-  .card { background:var(--card); border:1px solid var(--border); border-radius:8px;
-          padding:1.3rem; margin-bottom:1.2rem; overflow:hidden; }
-  table { width:100%; border-collapse:collapse; margin:.8rem 0; font-size:.86rem;
-          table-layout:fixed; word-break:break-word; }
-  th, td { padding:.5rem .7rem; text-align:left; border:1px solid var(--border); vertical-align:top; }
-  th { background:#21262d; color:var(--heading); font-weight:600; }
-  code { background:#21262d; padding:2px 6px; border-radius:4px; font-size:.82rem;
-         color:var(--orange); font-family:'SF Mono',Consolas,monospace; }
-  pre { font-family:'SF Mono',Consolas,monospace; font-size:.78rem; line-height:1.65;
-        overflow-x:auto; white-space:pre-wrap; word-break:break-all; color:var(--text);
-        background:#21262d; padding:.9rem; border-radius:6px; margin:.6rem 0; }
-  .tag { display:inline-block; padding:1px 8px; border-radius:12px; font-size:.72rem;
-         font-weight:600; white-space:nowrap; }
-  .ok { background:#1a3a1a; color:var(--green); }
-  .pr { background:#1f3a5f; color:var(--accent); }
-  .stub { background:#2d1a1a; color:var(--red); }
-  .todo { background:#2d2000; color:var(--yellow); }
-  .note { background:#1a2332; border-left:3px solid var(--accent);
-          padding:.7rem 1rem; margin:.8rem 0; border-radius:0 4px 4px 0; font-size:.86rem; }
-  .warn { background:#2d1f00; border-left:3px solid var(--yellow);
-          padding:.7rem 1rem; margin:.8rem 0; border-radius:0 4px 4px 0; font-size:.86rem; }
-  .toc { list-style:none; margin:.4rem 0; }
-  .toc ul { list-style:none; margin:.2rem 0 .3rem 1.1rem; }
-  .toc li { margin:.15rem 0; }
-  .toc a { color:var(--muted); font-size:.88rem; }
-  .toc a:hover { color:var(--accent); }
-  a { color:var(--accent); text-decoration:none; }
-  a:hover { text-decoration:underline; }
-  ul, ol { margin:.4rem 0 .6rem 1.3rem; }
-  li { margin:.2rem 0; }
-  .mermaid { background:#161b22; border:1px solid var(--border); border-radius:6px;
-             padding:.8rem; margin:.8rem 0; overflow-x:auto; }
-  .kv { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:.7rem; margin:.6rem 0; }
-  .kv .item { background:#21262d; border:1px solid var(--border); border-radius:6px; padding:.7rem; }
-  .kv .k { color:var(--heading); font-weight:600; font-size:.88rem; margin-bottom:.2rem; }
-  .kv .v { color:var(--muted); font-size:.8rem; }
-  .muted { color:var(--muted); }
-</style>
-<script type="module">
-  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.esm.min.mjs';
-  mermaid.initialize({ startOnLoad:false, theme:'dark', securityLevel:'loose',
-    themeVariables:{ fontSize:'14px', fontFamily:'ui-sans-serif, system-ui' } });
-  let n = 0;
-  for (const el of document.querySelectorAll('.mermaid')) {
-    const src = el.textContent;
-    try {
-      const { svg } = await mermaid.render('mmd-' + (++n), src);
-      el.innerHTML = svg;
-    } catch (err) {
-      el.classList.add('mermaid-error');
-      el.insertAdjacentHTML('beforeend', '<div class="warn">mermaid 渲染失败，源码保留在上方</div>');
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AgentOS — Agent Harness Tech Spec v2.0</title>
+  <style>
+    :root {
+      --bg: #0d1117; --card: #161b22; --border: #30363d;
+      --text: #c9d1d9; --heading: #f0f6fc; --accent: #58a6ff;
+      --green: #3fb950; --yellow: #d29922; --red: #f85149;
+      --purple: #bc8cff; --orange: #d18616; --cyan: #39d2c0;
+      --muted: #8b949e;
     }
-  }
-</script>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { overflow-x: hidden; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+           background: var(--bg); color: var(--text); line-height: 1.6;
+           padding: 2rem; max-width: 1280px; margin: 0 auto; width: 100%; }
+    h1 { color: var(--heading); font-size: 1.8rem; margin-bottom: 0.4rem; }
+    h2 { color: var(--accent); font-size: 1.3rem; margin: 2rem 0 1rem;
+         border-bottom: 1px solid var(--border); padding-bottom: 0.4rem; }
+    h3 { color: var(--heading); font-size: 1rem; margin: 1.2rem 0 0.6rem; }
+    .subtitle { color: var(--muted); margin-bottom: 2rem; font-size: 0.9rem; }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+            padding: 1.5rem; margin-bottom: 1.5rem; overflow: hidden; }
+    table { width: 100%; border-collapse: collapse; margin: 0.8rem 0; font-size: 0.88rem; table-layout: fixed; word-break: break-word; }
+    th, td { padding: 0.55rem 0.8rem; text-align: left; border: 1px solid var(--border); }
+    th { background: #21262d; color: var(--heading); font-weight: 600; }
+    td { vertical-align: top; word-break: break-word; }
+    code { background: #21262d; padding: 2px 6px; border-radius: 4px;
+           font-size: 0.83rem; color: var(--orange); font-family: 'SF Mono', Consolas, monospace; }
+    .tag { display: inline-block; padding: 2px 8px; border-radius: 12px;
+           font-size: 0.73rem; font-weight: 600; white-space: nowrap; }
+    .ok  { background: #1a3a1a; color: var(--green); }
+    .pr  { background: #1f3a5f; color: var(--accent); }
+    .stub { background: #2d1a1a; color: var(--red); }
+    .todo { background: #2d2000; color: var(--yellow); }
+    .note { background: #1a2332; border-left: 3px solid var(--accent);
+            padding: 0.8rem 1rem; margin: 0.8rem 0; border-radius: 0 4px 4px 0; font-size: 0.88rem; }
+    .warn { background: #2d1f00; border-left: 3px solid var(--yellow);
+            padding: 0.8rem 1rem; margin: 0.8rem 0; border-radius: 0 4px 4px 0; font-size: 0.88rem; }
+    pre { font-family: 'SF Mono', Consolas, monospace; font-size: 0.8rem;
+          line-height: 1.7; overflow-x: auto; white-space: pre-wrap; word-break: break-all; color: var(--text);
+          background: #21262d; padding: 1rem; border-radius: 6px; margin: 0.6rem 0; }
+
+    .domain-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1rem; margin: 1rem 0; }
+    .entity { background: #21262d; border: 1px solid var(--border); border-radius: 6px; padding: 1rem; }
+    .entity-name { color: var(--heading); font-weight: 700; font-size: 0.95rem; margin-bottom: 0.5rem; }
+    .entity-desc { color: var(--muted); font-size: 0.82rem; margin-bottom: 0.6rem; }
+    .entity-fields { font-size: 0.8rem; }
+    .entity-fields li { list-style: none; padding: 2px 0; }
+
+    .fund-flow { display: flex; flex-direction: column; gap: 0.8rem; margin: 1rem 0; }
+    .ff-row { display: flex; align-items: flex-start; gap: 6px; width: 100%; }
+    .ff-indent { padding-left: 1rem; }
+    .ff-label { display: block; color: var(--muted); font-size: 0.78rem; font-style: italic; padding: 0.3rem 0; }
+    .ff-box { display: inline-block; border: 1px solid; border-radius: 6px;
+              padding: 0.5rem 0.9rem; font-size: 0.85rem; font-weight: 600;
+              word-break: break-word; }
+    .ff-box.ff-system { width: 9rem; flex-shrink: 0; }
+    .ff-arrow { display: flex; align-items: flex-start; padding-top: 0.5rem;
+                white-space: nowrap; color: var(--accent); font-weight: bold;
+                font-size: 1rem; padding-left: 0.2rem; padding-right: 0.2rem; flex-shrink: 0; }
+    .ff-cell { flex: 1; min-width: 0; }
+    .ff-cell .ff-box { display: block; }
+    .ff-status { display: block; margin-top: 0.35rem; font-size: 0.82rem; font-weight: normal; }
+    .ff-user     { border-color: var(--accent); color: var(--accent); background: #1f3a5f; }
+    .ff-protocol { border-color: var(--purple); color: var(--purple); background: #2a1a3a; }
+    .ff-internal { border-color: var(--green); color: var(--green); background: #1a3a1a; }
+    .ff-system   { border-color: var(--muted); color: var(--muted); background: #21262d; }
+
+    .prog-merged { background:#1a3a1a; color:var(--green); }
+    .prog-pr     { background:#1f3a5f; color:var(--accent); }
+    .prog-inprog { background:#2d2000; color:var(--yellow); }
+    .prog-todo   { background:#2d1a1a; color:var(--red); }
+    .prog-tag    { display:inline-block; padding:2px 8px; border-radius:10px; font-size:0.72rem; font-weight:600; }
+    .branch-tag  { font-size:0.78rem; color:var(--muted); font-family:'SF Mono',Consolas,monospace; }
+
+    .states { display: flex; flex-wrap: wrap; gap: 0.3rem; margin: 0.5rem 0; }
+    .s { padding: 2px 7px; border-radius: 10px; font-size: 0.72rem; font-weight: 600; }
+    .s-ok   { background: #1a3a1a; color: var(--green); }
+    .s-fail { background: #2d1a1a; color: var(--red); }
+    .s-mid  { background: #1f3a5f; color: var(--accent); }
+    .s-term { background: #2a1a3a; color: var(--purple); }
+
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    @media (max-width: 900px) { .two-col { grid-template-columns: 1fr; } }
+
+    .flow-section { border-left: 3px solid var(--border); padding-left: 1rem; margin-bottom: 0.5rem; }
+    .flow-section.deposit  { border-color: var(--accent); }
+    .flow-section.withdraw { border-color: var(--green); }
+    .flow-section.migrate  { border-color: var(--yellow); }
+  
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .toc { list-style: none; margin: 0.6rem 0 0 0; }
+    .toc ul { list-style: none; margin: 0.25rem 0 0.35rem 1.2rem; }
+    .toc li { margin: 0.18rem 0; }
+    .toc > li > a { font-weight: 600; }
+    .toc ul { font-size: 0.86rem; }
+    .toc ul ul { font-size: 0.82rem; }
+    .toc ul a { color: var(--text); }
+    .toc ul a:hover { color: var(--accent); }
+    table.progress-table th:nth-child(1) { width: 20%; }
+    table.progress-table th:nth-child(2) { width: 30%; }
+    table.progress-table th:nth-child(3) { width: 15%; }
+    table.progress-table th:nth-child(4) { width: 35%; }
+
+    /* fixed left-hand TOC so the reader never scrolls back to the top.
+       `overflow-x: hidden` on html/body (from the reference sheet) makes the
+       body a scroll container and kills position: sticky — clip keeps the
+       no-horizontal-scroll behaviour without that side effect. */
+    html, body { overflow-x: clip; }
+    html { scroll-behavior: smooth; }
+    body { max-width: 1720px; }
+    .layout { display: grid; grid-template-columns: 292px minmax(0, 1fr);
+              gap: 2rem; align-items: start; }
+    .sidebar { position: sticky; top: 1.5rem; max-height: calc(100vh - 3rem);
+               overflow-y: auto; border-right: 1px solid var(--border); padding-right: 1rem; }
+    .sidebar-title { color: var(--muted); font-size: 0.75rem; letter-spacing: 0.08em;
+                     text-transform: uppercase; margin-bottom: 0.6rem;
+                     position: sticky; top: 0; background: var(--bg); padding: 0.3rem 0; z-index: 1; }
+    .toc-side, .toc-side ul { list-style: none; margin: 0; padding: 0; }
+    .toc-side { font-size: 0.82rem; }
+    .toc-side ul { margin-left: 0.8rem; font-size: 0.78rem; }
+    .toc-side li { margin: 0.1rem 0; line-height: 1.35; }
+    .toc-side a { color: var(--muted); display: block; padding: 0.12rem 0.4rem;
+                  border-left: 2px solid transparent; }
+    .toc-side a:hover { color: var(--accent); }
+    .toc-side a.active { color: var(--accent); border-left-color: var(--accent);
+                         background: #161b22; border-radius: 0 4px 4px 0; }
+    h2[id], h3[id], h4[id], h5[id] { scroll-margin-top: 1rem; }
+    @media (max-width: 1100px) {
+      .layout { display: block; }
+      .sidebar { display: none; }
+    }
+    td.st-ok { background: #12261a; }
+    td.st-wip { background: #2a2210; }
+    td.st-todo { color: var(--muted); }
+    td.st-block { background: #2d1a1a; }
+    h4 { color: var(--heading); font-size: 0.92rem; margin: 1rem 0 0.4rem; }
+    h5 { color: var(--heading); font-size: 0.86rem; margin: 0.9rem 0 0.3rem; }
+    del { color: var(--muted); }
+    img { max-width: 100%; border: 1px solid var(--border); border-radius: 6px;
+          background: #fff; margin: 0.8rem 0; }
+    .meta { color: var(--muted); font-size: 0.82rem; margin-bottom: 1.6rem;
+            font-family: 'SF Mono', Consolas, monospace; }
+    .mermaid { background: #161b22; border: 1px solid var(--border); border-radius: 6px;
+               padding: 1rem; margin: 0.8rem 0; overflow-x: auto; }
+    .mermaid[data-processed="true"] { background: transparent; border: none; padding: 0; }
+    .mermaid svg { max-width: 100%; height: auto; }
+    .mermaid-failed { border-left: 3px solid var(--yellow); }
+    .mermaid-failed pre { margin: 0; background: transparent; padding: 0; }
+    /* column-count aware widths: the reference's equal-width fixed layout
+       squeezes long purpose cells into unreadable towers */
+    table.cols-2 th:nth-child(1) { width: 28%; }
+    table.cols-3 th:nth-child(1) { width: 26%; }
+    table.cols-3 th:nth-child(2) { width: 30%; }
+    table.cols-4 th:nth-child(1) { width: 20%; }
+    table.cols-4 th:nth-child(2) { width: 14%; }
+    table.cols-4 th:nth-child(3) { width: 14%; }
+    table.cols-5 th:nth-child(1) { width: 22%; }
+    table.cols-5 th:nth-child(2) { width: 12%; }
+    table.cols-5 th:nth-child(3) { width: 8%; }
+    table.cols-5 th:nth-child(4) { width: 14%; }
+    ul, ol { margin: 0.5rem 0 0.5rem 1.3rem; }
+    li { margin: 0.25rem 0; }
+    li > ul, li > ol { margin: 0.2rem 0 0.2rem 1.1rem; }
+    p { margin: 0.6rem 0; }
+    hr { border: none; border-top: 1px solid var(--border); margin: 1.4rem 0; }
+    blockquote { border-left: 3px solid var(--border); padding-left: 0.9rem;
+                 color: var(--muted); margin: 0.6rem 0; }
+  
+    /* table widths for this document (the reference sheet's cols-* are generic) */
+    .compare-table { font-size: 0.8rem; }
+    .compare-table th:nth-child(1){width:12%} .compare-table th:nth-child(2){width:16%}
+    .compare-table th:nth-child(3),.compare-table th:nth-child(4),.compare-table th:nth-child(5),
+    .compare-table th:nth-child(6),.compare-table th:nth-child(7){width:14.4%}
+    .take-table th:nth-child(1){width:16%} .take-table th:nth-child(2){width:30%}
+    .take-table th:nth-child(3){width:26%} .take-table th:nth-child(4){width:28%}
+    .ref-table th:nth-child(1){width:18%} .ref-table th:nth-child(2){width:10%}
+    .ref-table th:nth-child(3){width:36%} .ref-table th:nth-child(4){width:36%}
+    .api-table th:nth-child(1){width:6%}  .api-table th:nth-child(2){width:24%}
+    .api-table th:nth-child(3){width:46%} .api-table th:nth-child(4){width:24%}
+    .components-table th:nth-child(1){width:6%} .components-table th:nth-child(2){width:20%}
+    .components-table th:nth-child(3){width:42%} .components-table th:nth-child(4){width:32%}
+    .points th:nth-child(1){width:5%}     .points th:nth-child(2){width:30%}
+    .points th:nth-child(3){width:50%}    .points th:nth-child(4){width:15%}
+</style>
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: 'dark',
+      securityLevel: 'loose',
+      themeVariables: { fontSize: '14px', fontFamily: 'ui-sans-serif, system-ui' }
+    });
+    let n = 0;
+    for (const el of document.querySelectorAll('.mermaid')) {
+      const src = el.textContent;
+      try {
+        const { svg } = await mermaid.render('mmd-' + (++n), src);
+        el.innerHTML = svg;
+        el.setAttribute('data-processed', 'true');
+      } catch (err) {
+        // keep the source readable instead of leaving a blank box
+        el.classList.add('mermaid-failed');
+        const pre = document.createElement('pre');
+        pre.textContent = src;
+        el.replaceChildren(pre);
+        console.error('mermaid render failed', err);
+      }
+    }
+  </script>
 </head>
 <body>
-
-<h1>AgentOS · 平台技术规格（200 点）</h1>
-<div class="subtitle">
-  2026-10-30 · 基于 DSH / OpenHands / OpenAI Agents SDK / SWE-agent / Claude Agent SDK 五个参考，外加 CrewAI（Crews/Flows）、LangGraph（DAG/checkpoint）、MAF（A2A/MCP）、CrewAI AMP（控制平面）作为能力补充。<br>
-  规划稿 · 与 <a href="agent.html">Agent 内核技术文档</a> / <a href="net.html">Web/REST 网络侧技术文档</a> 并列；
-  本页写"要做什么"，那两页写"现在是什么"。<br>
-  参考代号：<code>CAS</code> Claude Agent SDK · <code>DSH</code> DeepSeek Harness ·
-  <code>OH</code> OpenHands · <code>OAI</code> OpenAI Agents SDK · <code>SWE</code> SWE-agent ·
-  补充 <code>CREW</code>/<code>LG</code>/<code>MAF</code>/<code>AMP</code>
-</div>
-
-<div class="card">
-  <div class="warn">
-    这是 <strong>v2 平台方向的规划稿</strong>，不是当前代码事实。它与现有四契约 + 公开 conformance 的 v1 叙事有 4 处冲突
-    （Knowledge 降级、conformance 取消、preset → profile、框架叙事 → 平台叙事）——冲突清单见本页 "关键决策" 与 "迁移" 两节。
-  </div>
-</div>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="sidebar-title">Contents</div>
+    <nav id="side-toc"><ul class="toc-side"><li><a href="#0-comparison">0 首页对比：AgentOS vs 五个参考仓库</a><ul><li><a href="#01-what-we-take">0.1 我们取什么 / 不取什么 / 多做什么</a></li><li><a href="#02-repo-by-repo">0.2 逐个比较（主参考 5 个）</a><ul><li><a href="#021-deepseek-harness">0.2.1 DeepSeek Harness（266k）—— 重合度最高，哲学相反</a></li><li><a href="#022-openhands">0.2.2 OpenHands / Agent Canvas（92k）—— 定位是平台，不是内核</a></li><li><a href="#023-openai-agents-sdk">0.2.3 OpenAI Agents SDK（30k）—— agent-as-tool 的最佳参照</a></li><li><a href="#024-swe-agent">0.2.4 SWE-agent（20k）—— coding loop 的最佳参照</a></li><li><a href="#025-claude-agent-sdk">0.2.5 Claude Agent SDK（8k）—— 唯一内核</a></li></ul></li><li><a href="#03-orchestration-refs">0.3 编排层参照（2 个补充）</a><ul><li><a href="#031-crewai">0.3.1 CrewAI（60k）—— Crews ≈ roles，Flows ≈ workflow</a></li><li><a href="#032-langgraph">0.3.2 LangGraph（44k）—— 功能差距最大</a></li></ul></li></ul></li><li><a href="#tldr-five-answers">TL;DR. 五个问题的答案</a></li><li><a href="#1-what-is-a-harness">1 什么是 Agent Harness</a><ul><li><a href="#11-definition">1.1 定义</a></li><li><a href="#12-harness-vs-framework-platform-runtime">1.2 四个近义词的边界</a></li><li><a href="#13-what-a-harness-must-own">1.3 一个 harness 必须自己拥有的五件事</a></li><li><a href="#14-how-reference-harnesses-define-it">1.4 参考实现怎么定义 harness</a></li><li><a href="#15-scope">1.5 我们做什么 / 不做什么</a></li></ul></li><li><a href="#2-how-many-layers">2 几层架构</a><ul><li><a href="#21-five-layers">2.1 五层</a></li><li><a href="#22-layer-responsibilities">2.2 每层职责</a></li><li><a href="#23-dependency-direction">2.3 依赖方向</a></li><li><a href="#24-why-five">2.4 为什么是五层</a></li><li><a href="#25-layer-component-api-matrix">2.5 层 × 组件 × API 矩阵</a></li></ul></li><li><a href="#3-how-many-components">3 几个核心组件</a><ul><li><a href="#31-eight-components">3.1 八个组件</a></li><li><a href="#32-component-cards">3.2 组件边界</a></li><li><a href="#33-component-call-graph">3.3 组件调用图</a></li><li><a href="#34-component-rules">3.4 组件规则</a></li></ul></li><li><a href="#4-how-many-apis">4 几个窄 API</a><ul><li><a href="#41-narrow-api-principles">4.1 窄 API 原则</a></li><li><a href="#42-eight-apis">4.2 八个窄 API</a></li><li><a href="#43-api-details">4.3 API 详解</a><ul><li><a href="#a1-modelgateway-stream">A1 ModelGateway.stream — 模型通道</a></li><li><a href="#a2-toolregistry-invoke">A2 ToolRegistry.invoke — 工具调用</a></li><li><a href="#a3-agentruntime-run">A3 AgentRuntime.run / cancel — 跑一个 turn</a></li><li><a href="#a4-sessionstore">A4 SessionStore — 事件与检查点</a></li><li><a href="#a5-orchestrator">A5 Orchestrator — 编排</a></li><li><a href="#a6-sandbox-exec">A6 Sandbox.exec — 副作用边界</a></li><li><a href="#a7-configloader">A7 ConfigLoader.resolve / dump</a></li><li><a href="#a8-controlplane">A8 ControlPlane.record / check</a></li></ul></li><li><a href="#44-apis-compose-the-loop">4.4 八个 API 怎么拼成 loop</a></li><li><a href="#45-why-eight">4.5 为什么是这 8 个</a></li></ul></li><li><a href="#5-loop-philosophy">5 循环哲学怎么做</a><ul><li><a href="#51-one-loop">5.1 一个 loop：turn / step / tool / observation</a></li><li><a href="#52-five-invariants">5.2 五个不变量</a></li><li><a href="#53-loop-skeleton">5.3 循环骨架</a></li><li><a href="#54-tool-loop">5.4 工具循环</a></li><li><a href="#55-multi-agent-loop">5.5 多 agent 循环：同一个 loop</a></li><li><a href="#56-termination-resume-cancel">5.6 终止、恢复、取消</a></li><li><a href="#57-model-switch-without-breaking-loop">5.7 模型切换不破坏循环</a></li><li><a href="#58-loop-observability">5.8 循环的可观测性</a></li></ul></li><li><a href="#6-release">6 验收与发布</a><ul><li><a href="#61-phases">6.1 P0 / P1 / P2</a></li><li><a href="#62-acceptance">6.2 验收口径</a></li><li><a href="#63-risks">6.3 主要风险</a></li></ul></li><li><a href="#appendix-a-200">Appendix A — 200-point implementation checklist</a><ul><li><a href="#appendix-a1">A. 定位与原则（1–8）</a></li><li><a href="#appendix-a2">B. 总体架构与模块边界（9–22）</a></li><li><a href="#appendix-a3">C. Agent Loop 内核（23–38）</a></li><li><a href="#appendix-a4">D. Model 层（39–70）</a></li><li><a href="#appendix-a5">E. Tool 层（71–96）</a></li><li><a href="#appendix-a6">F. 多 Agent 编排（97–122）</a></li><li><a href="#appendix-a7">G. 会话持久化（123–140）</a></li><li><a href="#appendix-a8">H. 沙箱与安全隔离（141–154）</a></li><li><a href="#appendix-a9">I. 配置层（155–166）</a></li><li><a href="#appendix-a10">J. Entry / UI（167–176）</a></li><li><a href="#appendix-a11">K. 控制平面（177–196）</a></li><li><a href="#appendix-a12">L. 迁移、交付、验收（197–200）</a></li></ul></li></ul></nav>
+  </aside>
+  <main>
+<h1>AgentOS — Agent Harness Tech Spec v2.0</h1>
+<p class="subtitle">one harness · five layers · eight components · eight narrow APIs · one loop</p>
+<p class="meta">source: .docs/tech/spec.html · generated 2026-10-30 · section order follows the five questions: what / layers / components / APIs / loop</p>
 
 <div class="card">
-  <h2 id="toc" style="margin-top:0">目录</h2>
-  <ul class="toc">
-    <li><a href="#sec-1">0. 一句话定位</a></li>
-    <li style="margin-left:1.1rem"><a href="#sec-2">参考集（最终 5 个）</a></li>
-    <li style="margin-left:1.1rem"><a href="#sec-3">关键决策（这次定死）</a></li>
-    <li style="margin-left:1.1rem"><a href="#sec-4">两个直接回答</a></li>
-    <li><a href="#sec-5">1. 目标模块图</a></li>
-    <li style="margin-left:1.1rem"><a href="#sec-6">Model 层怎么做到"完全可切换"</a></li>
-    <li><a href="#sec-7">2. 200 点</a></li>
-    <li style="margin-left:1.1rem"><a href="#sec-8">A. 定位与原则（1–8）</a></li>
-    <li style="margin-left:1.1rem"><a href="#sec-9">B. 总体架构与模块边界（9–22）</a></li>
-    <li style="margin-left:1.1rem"><a href="#sec-10">C. Agent Loop 内核（23–38）</a></li>
-    <li style="margin-left:1.1rem"><a href="#sec-11">D. Model 层（39–70）</a></li>
-    <li style="margin-left:1.1rem"><a href="#sec-12">E. Tool 层（71–96）</a></li>
-    <li style="margin-left:1.1rem"><a href="#sec-13">F. 多 Agent 编排（97–122）</a></li>
-    <li style="margin-left:1.1rem"><a href="#sec-14">G. 会话持久化（123–140）</a></li>
-    <li style="margin-left:1.1rem"><a href="#sec-15">H. 沙箱与安全隔离（141–154）</a></li>
-    <li style="margin-left:1.1rem"><a href="#sec-16">I. 配置层（155–166）</a></li>
-    <li style="margin-left:1.1rem"><a href="#sec-17">J. Entry / UI（167–176）</a></li>
-    <li style="margin-left:1.1rem"><a href="#sec-18">K. 控制平面（177–196）</a></li>
-    <li style="margin-left:1.1rem"><a href="#sec-19">L. 迁移、交付、验收（197–200）</a></li>
-    <li><a href="#sec-20">3. 三个必须先落地的设计</a></li>
-    <li style="margin-left:1.1rem"><a href="#sec-21">3.1 Desktop 之外的会话持久化</a></li>
-    <li style="margin-left:1.1rem"><a href="#sec-22">3.2 沙箱隔离</a></li>
-    <li style="margin-left:1.1rem"><a href="#sec-23">3.3 模型切换</a></li>
-    <li><a href="#sec-24">4. 验收口径</a></li>
-  </ul>
+<table class="cols-2">
+<thead><tr><th><strong>Items</strong></th><th><strong>Details</strong></th></tr></thead>
+<tbody>
+<tr><td>Owner Pillar (Feature Team)</td><td>AgentOS Platform</td></tr>
+<tr><td>Feature Label</td><td><code>agentos-v2</code></td></tr>
+<tr><td>Authors</td><td>Charlie</td></tr>
+<tr><td>Audiences</td><td>AgentOS maintainers · platform engineers · provider authors</td></tr>
+<tr><td>Status</td><td>DRAFT</td></tr>
+<tr><td>Version</td><td>v2.0</td></tr>
+<tr><td>Reviewers</td><td>—</td></tr>
+<tr><td>Useful links</td><td>
+Reference harnesses: <a href="https://github.com/deepseek-ai/deepseek-harness">deepseek-harness</a> ·
+<a href="https://github.com/All-Hands-AI/OpenHands">OpenHands</a> ·
+<a href="https://github.com/openai/openai-agents-python">OpenAI Agents SDK</a> ·
+<a href="https://github.com/SWE-agent/SWE-agent">SWE-agent</a> ·
+<a href="https://github.com/anthropics/claude-agent-sdk-python">Claude Agent SDK</a><br>
+Companion docs: <a href="agent.html">Agent 内核技术文档（现状）</a> · <a href="net.html">Web/REST 网络侧技术文档（现状）</a>
+</td></tr>
+<tr><td>Approved Date</td><td>—</td></tr>
+</tbody>
+</table>
 </div>
 
+<h2 id="0-comparison">0 首页对比：AgentOS vs 五个参考仓库</h2>
 <div class="card">
-
-<h2 id="sec-1">0. 一句话定位</h2>
-
-<div class="note"><strong>AgentOS 是一个 model-agnostic 的 agent 平台。</strong><br>一个内核（Claude Agent SDK）跑 agent 循环；profile / bundle / patch 描述业务；native tool / MCP tool / skill / agent 统一成 tool；control plane 提供观测、治理、审计、预算；Web 是唯一入口。</div>
-
-<p><strong>它不是</strong>：meta-harness（不跑 Claude Code / Codex / OpenHands 这类第三方 agent）、不是配置标准（不做公开 conformance）、不是跨运行时（同一份配置不追求在 LangGraph/DSH 上跑）、不是企业 SaaS（4A/多租户只留接口，不做运营面）。</p>
-
-</div>
-
-<div class="card">
-
-<h3 id="sec-2">参考集（最终 5 个）</h3>
-
-<table>
-
-<tr><th>代号</th><th>项目</th><th>我们取什么</th></tr>
-
-<tr><td><strong>CAS</strong></td><td>Claude Agent SDK</td><td>agent loop 内核、流式、工具循环</td></tr>
-
-<tr><td><strong>DSH</strong></td><td>DeepSeek Harness</td><td>插件化边界、profile/bundle/patch、会话日志、subagent/teams</td></tr>
-
-<tr><td><strong>OH</strong></td><td>OpenHands</td><td>平台形态、沙箱后端、control plane/UI、对外 MCP</td></tr>
-
-<tr><td><strong>OAI</strong></td><td>OpenAI Agents SDK</td><td>agent-as-tool、handoff、guardrails、tracing</td></tr>
-
-<tr><td><strong>SWE</strong></td><td>SWE-agent</td><td>代码任务循环、环境交互、评测</td></tr>
-
-<tr><td>补充</td><td>CrewAI / LangGraph / MAF / AMP</td><td>Crews/Flows、DAG/checkpoint/HITL、A2A、控制平面</td></tr>
-
+<p><strong>这份 tech 的出发点：参考这五个开源 harness，做我们自己的 agent OS。</strong>不是 fork 其中任何一个，也不是做它们的聚合平台；而是取各自的 harness 内核经验，收敛成 <strong>5 层 / 8 组件 / 8 窄 API / 1 个 loop</strong>。</p>
+<table class="compare-table">
+<thead><tr><th>维度</th><th>AgentOS（我们）</th><th>DeepSeek Harness</th><th>OpenHands</th><th>OpenAI Agents SDK</th><th>SWE-agent</th><th>Claude Agent SDK</th></tr></thead>
+<tbody>
+<tr><td>定位</td><td>model-agnostic agent OS / 平台</td><td>插件化 agent harness</td><td>AI 开发控制中心</td><td>轻量 agent 框架</td><td>单任务 coding agent</td><td>agent harness SDK</td></tr>
+<tr><td>Stars</td><td>—（自建）</td><td>266,146</td><td>92,226</td><td>30,384</td><td>20,682</td><td>8,391</td></tr>
+<tr><td>语言 / 许可</td><td>TS / MIT（计划）</td><td>TS / MIT</td><td>TS / MIT</td><td>Python / MIT</td><td>Python / MIT</td><td>Python + TS / MIT</td></tr>
+<tr><td>内核 loop</td><td>借 Claude SDK，adapter 隔离</td><td>自研 agent-loop，可换</td><td>自研 agent server + ACP</td><td>自研 loop</td><td>自研单任务 loop</td><td>SDK 自带 loop</td></tr>
+<tr><td>模型切换</td><td>Anthropic wire + dialect + gateway（3 类端点）</td><td>多 provider 插件</td><td>多 LLM profile</td><td>OpenAI 为主</td><td>多 provider</td><td>Anthropic / Bedrock</td></tr>
+<tr><td>工具 / MCP</td><td>native / MCP / skill / agent 统一 registry</td><td>插件 + MCP client</td><td>MCP + 内置工具 + ACP</td><td>MCP + function tools</td><td>ACI + shell</td><td>MCP + 内置工具</td></tr>
+<tr><td>会话 / 持久化</td><td>append-only 事件 + checkpoint + resume/fork</td><td>append-only session log</td><td>事件流 + 多后端</td><td>session + SQLite</td><td>trajectory 日志</td><td>session + resume</td></tr>
+<tr><td>沙箱</td><td>T0 fsRoots → T1 进程 → T2 容器 → T3 远程</td><td>bwrap / Landlock / Seatbelt + remote</td><td>Docker / VM / 云多后端</td><td>无内置沙箱</td><td>Docker 环境</td><td>权限 / 沙箱配置</td></tr>
+<tr><td>多 agent</td><td>subagent / teams / group chat / DAG</td><td>subagent + Agent Teams</td><td>ACP 多 agent 聚合</td><td>handoff / agent-as-tool</td><td>无</td><td>subagent</td></tr>
+<tr><td>控制平面</td><td>内建 trace / budget / policy / audit / eval</td><td>审批 + telemetry</td><td>平台级 UI + 自动化</td><td>tracing</td><td>eval</td><td>无（宿主负责）</td></tr>
+<tr><td>配置</td><td>profile / bundle / patch</td><td>profile / bundle / patch</td><td>settings + backends</td><td>code</td><td>code / yaml</td><td>code</td></tr>
+<tr><td>入口</td><td>Web（先）；CLI 运维</td><td>web / sdk / acp / headless</td><td>Web + IDE + REST + Slack</td><td>code / 托管</td><td>CLI</td><td>SDK</td></tr>
+</tbody>
 </table>
 
-</div>
+<h3 id="01-what-we-take">0.1 我们取什么 / 不取什么 / 多做什么</h3>
+<table class="take-table">
+<thead><tr><th>仓库</th><th>取什么</th><th>不取什么</th><th>我们的增量</th></tr></thead>
+<tbody>
+<tr><td><strong>DeepSeek Harness</strong></td><td>插件边界、profile/bundle/patch、append-only 会话、subagent/teams</td><td>Cordis 绑定、无特权内核哲学</td><td>模型可切换 + 控制平面 + 单进程极简</td></tr>
+<tr><td><strong>OpenHands</strong></td><td>沙箱后端、平台形态、Web UX、对外 MCP</td><td>ACP 聚合第三方 agent</td><td>跑 model 不跑 agent；配置即代码</td></tr>
+<tr><td><strong>OpenAI Agents SDK</strong></td><td>agent-as-tool、handoff、guardrails、tracing</td><td>OpenAI-only、Python-only</td><td>跨厂商模型 + provider 契约</td></tr>
+<tr><td><strong>SWE-agent</strong></td><td>代码任务循环、环境交互、评测</td><td>单一 coding 场景</td><td>通用 harness + 多 agent / workflow</td></tr>
+<tr><td><strong>Claude Agent SDK</strong></td><td>loop、流式、工具循环</td><td>把它当唯一运行时</td><td>模型网关 + 换模型 + 平台能力</td></tr>
+</tbody>
+</table>
+<h3 id="02-repo-by-repo">0.2 逐个比较（主参考 5 个）</h3>
 
-<div class="card">
-
-<h3 id="sec-3">关键决策（这次定死）</h3>
-
-<table>
-
-<tr><th>决策</th><th>选择</th><th>理由</th></tr>
-
-<tr><td>Agent loop</td><td>借 Claude Agent SDK，不自研</td><td>最快，且 SRE 已验证</td></tr>
-
-<tr><td>模型切换</td><td>Anthropic wire format + dialect + gateway</td><td>loop 不变，换模型只换 manifest</td></tr>
-
-<tr><td>Knowledge</td><td><strong>降级</strong>为 tool/skill，不做一等契约</td><td>减少内核面积</td></tr>
-
-<tr><td>公开 conformance</td><td><strong>取消</strong>，改内部 contract tests</td><td>我们做平台，不做标准</td></tr>
-
-<tr><td>Entry</td><td>先只做 web；CLI 保留运维</td><td>收敛入口</td></tr>
-
-<tr><td>配置</td><td>profile / bundle / patch</td><td>对齐 DSH，比 preset 更能分层</td></tr>
-
-<tr><td>多 agent</td><td>subagent / teams / group chat</td><td>与现有 role/workflow 重合，补委派与协作</td></tr>
-
-<tr><td>控制平面</td><td>内建，AMP 是最终方向</td><td>观测/治理/审计/预算第一天就有</td></tr>
-
-<tr><td>跨运行时移植</td><td><strong>不做</strong></td><td>我们是平台，不是元运行时</td></tr>
-
-<tr><td>平台边界</td><td>跑 model，不跑第三方 agent</td><td>不 adopt OpenHands 的 ACP-agent 聚合</td></tr>
-
+<h4 id="021-deepseek-harness">0.2.1 DeepSeek Harness（266k）—— 重合度最高，哲学相反</h4>
+<table class="cols-2">
+<thead><tr><th style="width:20%">项</th><th>内容</th></tr></thead>
+<tbody>
+<tr><td>它是什么</td><td>MIT、TypeScript，"Everything is a Plugin"，底层是 vendor 的 <strong>Cordis</strong> 元框架。没有特权内核：agent loop、模型适配、工具注册、会话日志、system prompt 全是可替换插件。profile / bundle / patch 三层 YAML 层叠，255 个包。</td></tr>
+<tr><td>我们取什么</td><td>插件边界、profile/bundle/patch、append-only 会话日志、subagent/teams、沙箱后端（bwrap/Landlock/Seatbelt）、能力接缝的三角色划分。</td></tr>
+<tr><td>我们不取什么</td><td>Cordis 绑定（契约只在 DSH 内有效）、无特权内核的工程预算（我们没有 255 包的人力）、"把竞品装进来"的单体运行时哲学。</td></tr>
+<tr><td>我们要补什么</td><td>事件日志版本迁移、bundle/patch 的分层语义、team roster / task board / mailbox。</td></tr>
+<tr><td>判定</td><td><strong>架构参照第一名</strong>。v1 曾想把它做成第一个 conforming runtime；v2 明确不做跨运行时，所以只做设计参照，不做兼容层。</td></tr>
+</tbody>
 </table>
 
+<h4 id="022-openhands">0.2.2 OpenHands / Agent Canvas（92k）—— 定位是平台，不是内核</h4>
+<table class="cols-2">
+<thead><tr><th style="width:20%">项</th><th>内容</th></tr></thead>
+<tbody>
+<tr><td>它是什么</td><td>自托管的 coding agent 控制中心。核心卖点是 <strong>ACP（Agent-Client Protocol）</strong>：可以跑 OpenHands、Claude Code、Codex、Gemini、Pi、OpenCode，后端可在本地 / Docker / VM / 云之间切换；带 Slack/GitHub/Linear 自动化和自托管 UI。</td></tr>
+<tr><td>我们取什么</td><td>沙箱后端分层（T0–T3）、平台形态、Web UX、对外暴露 MCP、自动化的触发方式。</td></tr>
+<tr><td>我们不取什么</td><td><strong>ACP 聚合第三方 agent</strong>——我们跑 model，不跑 Claude Code / Codex 这类 agent；也不做多后端切换的运营面。</td></tr>
+<tr><td>我们要补什么</td><td>容器/远程沙箱、常驻自动化（schedule/webhook）、平台级 UI。</td></tr>
+<tr><td>判定</td><td><strong>平台参照第一名</strong>。ACP 只作为未来可选入口，不作为核心；核心仍是 model-agnostic 的 harness。</td></tr>
+</tbody>
+</table>
+
+<h4 id="023-openai-agents-sdk">0.2.3 OpenAI Agents SDK（30k）—— agent-as-tool 的最佳参照</h4>
+<table class="cols-2">
+<thead><tr><th style="width:20%">项</th><th>内容</th></tr></thead>
+<tbody>
+<tr><td>它是什么</td><td>轻量 agent 框架：agent loop、handoff、guardrails、tracing、sessions（SQLite）、MCP。Python 优先，模型以 OpenAI 为主。</td></tr>
+<tr><td>我们取什么</td><td>agent-as-tool、handoff、guardrails（映射到 policy engine）、tracing 的 span 语义、session 持久化。</td></tr>
+<tr><td>我们不取什么</td><td>OpenAI-only、Python-only、把编排留在代码里（我们要 profile 化）。</td></tr>
+<tr><td>我们要补什么</td><td>guardrails 作为 ControlPlane 的 policy、handoff 作为 group chat 的一种、trace 的父子 span。</td></tr>
+<tr><td>判定</td><td><strong>组件级参照</strong>。它证明 8 个窄 API 里的 stream / invoke / record 足够表达 agent 循环。</td></tr>
+</tbody>
+</table>
+
+<h4 id="024-swe-agent">0.2.4 SWE-agent（20k）—— coding loop 的最佳参照</h4>
+<table class="cols-2">
+<thead><tr><th style="width:20%">项</th><th>内容</th></tr></thead>
+<tbody>
+<tr><td>它是什么</td><td>单任务 coding agent：agent-computer interface（ACI）、Docker 环境、trajectory 日志、评测。</td></tr>
+<tr><td>我们取什么</td><td>代码任务循环、环境交互、eval / golden set、trajectory 回放、sandbox 的 exec 语义。</td></tr>
+<tr><td>我们不取什么</td><td>单一 coding 场景、单任务模型。</td></tr>
+<tr><td>我们要补什么</td><td>eval 作为 ControlPlane 的一部分；sandbox T1/T2 的 exec 边界。</td></tr>
+<tr><td>判定</td><td><strong>场景参照</strong>。它验证了 loop + sandbox + eval 三件套，正好对应我们的 C1 / C6 / C8。</td></tr>
+</tbody>
+</table>
+
+<h4 id="025-claude-agent-sdk">0.2.5 Claude Agent SDK（8k）—— 唯一内核</h4>
+<table class="cols-2">
+<thead><tr><th style="width:20%">项</th><th>内容</th></tr></thead>
+<tbody>
+<tr><td>它是什么</td><td>agent harness SDK：loop、流式、工具循环、subagent、hooks、sessions、permissions、MCP。</td></tr>
+<tr><td>我们取什么</td><td>loop、流式、工具循环、subagent 语义、permission 语义。它是 C1 Kernel 的唯一实现来源。</td></tr>
+<tr><td>我们不取什么</td><td>把它当唯一运行时/唯一模型；我们要在它前面加 ModelGateway。</td></tr>
+<tr><td>我们要补什么</td><td>adapter 隔离、模型切换、能力协商、usage 记账。</td></tr>
+<tr><td>判定</td><td><strong>内核唯一来源</strong>。不 fork、不重写 loop；所有模型差异在 A1 内部消化。</td></tr>
+</tbody>
+</table>
+
+<h3 id="03-orchestration-refs">0.3 编排层参照（2 个补充）</h3>
+
+<h4 id="031-crewai">0.3.1 CrewAI（60k）—— Crews ≈ roles，Flows ≈ workflow</h4>
+<table class="cols-2">
+<thead><tr><th style="width:20%">项</th><th>内容</th></tr></thead>
+<tbody>
+<tr><td>它是什么</td><td>Crews（角色化自治协作）+ Flows（事件驱动确定性流程）。商业版 AMP 提供控制平面、观测、治理。</td></tr>
+<tr><td>我们取什么</td><td>Flows 的确定性流程（对应我们的 DAG workflow）、Crews 的角色协作（对应 roles + teams）、AMP 的控制平面形态。</td></tr>
+<tr><td>我们不取什么</td><td>AMP 的商业 admin / 云形态；把编排写进代码。</td></tr>
+<tr><td>我们要补什么</td><td>Crews 的 delegation / hierarchical process / 并行协作、memory、事件驱动分支。</td></tr>
+<tr><td>判定</td><td><strong>编排参照</strong>。我们的 workflow 目前是 Flows 的线性子集，要补 DAG 与并行。</td></tr>
+</tbody>
+</table>
+
+<h4 id="032-langgraph">0.3.2 LangGraph（44k）—— 功能差距最大</h4>
+<table class="cols-2">
+<thead><tr><th style="width:20%">项</th><th>内容</th></tr></thead>
+<tbody>
+<tr><td>它是什么</td><td>低层有状态编排框架：durable execution / checkpoint / 任意点 resume、HITL interrupt、长期记忆、subgraph、可视化调试（LangSmith）。</td></tr>
+<tr><td>我们取什么</td><td>DAG 执行、checkpoint、interrupt/resume、subgraph 组合、节点级 trace。</td></tr>
+<tr><td>我们不取什么</td><td>LangSmith 绑定；把图定义写进代码。</td></tr>
+<tr><td>我们要补什么</td><td>图/DAG（分支、并行、循环）、agent 状态 checkpoint（不是只记 step index）、HITL、长期记忆 / store。</td></tr>
+<tr><td>判定</td><td><strong>编排参照，差距最大</strong>。我们的 workflow 是它的线性特例；P1 要补 DAG + checkpoint + HITL。</td></tr>
+</tbody>
+</table>
+
+<div class="note">
+<strong>一句话：</strong>五家都是 harness；AgentOS 是<strong>把 harness 做成自己的 agent OS</strong>——同一套 loop，换模型、换工具、换沙箱、换入口，最后加上控制平面。编排层（Crews / 图 / group chat）不是另一套内核，而是同一个 loop 的不同上下文。
+</div>
 </div>
 
+<h2 id="tldr-five-answers">TL;DR. 五个问题的答案</h2>
 <div class="card">
-
-<h3 id="sec-4">两个直接回答</h3>
-
-<p><strong>"跨运行时可移植"是什么意思？</strong> 同一份 agent 定义能在不同 runtime（Claude SDK / DSH / LangGraph）上执行。DSH 的契约绑定 Cordis（只在 DSH 内有效）；OpenHands 用 ACP 把第三方 agent 装进来。<strong>我们不追求这个</strong>：我们的可移植性是"模型可换 + 工具走 MCP"，不是"配置跨 runtime"。</p>
-
-<p><strong>"要不要对齐 OpenHands 的平台方向？"</strong> 对齐它的 <strong>control plane / 沙箱后端 / Web UX / 对外 MCP</strong>；<strong>不对齐</strong>它"跑 Claude Code / Codex / OpenHands"的 agent 聚合模式——我们跑的是 model。</p>
-
+<table class="cols-2">
+<thead><tr><th style="width:24%">问题</th><th>答案</th></tr></thead>
+<tbody>
+<tr><td><strong>什么是 agent harness？</strong></td><td>把 model、tool、session、sandbox 串成<strong>可重复循环</strong>的运行时。模型是函数，harness 是执行这个函数的程序。</td></tr>
+<tr><td><strong>几层架构？</strong></td><td><strong>5 层</strong>：Entry → Kernel → Capabilities → Config → Control Plane。依赖只能向下，不能反向。</td></tr>
+<tr><td><strong>几个核心组件？</strong></td><td><strong>8 个</strong>：Kernel、ModelGateway、ToolRegistry、SessionStore、Orchestrator、Sandbox、ConfigLoader、ControlPlane。</td></tr>
+<tr><td><strong>几个窄 API？</strong></td><td><strong>8 个</strong>：stream、invoke、run/cancel、append/read/checkpoint、start/resume/interrupt、exec、resolve/dump、record/check。</td></tr>
+<tr><td><strong>循环哲学怎么做？</strong></td><td><strong>一个 loop，五个不变量</strong>：append-only、model-visible ⟺ logged、single-writer、cancel-through、budget-hard-stop。多 agent 与 workflow 都是同一个 loop 的不同上下文。</td></tr>
+</tbody>
+</table>
+<div class="warn">
+这是 v2 规划稿，不是当前代码事实。它和 v1 的四契约 + 公开 conformance 叙事有 4 处冲突：Knowledge 降级、conformance 取消、preset → profile、框架叙事 → 平台叙事。现状以 <a href="agent.html">agent.html</a> / <a href="net.html">net.html</a> 为准。
+</div>
 </div>
 
+<h2 id="1-what-is-a-harness">1 什么是 Agent Harness</h2>
 <div class="card">
-
-<h2 id="sec-5">1. 目标模块图</h2>
-
-<pre>apps/web                 Web console（唯一产品入口）
-cli                      agentos CLI（运维）
-packages/
-  contracts/             纯类型 + JSON Schema，零依赖
-  kernel/                Claude Agent SDK adapter、turn/step 生命周期、取消
-  models/                gateway、dialect、routing、能力探测、成本
-    dialect-anthropic/   Anthropic 及兼容 endpoint
-    dialect-openai/      OpenAI-compat → Anthropic wire（translation gateway）
-    dialect-bedrock/     AWS Bedrock 原生链
-  tools/                 registry、MCP client、agent-as-tool、skill-as-tool、策略
-  orchestration/         subagent、teams、group chat、DAG workflow、checkpoint
-  sessions/              append-only 事件日志、ledger、checkpoint、compaction
-  sandbox/               fs / process / container / network / policy
-  config/                profile、bundle、patch、schema、dump、drift
-  control-plane/         tracing、audit、budget、concurrency、approvals、evals
-  entry-web/ entry-cli/  入口适配器
-  providers/             可选（knowledge-markdown 等，非核心契约）</pre>
-
+<h3 id="11-definition">1.1 定义</h3>
+<p><strong>Agent harness 是把模型变成 agent 的运行时。</strong>它不生产智能，它组织智能：决定模型看到什么上下文、能调用什么工具、会话如何持久、副作用如何受限、循环何时停止。</p>
+<div class="note">
+一句话公式：<code>harness = loop(model, tools, session, sandbox) + policy + observability</code><br>
+模型是可替换的函数；工具是可挂载的能力；session 是事实源；sandbox 是边界；policy 与 observability 是平台属性。
 </div>
 
-<div class="card">
+<h3 id="12-harness-vs-framework-platform-runtime">1.2 四个近义词的边界</h3>
+<table class="cols-3">
+<thead><tr><th>词</th><th>它是什么</th><th>AgentOS 的取舍</th></tr></thead>
+<tbody>
+<tr><td><strong>Harness</strong></td><td>执行 agent 循环的运行时：loop + context + tools + session + sandbox</td><td><strong>我们做这个</strong></td></tr>
+<tr><td><strong>Framework</strong></td><td>供你组合的抽象库：graph、chain、agent 类</td><td>我们不做通用编排库；只做运行时</td></tr>
+<tr><td><strong>Platform</strong></td><td>harness + 控制平面 + 入口 + 运营</td><td><strong>我们的产品形态</strong>（v2 目标）</td></tr>
+<tr><td><strong>Runtime</strong></td><td>进程/宿主环境（Node、容器、VM）</td><td>我们只依赖它，不重造它</td></tr>
+</tbody>
+</table>
 
-<h3 id="sec-6">Model 层怎么做到"完全可切换"</h3>
+<h3 id="13-what-a-harness-must-own">1.3 一个 harness 必须自己拥有的五件事</h3>
+<table class="cols-2">
+<thead><tr><th>职责</th><th>不拥有的后果</th></tr></thead>
+<tbody>
+<tr><td>循环（turn / step / tool call）</td><td>模型只能一次性问答，无法完成多步任务</td></tr>
+<tr><td>上下文（system / history / tool schema）</td><td>行为不可复现，无法调试</td></tr>
+<tr><td>会话（append-only 事实源）</td><td>崩溃即丢失，无法 resume / fork</td></tr>
+<tr><td>沙箱（fs / process / network）</td><td>工具即任意代码执行，无法运营</td></tr>
+<tr><td>治理（预算 / 并发 / 审批 / 审计）</td><td>成本与风险不可控，不能上生产</td></tr>
+</tbody>
+</table>
+<p><strong>AgentOS 的立场：</strong>这五件事全在 harness 内；模型、工具、知识、入口都在 harness 外，通过窄接口接入。</p>
 
-<p>这是你点名要的设计，单独说清楚：</p>
+<h3 id="14-how-reference-harnesses-define-it">1.4 参考实现怎么定义 harness</h3>
+<table class="cols-4 ref-table">
+<thead><tr><th>参考</th><th>Stars</th><th>它的 harness 核心</th><th>我们取什么 / 不取什么</th></tr></thead>
+<tbody>
+<tr><td><strong>Claude Agent SDK</strong></td><td>8,391</td><td>agent loop + 流式 + tool loop</td><td>取 loop；不把它当唯一运行时</td></tr>
+<tr><td><strong>DeepSeek Harness</strong></td><td>266,146</td><td>Cordis 插件树：session log、agent-loop、tools、sandbox 全是插件</td><td>取插件边界与会话日志；不取 Cordis 绑定</td></tr>
+<tr><td><strong>OpenHands</strong></td><td>92,226</td><td>agent server + 多后端沙箱 + ACP 聚合</td><td>取沙箱后端与平台形态；不取第三方 agent 聚合</td></tr>
+<tr><td><strong>OpenAI Agents SDK</strong></td><td>30,384</td><td>agent loop + handoff + guardrails + tracing</td><td>取 agent-as-tool / handoff / tracing；不取 OpenAI-only</td></tr>
+<tr><td><strong>SWE-agent</strong></td><td>20,682</td><td>agent-computer interface + 单任务循环</td><td>取环境交互与评测；不取单一 coding 场景</td></tr>
+</tbody>
+</table>
 
-<ol><li><strong>内部只认一种 wire format</strong>：Anthropic Messages。因为 loop 是 Claude SDK，换 wire 等于换 loop，代价最大。</li><li><strong>每个 vendor 一个 dialect</strong>：只做三件事——解析 channel（baseUrl/auth 只从 env 名取）、健康探测、alias→model。现有 <code>anthropic-compat</code>、<code>bedrock</code> 保留。</li><li><strong>OpenAI-compat 走 translation gateway</strong>：把 OpenAI Chat Completions 翻译成 Anthropic Messages（含流式、tool calls、stop、usage）。不放进 loop，放在模型层的边界上。</li><li><strong>能力位 + 启动协商</strong>：每个模型声明 tools / parallel tools / streaming / structured output / vision / thinking / caching / context window / max output。启动时校验，缺关键能力就 fail fast，不静默降级。</li><li><strong>探测不是 liveness</strong>：<code>/v1/models</code> 只证明端点活着；真正的探测是跑一次最小 tool-call smoke，证明这个模型能驱动 agent。</li><li><strong>成本与预算</strong>：单价表进 manifest；每次请求记账；session/agent/tenant 三级预算硬停。</li><li><strong>测试矩阵</strong>：每个 dialect × 每个能力位都有 contract test + cassette 回放，CI 阻断。</li></ol>
-
+<h3 id="15-scope">1.5 我们做什么 / 不做什么</h3>
+<table class="cols-2">
+<thead><tr><th>做</th><th>不做</th></tr></thead>
+<tbody>
+<tr><td>一个可替换的 loop 内核</td><td>自研模型</td></tr>
+<tr><td>模型可切换（3 类 dialect）</td><td>跑第三方 agent harness（Claude Code / Codex / OpenHands）</td></tr>
+<tr><td>工具统一（native / MCP / skill / agent）</td><td>公开 conformance 标准</td></tr>
+<tr><td>append-only 会话 + checkpoint</td><td>多 pod / K8s 产品化</td></tr>
+<tr><td>subagent / teams / DAG workflow</td><td>admin DB 配置 / 4A 全家桶</td></tr>
+<tr><td>control plane（观测 / 治理 / 审计 / 预算）</td><td>跨运行时移植</td></tr>
+</tbody>
+</table>
 </div>
 
+<h2 id="2-how-many-layers">2 几层架构</h2>
 <div class="card">
-
-<h2 id="sec-7">2. 200 点</h2>
-
-<p>图例：对齐列 <code>—</code> = 自研或无直接对应；其余为参考代号。</p>
-
+<h3 id="21-five-layers">2.1 五层</h3>
+<div class="mermaid">
+flowchart TB
+  L1["1 Entry<br/>Web / CLI / MCP"]
+  L2["2 Kernel<br/>Agent Loop / Turn / Cancel"]
+  L3["3 Capabilities<br/>Model · Tool · Session · Orchestration · Sandbox"]
+  L4["4 Config<br/>Profile / Bundle / Patch"]
+  L5["5 Control Plane<br/>Trace · Budget · Policy · Audit · Eval"]
+  L1 --> L2
+  L2 --> L3
+  L4 --> L3
+  L2 --> L5
+  L3 --> L5
 </div>
 
+<h3 id="22-layer-responsibilities">2.2 每层职责</h3>
+<table class="cols-3">
+<thead><tr><th>层</th><th>职责</th><th>不做什么</th></tr></thead>
+<tbody>
+<tr><td><strong>1 Entry</strong></td><td>协议、鉴权、SSE、UI 适配</td><td>不跑 loop、不碰模型</td></tr>
+<tr><td><strong>2 Kernel</strong></td><td>turn/step 生命周期、上下文组装、取消、工具循环</td><td>不知道 provider 细节</td></tr>
+<tr><td><strong>3 Capabilities</strong></td><td>模型通道、工具注册、事件日志、编排、沙箱</td><td>不互相调用，只经 kernel/contracts</td></tr>
+<tr><td><strong>4 Config</strong></td><td>profile / bundle / patch 解析、校验、dump</td><td>不参与运行时决策</td></tr>
+<tr><td><strong>5 Control Plane</strong></td><td>trace、usage、预算、策略、审批、审计、eval</td><td>不进入业务判断链，只横切</td></tr>
+</tbody>
+</table>
+
+<h3 id="23-dependency-direction">2.3 依赖方向</h3>
+<ul>
+<li>只能向下：Entry → Kernel → Capabilities → Config；Control Plane 横切。</li>
+<li><code>contracts</code> 零依赖；<code>kernel</code> 只依赖 <code>contracts</code>。</li>
+<li>SDK（Claude Agent SDK）只允许在 <code>kernel/adapter</code> import。</li>
+<li>Capabilities 之间不互相 import；通过窄 API 或事件交互。</li>
+<li>反向依赖在 CI 直接失败。</li>
+</ul>
+
+<h3 id="24-why-five">2.4 为什么是五层</h3>
+<table class="cols-2">
+<thead><tr><th>层数</th><th>判断</th></tr></thead>
+<tbody>
+<tr><td>三层（Entry / Kernel / Providers）</td><td>缺少配置层与控制平面，运营能力无处安放</td></tr>
+<tr><td><strong>五层（本方案）</strong></td><td>每层可独立替换；控制平面不污染 loop；配置不进入运行时</td></tr>
+<tr><td>七层（再加存储/网络层）</td><td>过度分层；SQLite/HTTP 是实现细节，不是架构层</td></tr>
+</tbody>
+</table>
+
+<h3 id="25-layer-component-api-matrix">2.5 层 × 组件 × API 矩阵</h3>
+<table class="cols-3">
+<thead><tr><th>层</th><th>组件</th><th>窄 API</th></tr></thead>
+<tbody>
+<tr><td>Entry</td><td>EntryAdapter</td><td>REST / SSE</td></tr>
+<tr><td>Kernel</td><td>Kernel</td><td><code>run</code> / <code>cancel</code></td></tr>
+<tr><td>Capabilities</td><td>ModelGateway · ToolRegistry · SessionStore · Orchestrator · Sandbox</td><td><code>stream</code> · <code>invoke</code> · <code>append/read/checkpoint</code> · <code>start/resume/interrupt</code> · <code>exec</code></td></tr>
+<tr><td>Config</td><td>ConfigLoader</td><td><code>resolve</code> / <code>dump</code></td></tr>
+<tr><td>Control Plane</td><td>ControlPlane</td><td><code>record</code> / <code>check</code></td></tr>
+</tbody>
+</table>
+</div>
+
+<h2 id="3-how-many-components">3 几个核心组件</h2>
 <div class="card">
+<h3 id="31-eight-components">3.1 八个组件</h3>
+<table class="cols-4 components-table">
+<thead><tr><th>#</th><th>组件</th><th>一句话职责</th><th>不做什么</th></tr></thead>
+<tbody>
+<tr><td>C1</td><td><strong>Kernel</strong></td><td>跑 agent loop：turn/step、上下文、工具循环、取消</td><td>不解析 provider、不直接碰网络</td></tr>
+<tr><td>C2</td><td><strong>ModelGateway</strong></td><td>alias → channel；dialect、能力协商、健康、fallback、成本</td><td>不理解 tool 语义</td></tr>
+<tr><td>C3</td><td><strong>ToolRegistry</strong></td><td>注册/解析/调用 native、MCP、skill、agent 四类工具</td><td>不跑 turn、不做编排</td></tr>
+<tr><td>C4</td><td><strong>SessionStore</strong></td><td>append-only 事件日志、投影、checkpoint、resume、fork</td><td>不渲染、不决策</td></tr>
+<tr><td>C5</td><td><strong>Orchestrator</strong></td><td>subagent、teams、group chat、DAG workflow</td><td>不直接调模型；复用 Kernel</td></tr>
+<tr><td>C6</td><td><strong>Sandbox</strong></td><td>fsRoots、进程、容器、网络策略、资源上限</td><td>不定义业务规则</td></tr>
+<tr><td>C7</td><td><strong>ConfigLoader</strong></td><td>profile / bundle / patch 解析、校验、dump、drift</td><td>不在运行时改配置</td></tr>
+<tr><td>C8</td><td><strong>ControlPlane</strong></td><td>trace、usage、budget、policy、approval、audit、eval</td><td>不进入 loop 的业务分支</td></tr>
+</tbody>
+</table>
 
-<h3 id="sec-8">A. 定位与原则（1–8）</h3>
+<h3 id="32-component-cards">3.2 组件边界</h3>
+<div class="domain-grid">
+  <div class="entity"><div class="entity-name">C1 Kernel</div><div class="entity-desc">循环的所有者</div><ul class="entity-fields">
+    <li>输入：session + input + role</li><li>输出：事件流 + turn 结果</li><li>依赖：C2 / C3 / C4 / C8</li><li>不依赖：C5 / C6</li></ul></div>
+  <div class="entity"><div class="entity-name">C2 ModelGateway</div><div class="entity-desc">模型通道的所有者</div><ul class="entity-fields">
+    <li>输入：messages + tools + alias</li><li>输出：stream + usage</li><li>依赖：C7 / C8</li><li>不依赖：C3 / C4</li></ul></div>
+  <div class="entity"><div class="entity-name">C3 ToolRegistry</div><div class="entity-desc">能力的唯一入口</div><ul class="entity-fields">
+    <li>输入：tool name + args</li><li>输出：result / error</li><li>依赖：C6 / C8</li><li>不依赖：C2</li></ul></div>
+  <div class="entity"><div class="entity-name">C4 SessionStore</div><div class="entity-desc">事实源</div><ul class="entity-fields">
+    <li>输入：event</li><li>输出：seq / projection / checkpoint</li><li>依赖：存储</li><li>不依赖：C2 / C3 / C5</li></ul></div>
+  <div class="entity"><div class="entity-name">C5 Orchestrator</div><div class="entity-desc">多 agent 与 workflow</div><ul class="entity-fields">
+    <li>输入：role / task / DAG</li><li>输出：子结果 / run 状态</li><li>依赖：C1 / C4 / C8</li><li>不依赖：C2 / C3（经 C1）</li></ul></div>
+  <div class="entity"><div class="entity-name">C6 Sandbox</div><div class="entity-desc">副作用边界</div><ul class="entity-fields">
+    <li>输入：argv / fsRoots / network</li><li>输出：stdout / exit / files</li><li>依赖：OS / 容器</li><li>不依赖：C1–C5</li></ul></div>
+  <div class="entity"><div class="entity-name">C7 ConfigLoader</div><div class="entity-desc">配置解析</div><ul class="entity-fields">
+    <li>输入：profile / bundle / patch</li><li>输出：解析树 / dump</li><li>依赖：contracts</li><li>不依赖：运行时组件</li></ul></div>
+  <div class="entity"><div class="entity-name">C8 ControlPlane</div><div class="entity-desc">观测与治理</div><ul class="entity-fields">
+    <li>输入：span / usage / policy query</li><li>输出：decision / audit</li><li>依赖：存储 / OTel</li><li>不依赖：C1 的业务状态</li></ul></div>
+</div>
 
-<table>
+<h3 id="33-component-call-graph">3.3 组件调用图</h3>
+<div class="mermaid">
+flowchart LR
+  K[C1 Kernel] --> M[C2 ModelGateway]
+  K --> T[C3 ToolRegistry]
+  K --> S[C4 SessionStore]
+  K --> CP[C8 ControlPlane]
+  T --> SB[C6 Sandbox]
+  T --> CP
+  O[C5 Orchestrator] --> K
+  O --> S
+  CFG[C7 ConfigLoader] --> M
+  CFG --> T
+  CFG --> O
+</div>
 
-<tr><th>#</th><th>做什么</th><th>怎么做</th><th>对齐</th></tr>
+<h3 id="34-component-rules">3.4 组件规则</h3>
+<ul>
+<li><strong>一个组件一个所有者</strong>：每类状态只有一个组件写。</li>
+<li><strong>组件不互相 import</strong>：只经窄 API 或事件。</li>
+<li><strong>组件可替换</strong>：C2 换 dialect、C3 换 transport、C4 换存储、C6 换沙箱后端。</li>
+<li><strong>组件不藏在 loop 里</strong>：新增能力必须是一个组件或一个 provider，不改 C1。</li>
+</ul>
+</div>
 
-<tr><td>1</td><td>定义 AgentOS 为 model-agnostic agent 平台</td><td>定位写进 README/产品文档；所有设计以"换模型不换平台"为约束</td><td>—</td></tr>
+<h2 id="4-how-many-apis">4 几个窄 API</h2>
+<div class="card">
+<h3 id="41-narrow-api-principles">4.1 窄 API 原则</h3>
+<table class="cols-2">
+<thead><tr><th>原则</th><th>含义</th></tr></thead>
+<tbody>
+<tr><td>一个动词一个方法</td><td>不提供 "doEverything"；调用方组合</td></tr>
+<tr><td>JSON Schema 跨边界</td><td>不传 TypeScript 类型；不让 zod 跨内核</td></tr>
+<tr><td>additive-only</td><td>加字段不改语义；破坏性变更 major</td></tr>
+<tr><td>错误是返回值</td><td>typed code + retryable，不靠异常控制流</td></tr>
+<tr><td>可替换</td><td>API 稳定，provider 可变</td></tr>
+</tbody>
+</table>
 
+<h3 id="42-eight-apis">4.2 八个窄 API</h3>
+<table class="cols-4 api-table">
+<thead><tr><th>#</th><th>API</th><th>签名</th><th>谁调</th></tr></thead>
+<tbody>
+<tr><td>A1</td><td><code>ModelGateway.stream</code></td><td><code>(req) → AsyncIterable&lt;Event&gt;</code></td><td>Kernel</td></tr>
+<tr><td>A2</td><td><code>ToolRegistry.invoke</code></td><td><code>(name, args, ctx) → Result</code></td><td>Kernel</td></tr>
+<tr><td>A3</td><td><code>AgentRuntime.run / cancel</code></td><td><code>(req) → TurnResult</code> / <code>(id) → void</code></td><td>Entry / Orchestrator</td></tr>
+<tr><td>A4</td><td><code>SessionStore.append / read / checkpoint</code></td><td><code>(event) → seq</code> / <code>(from) → Event[]</code> / <code>() → Checkpoint</code></td><td>Kernel / Orchestrator</td></tr>
+<tr><td>A5</td><td><code>Orchestrator.start / resume / interrupt</code></td><td><code>(workflow, input) → runId</code> / <code>(runId) → runId</code> / <code>(runId) → paused</code></td><td>Entry / Schedule</td></tr>
+<tr><td>A6</td><td><code>Sandbox.exec</code></td><td><code>(argv, policy) → ExecResult</code></td><td>ToolRegistry</td></tr>
+<tr><td>A7</td><td><code>ConfigLoader.resolve / dump</code></td><td><code>(profile) → ResolvedTree</code> / <code>() → string</code></td><td>Bootstrap / CLI</td></tr>
+<tr><td>A8</td><td><code>ControlPlane.record / check</code></td><td><code>(span) → void</code> / <code>(query) → Decision</code></td><td>Kernel / ToolRegistry</td></tr>
+</tbody>
+</table>
+
+<h3 id="43-api-details">4.3 API 详解</h3>
+
+<h4 id="a1-modelgateway-stream">A1 ModelGateway.stream — 模型通道</h4>
+<pre><code class="language-json">// req
+{
+  "model": "general",                 // alias / manifest name
+  "messages": [...],                   // Anthropic Messages
+  "tools": [...],                      // JSON Schema
+  "stream": true,
+  "budget": { "sessionId": "...", "maxUsd": 2.5 },
+  "trace": { "traceId": "...", "turnId": "..." }
+}
+// events
+{ "type": "text", "delta": "..." }
+{ "type": "tool_call", "id": "...", "name": "...", "args": {...} }
+{ "type": "usage", "input": 1200, "output": 340, "cacheRead": 800, "costUsd": 0.003 }
+{ "type": "error", "code": "AGT-2001", "retryable": false }</code></pre>
+<table class="cols-3">
+<thead><tr><th>字段</th><th>来源</th><th>语义</th></tr></thead>
+<tbody>
+<tr><td><code>model</code></td><td>profile / role / request</td><td>优先级：request &gt; role &gt; profile</td></tr>
+<tr><td><code>messages</code></td><td>SessionStore 投影</td><td>只读；此层不改历史</td></tr>
+<tr><td><code>tools</code></td><td>ToolRegistry</td><td>JSON Schema，不转换</td></tr>
+<tr><td><code>budget</code></td><td>ControlPlane</td><td>超预算 → AGT-1007，不发请求</td></tr>
+</tbody>
+</table>
+<h5 id="a1-flow">执行流程</h5>
+<pre><code class="language-text">1. alias → model id
+2. dialect = manifest.dialect；channel 只从 env 名取
+3. capability 校验：tools / streaming / context；缺失 → AGT-2002
+4. health gate（30s cache）；不健康 → fallbackChain
+5. 发请求：anthropic-compat / bedrock / openai-compat(gateway)
+6. 流式转发 + 首 token 延迟
+7. 5xx/超时 → fallback；4xx → 不重试
+8. usage + span</code></pre>
+
+<h4 id="a2-toolregistry-invoke">A2 ToolRegistry.invoke — 工具调用</h4>
+<pre><code class="language-json">// req
+{ "name": "read_file", "args": { "path": "..." }, "sessionId": "...", "idempotencyKey": "..." }
+// resp
+{ "ok": true, "result": {...}, "bytes": 1234, "offloaded": false }
+{ "ok": false, "code": "AGT-2004", "error": "timeout", "retryable": true }</code></pre>
+<table class="cols-3">
+<thead><tr><th>步骤</th><th>动作</th><th>失败码</th></tr></thead>
+<tbody>
+<tr><td>resolve</td><td>name → mount plan</td><td>AGT-1004</td></tr>
+<tr><td>policy</td><td>allow / deny / approval</td><td>AGT-1003 / 2006</td></tr>
+<tr><td>idempotent</td><td>非幂等 + key → 去重</td><td>AGT-1005</td></tr>
+<tr><td>sandbox</td><td>fsRoots / process / network</td><td>AGT-2005</td></tr>
+<tr><td>invoke</td><td>超时 / 取消 / 结果上限</td><td>AGT-2004</td></tr>
+<tr><td>offload</td><td>&gt;10KB 落盘，只回指针</td><td>—</td></tr>
+</tbody>
+</table>
+
+<h4 id="a3-agentruntime-run">A3 AgentRuntime.run / cancel — 跑一个 turn</h4>
+<pre><code class="language-json">// req
+{ "sessionId": "...", "input": "...", "role": "triage-analyst", "model": "general", "maxTurns": 20, "budgetUsd": 1.0 }
+// resp
+{ "turnId": "...", "status": "done", "events": 12, "usage": { "costUsd": 0.04 } }</code></pre>
+<table class="cols-2">
+<thead><tr><th>保证</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td>顺序</td><td>同 session 串行；不同 session 并发</td></tr>
+<tr><td>可恢复</td><td>turn 结束写 checkpoint</td></tr>
+<tr><td>可取消</td><td>AbortSignal 贯穿 model / tool / 子进程</td></tr>
+<tr><td>可审计</td><td>turn/step/tool 事件全量落日志</td></tr>
+</tbody>
+</table>
+
+<h4 id="a4-sessionstore">A4 SessionStore — 事件与检查点</h4>
+<pre><code class="language-text">append(sessionId, event)        → seq
+read(sessionId, fromSeq)        → events
+checkpoint(sessionId, turnId)   → checkpointId
+resume(sessionId, checkpointId) → state
+fork(sessionId, turnId)         → newSessionId</code></pre>
+<ul>
+<li><strong>append-only</strong>：事件不修改、不删除；compaction 也是事件。</li>
+<li><strong>model-visible ⟺ logged</strong>：进入模型的内容必须可回放。</li>
+<li><strong>single-writer</strong>：同一 session 同时只有一个写入 turn。</li>
+</ul>
+
+<h4 id="a5-orchestrator">A5 Orchestrator — 编排</h4>
+<pre><code class="language-text">start(workflow, input)           → runId
+resume(runId, checkpointId)      → runId
+interrupt(runId, reason)         → paused
+status(runId)                    → { state, nodes }</code></pre>
+<table class="cols-2">
+<thead><tr><th>能力</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td>DAG</td><td>分支 / 并行 / 有界循环</td></tr>
+<tr><td>checkpoint</td><td>节点级；resume 从失败节点继续</td></tr>
+<tr><td>HITL</td><td>review 节点暂停，审批后继续</td></tr>
+<tr><td>trigger</td><td>manual / schedule / webhook</td></tr>
+</tbody>
+</table>
+
+<h4 id="a6-sandbox-exec">A6 Sandbox.exec — 副作用边界</h4>
+<pre><code class="language-json">// req
+{ "argv": ["bash", "-lc", "..."], "fsRoots": ["/app/.agentos/workspaces/s1"], "network": { "allow": [] }, "limits": { "timeoutMs": 60000, "memMb": 512 } }
+// resp
+{ "exit": 0, "stdout": "...", "stderr": "...", "durationMs": 1234, "files": [...] }</code></pre>
+<p>四档：T0 fsRoots（默认）→ T1 进程隔离 → T2 每会话容器 → T3 远程沙箱。默认拒绝；密钥执行时注入。</p>
+
+<h4 id="a7-configloader">A7 ConfigLoader.resolve / dump</h4>
+<pre><code class="language-text">resolve(profile)  → ResolvedTree   // bundle → profile patch → home patch → CLI
+dump()            → string         // 可解释的完整树
+validate()        → Issue[]        // schema + 引用 + drift</code></pre>
+
+<h4 id="a8-controlplane">A8 ControlPlane.record / check</h4>
+<pre><code class="language-text">record(span)                    → void
+checkBudget(scope, estimated)   → allow | deny | ask
+checkPolicy(actor, action, res) → allow | deny | approve
+requestApproval(req)            → approvalId</code></pre>
+
+<h3 id="44-apis-compose-the-loop">4.4 八个 API 怎么拼成 loop</h3>
+<div class="mermaid">
+sequenceDiagram
+  participant E as Entry
+  participant K as Kernel
+  participant S as SessionStore
+  participant M as ModelGateway
+  participant T as ToolRegistry
+  participant C as ControlPlane
+  E->>K: A3 run(session, input)
+  K->>S: A4 append(user/message)
+  K->>M: A1 stream(messages, tools)
+  M-->>K: text / tool_call
+  K->>T: A2 invoke(tool, args)
+  T-->>K: result
+  K->>S: A4 append(tool/result)
+  K->>M: A1 stream(next)
+  M-->>K: final
+  K->>S: A4 append(assistant/message) + checkpoint
+  K->>C: A8 record(usage, span)
+  K-->>E: A3 TurnResult
+</div>
+
+<h3 id="45-why-eight">4.5 为什么是这 8 个</h3>
+<table class="cols-2">
+<thead><tr><th>判断</th><th>理由</th></tr></thead>
+<tbody>
+<tr><td>少一个 stream</td><td>Kernel 就直接依赖 provider，模型不可切换</td></tr>
+<tr><td>少一个 invoke</td><td>工具散落在 loop 里，无法统一策略/观测</td></tr>
+<tr><td>少一个 append</td><td>会话不可恢复，无法审计</td></tr>
+<tr><td>少一个 exec</td><td>副作用无边界，不能上生产</td></tr>
+<tr><td>少一个 resolve</td><td>配置进入运行时，profile 失效</td></tr>
+<tr><td>少一个 record</td><td>成本/行为不可见，不能运营</td></tr>
+<tr><td>再多一个</td><td>开始出现 "doEverything"；窄接口被破坏</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2 id="5-loop-philosophy">5 循环哲学怎么做</h2>
+<div class="card">
+<h3 id="51-one-loop">5.1 一个 loop：turn / step / tool / observation</h3>
+<p>循环不是"让模型多想几轮"，而是<strong>一个有状态的执行器</strong>：每一步都从事实源取上下文、调用窄 API、把结果写回事实源。</p>
+<div class="mermaid">
+flowchart TB
+  A[turn start] --> B[claim input]
+  B --> C[assemble context]
+  C --> D[model stream]
+  D --> E{tool_call?}
+  E -->|yes| F[policy + sandbox]
+  F --> G[append tool result]
+  G --> D
+  E -->|no| H[append assistant message]
+  H --> I[checkpoint]
+  I --> J[turn end]
+</div>
+
+<h3 id="52-five-invariants">5.2 五个不变量</h3>
+<table class="cols-2">
+<thead><tr><th>不变量</th><th>违反的后果</th></tr></thead>
+<tbody>
+<tr><td><strong>Append-only</strong></td><td>历史被改写，行为不可复现</td></tr>
+<tr><td><strong>Model-visible ⟺ logged</strong></td><td>模型看到的内容无法回放，审计失效</td></tr>
+<tr><td><strong>Single-writer</strong></td><td>并发写同一 session，事件乱序</td></tr>
+<tr><td><strong>Cancel-through</strong></td><td>取消只停 UI，子进程/工具继续烧钱</td></tr>
+<tr><td><strong>Budget hard-stop</strong></td><td>预算只是提示，成本失控</td></tr>
+</tbody>
+</table>
+
+<h3 id="53-loop-skeleton">5.3 循环骨架</h3>
+<pre><code class="language-text">loop:
+  event = claim_next_input(session)          // A4
+  if none: close_turn()
+  context = derive_messages(events)          // A4
+  decision = control.check_budget(context)    // A8
+  if decision != allow: close_turn(denied)
+  stream = model.stream(context, tools)      // A1
+  for chunk in stream:
+    emit(chunk)
+    if chunk is tool_call:
+      result = tools.invoke(chunk, context)  // A2 → policy → A6
+      append(tool_result)                    // A4
+      continue loop                          // next step
+  append(assistant_message)                  // A4
+  checkpoint(session)                        // A4
+  close_turn()</code></pre>
+
+<h3 id="54-tool-loop">5.4 工具循环</h3>
+<table class="cols-3">
+<thead><tr><th>阶段</th><th>动作</th><th>失败处理</th></tr></thead>
+<tbody>
+<tr><td>resolve</td><td>name → mount plan</td><td>AGT-1004，回模型可读错误</td></tr>
+<tr><td>policy</td><td>allow / deny / approval</td><td>拒绝 → 回模型；需审批 → 暂停</td></tr>
+<tr><td>sandbox</td><td>fs / process / network</td><td>越界 → AGT-2005</td></tr>
+<tr><td>invoke</td><td>超时 / 取消</td><td>AGT-2004，标记 retryable</td></tr>
+<tr><td>observe</td><td>结果（或指针）回填</td><td>&gt;10KB → offload</td></tr>
+</tbody>
+</table>
+
+<h3 id="55-multi-agent-loop">5.5 多 agent 循环：同一个 loop</h3>
+<table class="cols-3">
+<thead><tr><th>形态</th><th>差异</th><th>复用什么</th></tr></thead>
+<tbody>
+<tr><td>subagent</td><td>独立上下文 + 工具围栏 + 预算；返回 typed summary</td><td>Kernel loop、A1/A2/A4</td></tr>
+<tr><td>teams</td><td>roster + task board + mailbox</td><td>subagent + Orchestrator</td></tr>
+<tr><td>group chat</td><td>speaker selection + termination</td><td>Kernel loop + Orchestrator</td></tr>
+<tr><td>workflow</td><td>DAG + checkpoint + HITL</td><td>Kernel loop（agent 节点）</td></tr>
+</tbody>
+</table>
+
+<h3 id="56-termination-resume-cancel">5.6 终止、恢复、取消</h3>
+<div class="states">
+  <span class="s s-mid">running</span><span class="s s-ok">done</span><span class="s s-fail">error</span>
+  <span class="s s-term">aborted</span><span class="s s-mid">paused</span>
+</div>
+<table class="cols-2">
+<thead><tr><th>事件</th><th>行为</th></tr></thead>
+<tbody>
+<tr><td>模型无 tool_call</td><td>append assistant message → done</td></tr>
+<tr><td>maxTurns / budget</td><td>硬停 → error（AGT-1007）</td></tr>
+<tr><td>用户取消 / SIGTERM</td><td>AbortSignal 贯穿 → aborted</td></tr>
+<tr><td>崩溃</td><td>启动扫描 running → aborted；从 checkpoint resume</td></tr>
+<tr><td>HITL</td><td>暂停 → 审批 → resume</td></tr>
+</tbody>
+</table>
+
+<h3 id="57-model-switch-without-breaking-loop">5.7 模型切换不破坏循环</h3>
+<ul>
+<li>loop 只见 Anthropic Messages；vendor 差异在 A1 内部消化。</li>
+<li>能力位在启动时协商；缺 tools/streaming → fail fast，不静默降级。</li>
+<li>fallback 发生在 A1 内部；loop 只看到 "模型换了"，事件与 usage 记录实际模型。</li>
+<li>translation gateway（OpenAI-compat）是 A1 的实现细节，不是第二套 loop。</li>
+</ul>
+
+<h3 id="58-loop-observability">5.8 循环的可观测性</h3>
+<table class="cols-3">
+<thead><tr><th>层</th><th>span</th><th>关键字段</th></tr></thead>
+<tbody>
+<tr><td>turn</td><td><code>turn</code></td><td>session、role、status、duration</td></tr>
+<tr><td>step</td><td><code>step</code></td><td>model、tokens、tool count</td></tr>
+<tr><td>tool</td><td><code>tool</code></td><td>name、args hash、exit、duration</td></tr>
+<tr><td>model</td><td><code>model.request</code></td><td>provider、model、first-token、cost</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2 id="6-release">6 验收与发布</h2>
+<div class="card">
+<h3 id="61-phases">6.1 P0 / P1 / P2</h3>
+<table class="cols-4 progress-table">
+<thead><tr><th>阶段</th><th>范围</th><th>状态</th><th>验收</th></tr></thead>
+<tbody>
+<tr><td>P0 内核 + 模型 + 工具</td><td>Kernel、A1/A2/A4、事件日志、fsRoots</td><td class="st-wip">🟡 进行中</td><td>3 类模型跑同一角色；tool/stream 一致；resume 可用</td></tr>
+<tr><td>P1 编排 + 控制平面</td><td>Orchestrator、A5、subagent/teams/group chat、A8</td><td class="st-todo">⬜ 未开始</td><td>多 agent 可跑；workflow 可中断/恢复；Web 见 trace 与成本</td></tr>
+<tr><td>P2 沙箱 + eval</td><td>A6 T0–T2、eval / golden set / 回归门禁</td><td class="st-todo">⬜ 未开始</td><td>沙箱可选；eval 阻断回归；compose 一键起</td></tr>
+</tbody>
+</table>
+
+<h3 id="62-acceptance">6.2 验收口径</h3>
+<ul>
+<li><strong>五层</strong>：反向依赖为 0；SDK 只出现在 kernel/adapter。</li>
+<li><strong>八组件</strong>：每组件有 contract test；替换一个不影响其余。</li>
+<li><strong>八 API</strong>：每个 API 有 JSON Schema + 错误码 + 超时语义。</li>
+<li><strong>一个 loop</strong>：同一事件序列可回放；崩溃后 resume 成功；取消能到达子进程。</li>
+</ul>
+
+<h3 id="63-risks">6.3 主要风险</h3>
+<table class="cols-3">
+<thead><tr><th>风险</th><th>影响</th><th>缓解</th></tr></thead>
+<tbody>
+<tr><td>translation gateway 复杂</td><td>OpenAI-compat 模型工具调用不一致</td><td>能力矩阵 + cassette 回放 + fail fast</td></tr>
+<tr><td>事件日志膨胀</td><td>存储/回放变慢</td><td>compaction 事件 + offload + GC</td></tr>
+<tr><td>沙箱逃逸</td><td>宿主风险</td><td>默认拒绝 + T1/T2 + 审计</td></tr>
+<tr><td>多 agent 成本</td><td>预算失控</td><td>subagent 预算 + 硬停</td></tr>
+<tr><td>配置层过复杂</td><td>用户不会写 profile</td><td>dump + schema + 脚手架</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2 id="appendix-a-200">Appendix A — 200-point implementation checklist</h2>
+<div class="card">
+<p>200 点按模块分组，编号与正文对应。每点只写"做什么 / 怎么做 / 对齐什么"，实现细节留给各自 issue。</p>
+<h3 id="appendix-a1">A. 定位与原则（1–8）</h3>
+<table class="cols-4 points">
+<thead><tr><th>#</th><th>做什么</th><th>怎么做</th><th>对齐</th></tr></thead>
+<tbody><tr><td>1</td><td>定义 AgentOS 为 model-agnostic agent 平台</td><td>定位写进 README/产品文档；所有设计以"换模型不换平台"为约束</td><td>—</td></tr>
 <tr><td>2</td><td>内核不自研</td><td>Claude Agent SDK 作为唯一默认 loop，adapter 隔离</td><td>CAS</td></tr>
-
 <tr><td>3</td><td>模型可切换为一等约束</td><td>所有模型能力经 manifest + dialect + gateway；loop 只见 Anthropic wire</td><td>DSH/OAI</td></tr>
-
 <tr><td>4</td><td>能力统一为 tool</td><td>native / MCP / skill / agent 四类统一注册、策略、观测</td><td>OAI/CREW</td></tr>
-
 <tr><td>5</td><td>配置即代码</td><td>profile/bundle/patch + git；拒绝 admin DB 作为配置源</td><td>DSH</td></tr>
-
 <tr><td>6</td><td>控制平面内建</td><td>观测/治理/审计/预算/并发从第一天进核心</td><td>AMP</td></tr>
-
 <tr><td>7</td><td>Web 唯一入口</td><td>先做 web console + REST/SSE；CLI 只做运维</td><td>OH</td></tr>
-
-<tr><td>8</td><td>明确不做</td><td>不跑第三方 agent、不做公开 conformance、不做跨运行时移植、不做 K8s 产品化</td><td>OH/DSH 反面</td></tr>
-
+<tr><td>8</td><td>明确不做</td><td>不跑第三方 agent、不做公开 conformance、不做跨运行时移植、不做 K8s 产品化</td><td>OH/DSH 反面</td></tr></tbody>
 </table>
 
-</div>
-
-<div class="card">
-
-<h3 id="sec-9">B. 总体架构与模块边界（9–22）</h3>
-
-<table>
-
-<tr><th>#</th><th>做什么</th><th>怎么做</th><th>对齐</th></tr>
-
-<tr><td>9</td><td>五层架构</td><td>entry → kernel → capabilities（models/tools/sessions/sandbox）→ config → control plane</td><td>DSH</td></tr>
-
+<h3 id="appendix-a2">B. 总体架构与模块边界（9–22）</h3>
+<table class="cols-4 points">
+<thead><tr><th>#</th><th>做什么</th><th>怎么做</th><th>对齐</th></tr></thead>
+<tbody><tr><td>9</td><td>五层架构</td><td>entry → kernel → capabilities（models/tools/sessions/sandbox）→ config → control plane</td><td>DSH</td></tr>
 <tr><td>10</td><td>contracts 零依赖</td><td>纯类型 + JSON Schema；禁止 import kernel</td><td>—</td></tr>
-
 <tr><td>11</td><td>kernel 只依赖 contracts</td><td>依赖 lint 强制；反向依赖 CI 失败</td><td>DSH</td></tr>
-
 <tr><td>12</td><td>模块清单固定</td><td>kernel/models/tools/orchestration/sessions/sandbox/config/control-plane/entry</td><td>DSH</td></tr>
-
 <tr><td>13</td><td>单进程默认</td><td>一个 node 进程；worker 可选</td><td>OH</td></tr>
-
 <tr><td>14</td><td>一个数据根</td><td><code>.agentos/</code>；可整体迁移、备份、GC</td><td>DSH</td></tr>
-
 <tr><td>15</td><td>一个配置根</td><td><code>config/</code>；profile/bundle/patch 全在此</td><td>DSH</td></tr>
-
 <tr><td>16</td><td>provider 包边界</td><td>每个 provider 独立包，只实现契约</td><td>DSH/CAS</td></tr>
-
 <tr><td>17</td><td>四个扩展点</td><td>model / tool / skill / agent；新增不改内核</td><td>OAI</td></tr>
-
 <tr><td>18</td><td>SDK 只在 adapter</td><td><code>@anthropic-ai/claude-agent-sdk</code> 只允许 kernel adapter import</td><td>CAS</td></tr>
-
 <tr><td>19</td><td>统一错误模型</td><td>typed error code + human message + retryable 标记</td><td>—</td></tr>
-
 <tr><td>20</td><td>结构化日志</td><td>JSON lines；trace id 贯穿；敏感字段脱敏</td><td>AMP</td></tr>
-
 <tr><td>21</td><td>版本策略</td><td>contracts additive-only；破坏性变更 major + 迁移</td><td>DSH</td></tr>
-
-<tr><td>22</td><td>每模块 contract test</td><td>包内测试 + 跨模块 e2e</td><td>OAI</td></tr>
-
+<tr><td>22</td><td>每模块 contract test</td><td>包内测试 + 跨模块 e2e</td><td>OAI</td></tr></tbody>
 </table>
 
-</div>
-
-<div class="card">
-
-<h3 id="sec-10">C. Agent Loop 内核（23–38）</h3>
-
-<table>
-
-<tr><th>#</th><th>做什么</th><th>怎么做</th><th>对齐</th></tr>
-
-<tr><td>23</td><td>采用 Claude Agent SDK</td><td>固定版本；升级走独立 PR + e2e</td><td>CAS</td></tr>
-
+<h3 id="appendix-a3">C. Agent Loop 内核（23–38）</h3>
+<table class="cols-4 points">
+<thead><tr><th>#</th><th>做什么</th><th>怎么做</th><th>对齐</th></tr></thead>
+<tbody><tr><td>23</td><td>采用 Claude Agent SDK</td><td>固定版本；升级走独立 PR + e2e</td><td>CAS</td></tr>
 <tr><td>24</td><td>adapter 输入/输出</td><td>输入 turn 请求；输出事件流 + 最终结果</td><td>CAS</td></tr>
-
 <tr><td>25</td><td>turn/step 生命周期</td><td>明确定义 start/step/tool/end；状态可观测</td><td>DSH</td></tr>
-
 <tr><td>26</td><td>流式事件</td><td>text/tool/thinking/result 分事件；SSE 转发</td><td>CAS/OH</td></tr>
-
 <tr><td>27</td><td>工具调用循环</td><td>SDK 负责；adapter 只做注册与结果回填</td><td>CAS</td></tr>
-
 <tr><td>28</td><td>取消</td><td>AbortSignal 贯穿；SDK interrupt；清理子进程</td><td>CAS/OH</td></tr>
-
 <tr><td>29</td><td>超时</td><td>turn/tool/subagent 三级超时</td><td>OAI</td></tr>
-
 <tr><td>30</td><td>重试</td><td>只在幂等边界重试；非幂等工具不自动重试</td><td>现有</td></tr>
-
 <tr><td>31</td><td>错误恢复</td><td>记录失败 attempt；不污染模型历史</td><td>DSH</td></tr>
-
 <tr><td>32</td><td>上下文组装</td><td>system + tool schema + messages + memory 单一入口</td><td>DSH</td></tr>
-
 <tr><td>33</td><td>系统提示分层</td><td>平台 / 角色 / 技能 / 会话四层</td><td>DSH</td></tr>
-
 <tr><td>34</td><td>compaction</td><td>超阈值摘要；保留指针；可回放</td><td>DSH/AMP</td></tr>
-
 <tr><td>35</td><td>大结果 offload</td><td>&gt;10KB 落盘，只回指针</td><td>OH</td></tr>
-
 <tr><td>36</td><td>子进程 stderr 捕获</td><td>MCP/shell stderr 进 debug 日志</td><td>OH</td></tr>
-
 <tr><td>37</td><td>信号处理</td><td>SIGINT/SIGTERM 排空后退出</td><td>OH</td></tr>
-
-<tr><td>38</td><td>loop 可替换 seam</td><td>adapter 接口固定；未来可换 loop</td><td>DSH</td></tr>
-
+<tr><td>38</td><td>loop 可替换 seam</td><td>adapter 接口固定；未来可换 loop</td><td>DSH</td></tr></tbody>
 </table>
 
-</div>
-
-<div class="card">
-
-<h3 id="sec-11">D. Model 层（39–70）</h3>
-
-<table>
-
-<tr><th>#</th><th>做什么</th><th>怎么做</th><th>对齐</th></tr>
-
-<tr><td>39</td><td>统一 wire format</td><td>内部只认 Anthropic Messages（Claude SDK 原生）</td><td>CAS</td></tr>
-
+<h3 id="appendix-a4">D. Model 层（39–70）</h3>
+<table class="cols-4 points">
+<thead><tr><th>#</th><th>做什么</th><th>怎么做</th><th>对齐</th></tr></thead>
+<tbody><tr><td>39</td><td>统一 wire format</td><td>内部只认 Anthropic Messages（Claude SDK 原生）</td><td>CAS</td></tr>
 <tr><td>40</td><td>ModelManifest</td><td>name/provider/baseUrlEnv/credentialsEnv/models/fallback/cost</td><td>现有</td></tr>
-
 <tr><td>41</td><td>alias → model</td><td>general/reasoner 等 alias 映射具体 model id</td><td>现有</td></tr>
-
 <tr><td>42</td><td>channel resolve</td><td>只从 env 名取值；不落盘、不日志</td><td>现有</td></tr>
-
 <tr><td>43</td><td>dialect registry</td><td>tag → dialect；新增 vendor 只加包</td><td>DSH</td></tr>
-
 <tr><td>44</td><td>anthropic-compat</td><td>任意 Anthropic 兼容 endpoint（DeepSeek/Kimi/GLM）</td><td>现有</td></tr>
-
 <tr><td>45</td><td>bedrock</td><td>原生凭证链（profile/region/bearer）</td><td>现有</td></tr>
-
 <tr><td>46</td><td>openai-compat</td><td>通过 translation gateway 暴露成 Anthropic wire</td><td>OAI</td></tr>
-
 <tr><td>47</td><td>translation gateway</td><td>Anthropic Messages ↔ OpenAI Chat Completions；流式/工具调用</td><td>OAI</td></tr>
-
 <tr><td>48</td><td>本地模型</td><td>Ollama/vLLM 走 openai-compat gateway</td><td>—</td></tr>
-
 <tr><td>49</td><td>capability probe</td><td>不只 /v1/models；跑最小 tool-call smoke</td><td>OAI</td></tr>
-
 <tr><td>50</td><td>tool calling</td><td>能力位；不支持则拒绝挂载 agent</td><td>OAI</td></tr>
-
 <tr><td>51</td><td>parallel tool calls</td><td>能力位；不支持则串行</td><td>OAI</td></tr>
-
 <tr><td>52</td><td>streaming</td><td>能力位；不支持则整块返回</td><td>—</td></tr>
-
 <tr><td>53</td><td>structured output</td><td>JSON Schema / response_format；不支持则提示注入</td><td>OAI</td></tr>
-
 <tr><td>54</td><td>vision</td><td>能力位；图片输入</td><td>—</td></tr>
-
 <tr><td>55</td><td>thinking/reasoning</td><td>能力位；reasoning token 单独计费与展示</td><td>DSH</td></tr>
-
 <tr><td>56</td><td>prompt caching</td><td>能力位；缓存命中率写入 usage</td><td>CAS</td></tr>
-
 <tr><td>57</td><td>context window</td><td>声明 + 运行时校验；超限 compaction 或拒绝</td><td>—</td></tr>
-
 <tr><td>58</td><td>max output</td><td>声明 + 截断检测</td><td>—</td></tr>
-
 <tr><td>59</td><td>feature negotiation</td><td>启动校验模型能力 vs 需求；fail fast</td><td>OAI</td></tr>
-
 <tr><td>60</td><td>routing policy</td><td>按 alias / role / tenant 选 model</td><td>DSH</td></tr>
-
 <tr><td>61</td><td>fallback chain</td><td>主模型失败/不健康时按链降级</td><td>现有</td></tr>
-
 <tr><td>62</td><td>health gate</td><td>探测缓存 + 熔断</td><td>现有</td></tr>
-
 <tr><td>63</td><td>retry policy</td><td>429/5xx 重试；带退避</td><td>—</td></tr>
-
 <tr><td>64</td><td>rate limit</td><td>每 provider / 租户限流</td><td>AMP</td></tr>
-
 <tr><td>65</td><td>cost table</td><td>input/output/缓存单价</td><td>AMP</td></tr>
-
 <tr><td>66</td><td>budget enforcement</td><td>session/agent/tenant 预算；硬停</td><td>AMP</td></tr>
-
 <tr><td>67</td><td>token accounting</td><td>每次请求记录 input/output/cache</td><td>AMP</td></tr>
-
 <tr><td>68</td><td>model attribution</td><td>usage.log + trace 记录模型</td><td>现有</td></tr>
-
 <tr><td>69</td><td>conformance matrix</td><td>每 dialect × 能力位的测试矩阵</td><td>OAI</td></tr>
-
-<tr><td>70</td><td>credential security</td><td>只存 env 名；日志脱敏；TLS 校验</td><td>现有</td></tr>
-
+<tr><td>70</td><td>credential security</td><td>只存 env 名；日志脱敏；TLS 校验</td><td>现有</td></tr></tbody>
 </table>
 
-</div>
-
-<div class="card">
-
-<h3 id="sec-12">E. Tool 层（71–96）</h3>
-
-<table>
-
-<tr><th>#</th><th>做什么</th><th>怎么做</th><th>对齐</th></tr>
-
-<tr><td>71</td><td>tool registry</td><td>统一注册 native/MCP/agent/skill</td><td>OAI</td></tr>
-
+<h3 id="appendix-a5">E. Tool 层（71–96）</h3>
+<table class="cols-4 points">
+<thead><tr><th>#</th><th>做什么</th><th>怎么做</th><th>对齐</th></tr></thead>
+<tbody><tr><td>71</td><td>tool registry</td><td>统一注册 native/MCP/agent/skill</td><td>OAI</td></tr>
 <tr><td>72</td><td>native tool</td><td>in-process typed tool</td><td>OAI</td></tr>
-
 <tr><td>73</td><td>MCP stdio</td><td>进程挂载</td><td>现有</td></tr>
-
 <tr><td>74</td><td>MCP http</td><td>远程挂载</td><td>现有</td></tr>
-
 <tr><td>75</td><td>MCP auth</td><td>OAuth/session 缓存</td><td>DSH</td></tr>
-
 <tr><td>76</td><td>tool manifest</td><td>transport/allowedTools/idempotent/env/sandbox/schema</td><td>现有</td></tr>
-
 <tr><td>77</td><td>drift check</td><td>declared vs discovered 启动核对</td><td>现有</td></tr>
-
 <tr><td>78</td><td>idempotent</td><td>必填；非幂等不自动重试</td><td>现有</td></tr>
-
 <tr><td>79</td><td>env expansion</td><td><code>${VAR}</code> 展开；缺失硬错</td><td>现有</td></tr>
-
 <tr><td>80</td><td>sandbox declaration</td><td>fsRoots / network</td><td>现有</td></tr>
-
 <tr><td>81</td><td>schema exchange</td><td>JSON Schema 跨边界</td><td>现有</td></tr>
-
 <tr><td>82</td><td>result cap</td><td>&gt;10KB offload</td><td>OH</td></tr>
-
 <tr><td>83</td><td>timeout</td><td>每工具超时</td><td>OAI</td></tr>
-
 <tr><td>84</td><td>cancellation</td><td>abort 传播到工具</td><td>CAS</td></tr>
-
 <tr><td>85</td><td>approval policy</td><td>危险工具需确认</td><td>DSH</td></tr>
-
 <tr><td>86</td><td>allow/deny</td><td>角色/租户级工具围栏</td><td>CREW</td></tr>
-
 <tr><td>87</td><td>rate limit per tool</td><td>防止风暴</td><td>AMP</td></tr>
-
 <tr><td>88</td><td>tool search</td><td>工具多时按需披露</td><td>DSH</td></tr>
-
 <tr><td>89</td><td>agent-as-tool</td><td>agent 包装成 typed tool</td><td>OAI/CREW</td></tr>
-
 <tr><td>90</td><td>skill-as-tool</td><td>SKILL.md 按需加载</td><td>DSH</td></tr>
-
 <tr><td>91</td><td>knowledge-as-tool</td><td>知识降级为工具，不做一等契约</td><td>—</td></tr>
-
 <tr><td>92</td><td>tool health</td><td>挂载健康检查</td><td>现有</td></tr>
-
 <tr><td>93</td><td>tool observability</td><td>每次调用 span + 参数脱敏</td><td>AMP</td></tr>
-
 <tr><td>94</td><td>tool errors</td><td>结构化错误 + 可重试标记</td><td>—</td></tr>
-
 <tr><td>95</td><td>secrets at exec</td><td>密钥只在执行时注入</td><td>OH</td></tr>
-
-<tr><td>96</td><td>MCP server exposure</td><td>对外暴露 MCP，IDE 可接</td><td>OH/SRE</td></tr>
-
+<tr><td>96</td><td>MCP server exposure</td><td>对外暴露 MCP，IDE 可接</td><td>OH/SRE</td></tr></tbody>
 </table>
 
-</div>
-
-<div class="card">
-
-<h3 id="sec-13">F. 多 Agent 编排（97–122）</h3>
-
-<table>
-
-<tr><th>#</th><th>做什么</th><th>怎么做</th><th>对齐</th></tr>
-
-<tr><td>97</td><td>agent role manifest</td><td>name/baseAgent/systemPrompt/tools/knowledge/model</td><td>现有</td></tr>
-
+<h3 id="appendix-a6">F. 多 Agent 编排（97–122）</h3>
+<table class="cols-4 points">
+<thead><tr><th>#</th><th>做什么</th><th>怎么做</th><th>对齐</th></tr></thead>
+<tbody><tr><td>97</td><td>agent role manifest</td><td>name/baseAgent/systemPrompt/tools/knowledge/model</td><td>现有</td></tr>
 <tr><td>98</td><td>role inheritance</td><td>单继承，prompt 拼接</td><td>现有</td></tr>
-
 <tr><td>99</td><td>tool fence</td><td>角色级 allowlist</td><td>现有</td></tr>
-
 <tr><td>100</td><td>model override</td><td>角色级模型</td><td>现有</td></tr>
-
 <tr><td>101</td><td>subagent</td><td>子 agent 独立上下文</td><td>DSH/OAI</td></tr>
-
 <tr><td>102</td><td>context isolation</td><td>子 agent 只拿任务上下文</td><td>DSH</td></tr>
-
 <tr><td>103</td><td>result contract</td><td>结构化 summary 返回父</td><td>OAI</td></tr>
-
 <tr><td>104</td><td>subagent budget</td><td>token/时间/工具次数</td><td>AMP</td></tr>
-
 <tr><td>105</td><td>teams roster</td><td>持久 roster</td><td>DSH</td></tr>
-
 <tr><td>106</td><td>task board</td><td>任务状态机</td><td>DSH</td></tr>
-
 <tr><td>107</td><td>mailbox</td><td>agent 间消息</td><td>DSH</td></tr>
-
 <tr><td>108</td><td>team observability</td><td>每个成员 span</td><td>AMP</td></tr>
-
 <tr><td>109</td><td>group chat</td><td>多 agent 对话</td><td>CREW/MAF</td></tr>
-
 <tr><td>110</td><td>speaker selection</td><td>round-robin / LLM 选择 / handoff</td><td>CREW</td></tr>
-
 <tr><td>111</td><td>termination</td><td>条件 / 轮次 / 预算</td><td>CREW</td></tr>
-
 <tr><td>112</td><td>handoff</td><td>控制权转移</td><td>OAI/MAF</td></tr>
-
 <tr><td>113</td><td>context packet</td><td>交接包</td><td>MAF</td></tr>
-
 <tr><td>114</td><td>agent-as-tool envelope</td><td>输入/输出 schema + timeout + budget</td><td>OAI</td></tr>
-
 <tr><td>115</td><td>workflow DAG</td><td>有向图，不是线性</td><td>LG</td></tr>
-
 <tr><td>116</td><td>branches</td><td>条件分支</td><td>LG</td></tr>
-
 <tr><td>117</td><td>parallel</td><td>并行节点</td><td>LG/CREW</td></tr>
-
 <tr><td>118</td><td>loops</td><td>有界循环</td><td>LG</td></tr>
-
 <tr><td>119</td><td>checkpoint per node</td><td>节点级检查点</td><td>LG</td></tr>
-
 <tr><td>120</td><td>HITL interrupt</td><td>暂停/审批/继续</td><td>LG</td></tr>
-
 <tr><td>121</td><td>triggers</td><td>manual / schedule / webhook</td><td>现有</td></tr>
-
-<tr><td>122</td><td>workflow observability</td><td>节点级 trace</td><td>LG</td></tr>
-
+<tr><td>122</td><td>workflow observability</td><td>节点级 trace</td><td>LG</td></tr></tbody>
 </table>
 
-</div>
-
-<div class="card">
-
-<h3 id="sec-14">G. 会话持久化（123–140）</h3>
-
-<table>
-
-<tr><th>#</th><th>做什么</th><th>怎么做</th><th>对齐</th></tr>
-
-<tr><td>123</td><td>event-sourced log</td><td>append-only SessionEvent</td><td>DSH</td></tr>
-
+<h3 id="appendix-a7">G. 会话持久化（123–140）</h3>
+<table class="cols-4 points">
+<thead><tr><th>#</th><th>做什么</th><th>怎么做</th><th>对齐</th></tr></thead>
+<tbody><tr><td>123</td><td>event-sourced log</td><td>append-only SessionEvent</td><td>DSH</td></tr>
 <tr><td>124</td><td>event schema</td><td>版本化 + 迁移</td><td>DSH</td></tr>
-
 <tr><td>125</td><td>model-visible ⟺ logged</td><td>进入模型的内容必须可回放</td><td>DSH</td></tr>
-
 <tr><td>126</td><td>ledger index</td><td>sqlite 索引 session 列表</td><td>现有</td></tr>
-
 <tr><td>127</td><td>sqlite default</td><td>零依赖启动</td><td>现有</td></tr>
-
 <tr><td>128</td><td>Postgres adapter</td><td>接口隔离，可选</td><td>AMP</td></tr>
-
 <tr><td>129</td><td>checkpoint</td><td>turn 边界快照</td><td>LG</td></tr>
-
 <tr><td>130</td><td>resume</td><td>从 checkpoint 继续</td><td>LG</td></tr>
-
 <tr><td>131</td><td>fork</td><td>从某 turn 分叉</td><td>DSH</td></tr>
-
 <tr><td>132</td><td>crash recovery</td><td>启动扫 running 行</td><td>现有</td></tr>
-
 <tr><td>133</td><td>compaction events</td><td>摘要事件可回放</td><td>DSH</td></tr>
-
 <tr><td>134</td><td>export/import</td><td>transcript + bundle</td><td>现有</td></tr>
-
 <tr><td>135</td><td>retention/GC</td><td>按天清理</td><td>现有</td></tr>
-
 <tr><td>136</td><td>idempotency keys</td><td>写操作去重</td><td>OAI</td></tr>
-
 <tr><td>137</td><td>tenant isolation</td><td>tenant/workspace 分区</td><td>AMP</td></tr>
-
 <tr><td>138</td><td>session search</td><td>标题/内容检索</td><td>OH</td></tr>
-
 <tr><td>139</td><td>titles</td><td>自动生成</td><td>DSH</td></tr>
-
-<tr><td>140</td><td>data layout</td><td>单一数据目录</td><td>现有</td></tr>
-
+<tr><td>140</td><td>data layout</td><td>单一数据目录</td><td>现有</td></tr></tbody>
 </table>
 
-</div>
-
-<div class="card">
-
-<h3 id="sec-15">H. 沙箱与安全隔离（141–154）</h3>
-
-<table>
-
-<tr><th>#</th><th>做什么</th><th>怎么做</th><th>对齐</th></tr>
-
-<tr><td>141</td><td>tier 0 fsRoots</td><td>路径 allowlist</td><td>现有</td></tr>
-
+<h3 id="appendix-a8">H. 沙箱与安全隔离（141–154）</h3>
+<table class="cols-4 points">
+<thead><tr><th>#</th><th>做什么</th><th>怎么做</th><th>对齐</th></tr></thead>
+<tbody><tr><td>141</td><td>tier 0 fsRoots</td><td>路径 allowlist</td><td>现有</td></tr>
 <tr><td>142</td><td>tier 1 process</td><td>bwrap / Landlock / Seatbelt</td><td>DSH</td></tr>
-
 <tr><td>143</td><td>tier 2 container</td><td>每会话容器</td><td>OH</td></tr>
-
 <tr><td>144</td><td>tier 3 remote</td><td>远程沙箱</td><td>DSH/OH</td></tr>
-
 <tr><td>145</td><td>network allowlist</td><td>每工具域名</td><td>DSH</td></tr>
-
 <tr><td>146</td><td>resource limits</td><td>CPU/mem/time/pids</td><td>OH</td></tr>
-
 <tr><td>147</td><td>secrets injection</td><td>执行时注入</td><td>OH</td></tr>
-
 <tr><td>148</td><td>approval gates</td><td>危险操作确认</td><td>DSH</td></tr>
-
 <tr><td>149</td><td>exec audit</td><td>每次执行审计</td><td>AMP</td></tr>
-
 <tr><td>150</td><td>default deny</td><td>默认拒绝</td><td>DSH</td></tr>
-
 <tr><td>151</td><td>sandbox honesty</td><td>未声明要显式标注</td><td>现有</td></tr>
-
 <tr><td>152</td><td>unsandboxed warning</td><td>启动时告警</td><td>现有</td></tr>
-
 <tr><td>153</td><td>PII redaction</td><td>日志/trace 脱敏</td><td>AMP</td></tr>
-
-<tr><td>154</td><td>dependency policy</td><td>锁版本 + 依赖审计</td><td>现有</td></tr>
-
+<tr><td>154</td><td>dependency policy</td><td>锁版本 + 依赖审计</td><td>现有</td></tr></tbody>
 </table>
 
-</div>
-
-<div class="card">
-
-<h3 id="sec-16">I. 配置层（155–166）</h3>
-
-<table>
-
-<tr><th>#</th><th>做什么</th><th>怎么做</th><th>对齐</th></tr>
-
-<tr><td>155</td><td>profile</td><td>命名组合（bundles + patches）</td><td>DSH</td></tr>
-
+<h3 id="appendix-a9">I. 配置层（155–166）</h3>
+<table class="cols-4 points">
+<thead><tr><th>#</th><th>做什么</th><th>怎么做</th><th>对齐</th></tr></thead>
+<tbody><tr><td>155</td><td>profile</td><td>命名组合（bundles + patches）</td><td>DSH</td></tr>
 <tr><td>156</td><td>bundle</td><td>分发单元（配置 + 可选代码）</td><td>DSH</td></tr>
-
 <tr><td>157</td><td>patch</td><td>行级覆盖</td><td>DSH</td></tr>
-
 <tr><td>158</td><td>layer order</td><td>bundle → profile patch → home patch → CLI overlay</td><td>DSH</td></tr>
-
 <tr><td>159</td><td>no deep merge</td><td>后层整行替换</td><td>DSH</td></tr>
-
 <tr><td>160</td><td>dump-config</td><td>打印解析后的完整树</td><td>DSH</td></tr>
-
 <tr><td>161</td><td>schema validation</td><td>加载时校验</td><td>现有</td></tr>
-
 <tr><td>162</td><td>drift check</td><td>声明 vs 实挂</td><td>现有</td></tr>
-
 <tr><td>163</td><td>secrets by name</td><td>只存 env 名</td><td>现有</td></tr>
-
 <tr><td>164</td><td>git source</td><td>配置只走 PR</td><td>现有</td></tr>
-
 <tr><td>165</td><td>hot reload</td><td>长驻热加载；一次性启动时应用</td><td>DSH</td></tr>
-
-<tr><td>166</td><td>migrate preset</td><td><code>preset.yml</code> → profile 兼容层</td><td>现有</td></tr>
-
+<tr><td>166</td><td>migrate preset</td><td><code>preset.yml</code> → profile 兼容层</td><td>现有</td></tr></tbody>
 </table>
 
-</div>
-
-<div class="card">
-
-<h3 id="sec-17">J. Entry / UI（167–176）</h3>
-
-<table>
-
-<tr><th>#</th><th>做什么</th><th>怎么做</th><th>对齐</th></tr>
-
-<tr><td>167</td><td>web console</td><td>唯一产品入口</td><td>OH</td></tr>
-
+<h3 id="appendix-a10">J. Entry / UI（167–176）</h3>
+<table class="cols-4 points">
+<thead><tr><th>#</th><th>做什么</th><th>怎么做</th><th>对齐</th></tr></thead>
+<tbody><tr><td>167</td><td>web console</td><td>唯一产品入口</td><td>OH</td></tr>
 <tr><td>168</td><td>REST/SSE</td><td>API + 流式</td><td>现有</td></tr>
-
 <tr><td>169</td><td>auth token</td><td>本地 token；identity 可插拔</td><td>现有</td></tr>
-
 <tr><td>170</td><td>session UI</td><td>列表 / 对话 / 状态</td><td>OH</td></tr>
-
 <tr><td>171</td><td>tool/file panel</td><td>工具调用与大文件</td><td>OH</td></tr>
-
 <tr><td>172</td><td>agent/team UI</td><td>角色与团队</td><td>DSH</td></tr>
-
 <tr><td>173</td><td>workflow UI</td><td>编排与运行</td><td>LG/CREW</td></tr>
-
 <tr><td>174</td><td>usage/audit UI</td><td>用量与审计</td><td>AMP</td></tr>
-
 <tr><td>175</td><td>CLI</td><td>运维命令</td><td>现有</td></tr>
-
-<tr><td>176</td><td>IDE MCP server</td><td>可选：对外 MCP</td><td>OH/SRE</td></tr>
-
+<tr><td>176</td><td>IDE MCP server</td><td>可选：对外 MCP</td><td>OH/SRE</td></tr></tbody>
 </table>
 
-</div>
-
-<div class="card">
-
-<h3 id="sec-18">K. 控制平面（177–196）</h3>
-
-<table>
-
-<tr><th>#</th><th>做什么</th><th>怎么做</th><th>对齐</th></tr>
-
-<tr><td>177</td><td>tracing</td><td>OpenTelemetry</td><td>AMP</td></tr>
-
+<h3 id="appendix-a11">K. 控制平面（177–196）</h3>
+<table class="cols-4 points">
+<thead><tr><th>#</th><th>做什么</th><th>怎么做</th><th>对齐</th></tr></thead>
+<tbody><tr><td>177</td><td>tracing</td><td>OpenTelemetry</td><td>AMP</td></tr>
 <tr><td>178</td><td>spans</td><td>turn/tool/model/subagent</td><td>AMP</td></tr>
-
 <tr><td>179</td><td>token/cost dashboard</td><td>按会话/角色/模型</td><td>AMP</td></tr>
-
 <tr><td>180</td><td>latency/error dashboard</td><td>p50/p95/错误率</td><td>AMP</td></tr>
-
 <tr><td>181</td><td>audit log</td><td>不可篡改追加</td><td>AMP</td></tr>
-
 <tr><td>182</td><td>policy engine</td><td>allow/deny/approval</td><td>AMP</td></tr>
-
 <tr><td>183</td><td>budget</td><td>多级预算</td><td>AMP</td></tr>
-
 <tr><td>184</td><td>concurrency</td><td>队列 / 上限</td><td>现有</td></tr>
-
 <tr><td>185</td><td>rate limits</td><td>租户/工具/模型</td><td>AMP</td></tr>
-
 <tr><td>186</td><td>approvals</td><td>人工审批流</td><td>DSH</td></tr>
-
 <tr><td>187</td><td>evals</td><td>离线评测</td><td>AMP</td></tr>
-
 <tr><td>188</td><td>golden sets</td><td>固定样本</td><td>AMP</td></tr>
-
 <tr><td>189</td><td>regression gates</td><td>CI 阻断</td><td>AMP</td></tr>
-
 <tr><td>190</td><td>replay</td><td>会话回放</td><td>LG</td></tr>
-
 <tr><td>191</td><td>multi-tenant</td><td>tenant/workspace</td><td>AMP</td></tr>
-
 <tr><td>192</td><td>RBAC</td><td>角色权限</td><td>AMP</td></tr>
-
 <tr><td>193</td><td>API keys</td><td>程序访问</td><td>SRE</td></tr>
-
 <tr><td>194</td><td>alerting</td><td>Slack / webhook</td><td>AMP</td></tr>
-
 <tr><td>195</td><td>PII/retention</td><td>脱敏与保留</td><td>AMP</td></tr>
-
-<tr><td>196</td><td>deployment topology</td><td>单进程默认；scale-out 预留</td><td>OH</td></tr>
-
+<tr><td>196</td><td>deployment topology</td><td>单进程默认；scale-out 预留</td><td>OH</td></tr></tbody>
 </table>
 
-</div>
-
-<div class="card">
-
-<h3 id="sec-19">L. 迁移、交付、验收（197–200）</h3>
-
-<table>
-
-<tr><th>#</th><th>做什么</th><th>怎么做</th><th>对齐</th></tr>
-
-<tr><td>197</td><td>repo re-org</td><td>现有包 → 目标模块映射；保留兼容层</td><td>—</td></tr>
-
+<h3 id="appendix-a12">L. 迁移、交付、验收（197–200）</h3>
+<table class="cols-4 points">
+<thead><tr><th>#</th><th>做什么</th><th>怎么做</th><th>对齐</th></tr></thead>
+<tbody><tr><td>197</td><td>repo re-org</td><td>现有包 → 目标模块映射；保留兼容层</td><td>—</td></tr>
 <tr><td>198</td><td>phased roadmap</td><td>P0 内核+模型+工具；P1 编排+控制平面；P2 沙箱+eval</td><td>—</td></tr>
-
 <tr><td>199</td><td>acceptance</td><td>每阶段验收标准写死；不达不进入下一阶段</td><td>—</td></tr>
-
-<tr><td>200</td><td>non-goals</td><td>不跑第三方 agent、不做公开 conformance、不做跨运行时、不做 K8s 产品化</td><td>—</td></tr>
-
+<tr><td>200</td><td>non-goals</td><td>不跑第三方 agent、不做公开 conformance、不做跨运行时、不做 K8s 产品化</td><td>—</td></tr></tbody>
 </table>
-
 </div>
 
-<div class="card">
-
-<h2 id="sec-20">3. 三个必须先落地的设计</h2>
-
+  </main>
 </div>
-
-<div class="card">
-
-<h3 id="sec-21">3.1 Desktop 之外的会话持久化</h3>
-
-<ul><li>事件日志是事实源，sqlite 只是索引；<strong>模型看到的一切必须能从日志重建</strong>。</li><li>checkpoint 放在 turn 边界；resume 从最近 checkpoint 继续；fork 从任意 turn 分叉。</li><li>大结果落盘，日志只存指针；compaction 也是事件，不是覆盖写。</li><li>崩溃恢复靠启动扫描，不靠进程内状态。</li></ul>
-
-</div>
-
-<div class="card">
-
-<h3 id="sec-22">3.2 沙箱隔离</h3>
-
-<p>分四档，按部署选择，声明在 tool manifest 里：</p>
-
-<table>
-
-<tr><th>档</th><th>做法</th><th>适用</th></tr>
-
-<tr><td>T0</td><td>fsRoots 路径 allowlist</td><td>本地单用户默认</td></tr>
-
-<tr><td>T1</td><td>进程隔离（bwrap/Landlock/Seatbelt）</td><td>本地多工具</td></tr>
-
-<tr><td>T2</td><td>每会话容器</td><td>团队/多租户</td></tr>
-
-<tr><td>T3</td><td>远程沙箱</td><td>云部署</td></tr>
-
-</table>
-
-<p>默认拒绝；未声明的工具启动时告警；密钥只在执行时注入。</p>
-
-</div>
-
-<div class="card">
-
-<h3 id="sec-23">3.3 模型切换</h3>
-
-<p>见第 1 节"Model 层怎么做到完全可切换"。一句话：<strong>loop 只见 Anthropic wire，vendor 差异全部收在 dialect + gateway + capability 协商里。</strong></p>
-
-</div>
-
-<div class="card">
-
-<h2 id="sec-24">4. 验收口径</h2>
-
-<ul><li><strong>P0 完成</strong>：换 3 个模型（Anthropic 兼容、Bedrock、OpenAI-compat）跑同一个角色，工具调用与流式一致；会话可 resume。</li><li><strong>P1 完成</strong>：subagent + teams + group chat 可跑；workflow 支持分支/并行/checkpoint；web 能看到 trace、成本、审计。</li><li><strong>P2 完成</strong>：沙箱 T0–T2 可选；eval 有 golden set 与回归门禁；单进程部署 + compose 一键起。</li></ul>
-
-<div class="note">200 点 = 200 个可独立验收的 PR 切分。每点只写"做什么/怎么做/对齐什么"，实现细节留给各自的 issue。</div>
-
-</div>
-
 </body>
 </html>
