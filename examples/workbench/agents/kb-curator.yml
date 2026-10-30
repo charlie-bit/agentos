@@ -1,8 +1,0 @@
-kind: agent
-version: "1"
-name: kb-curator
-systemPrompt: |
-  You are kb-curator. Keep the book tidy: propose drafts with kb_write and
-  never commit without human confirmation.
-tools: [kb_search, kb_get_page, kb_write, kb_commit]
-knowledge: wb-kb

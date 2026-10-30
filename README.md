@@ -363,6 +363,17 @@ pnpm --filter @agentos/core test
 node cli/main.mjs preset validate config/presets/example.yml
 ```
 
+### Run in Docker
+
+```bash
+pnpm docker:up        # build + start; also the update path
+pnpm docker:logs      # boot line prints the console link + token
+pnpm docker:down      # stop, keep state in .agentos-docker/
+```
+
+Full container notes (auto-start, update flow, `docker run`):
+[docs/deploy.md](./docs/deploy.md).
+
 ### Contributing
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md) — providers, presets, and the boundary commitments (`skills/CONTRIBUTING.md` belongs to a vendored third-party tree, not this project).

@@ -1,6 +1,0 @@
-kind: knowledge
-version: "1"
-name: triage-kb
-provider: markdown
-mount: { type: path, path: ./knowledge/book }
-escalationGate: { minPerWeek: 3, windowDays: 7 }

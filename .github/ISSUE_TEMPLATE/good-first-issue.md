@@ -16,7 +16,7 @@ labels: good-first-issue
 
 - [ ] `pnpm -r typecheck && pnpm -r lint && pnpm -r test` green
 - [ ] a test pins the behaviour (name it here)
-- [ ] spec point closed in `.docs/progress.md` (with evidence)
+- [ ] spec point closed with evidence (PR/commit)
 
 ## Pointers
 

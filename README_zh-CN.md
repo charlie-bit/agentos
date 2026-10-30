@@ -344,6 +344,17 @@ pnpm --filter @agentos/core test
 node cli/main.mjs preset validate config/presets/example.yml
 ```
 
+### 用 Docker 运行
+
+```bash
+pnpm docker:up        # 构建并启动，也是更新路径
+pnpm docker:logs      # 启动行会打印控制台链接和 token
+pnpm docker:down      # 停止，状态保留在 .agentos-docker/
+```
+
+容器部署的完整说明（开机自启、更新流程、`docker run`）见
+[docs/deploy.md](./docs/deploy.md)。
+
 ### 贡献
 
 详见 [CONTRIBUTING.md](./CONTRIBUTING.md)——provider 实现、preset 编写与边界承诺（`skills/CONTRIBUTING.md` 属于 vendored 第三方插件树，不是本仓指南）。

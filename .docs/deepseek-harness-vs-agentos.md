@@ -44,8 +44,8 @@ DeepSeek 开源的 agent harness，口号 **"Everything is a Plugin"**，MIT 协
 
 | 位置 | 现文 | 事实 | 建议改为 |
 |------|------|------|---------|
-| `.docs/product-vision.md:27` | "DSH（插槽密度高**但闭源**）" | MIT 开源，255 包全公开，165k star | "DSH（插槽密度最高且 MIT 开源，但契约仅在 DSH 运行时内有效）" |
-| `.docs/product-vision.md:35,42` | "DSH（MIT 但**插槽绑定 DeepSeek 生态**）" | 官方插件含 llm-pi-ai 多 provider、web-search-exa/perplexity、subagent-claude-code/codex、hooks-claude-code/codex、sandbox-e2b——**竞品互为插件**是其设计哲学 | "DSH（MIT 且 provider 中立，但采用'把竞品装进来'的单体运行时哲学，而非'把契约搬出去'的可移植哲学）" |
+| `旧 product-vision.md（已删除）:27` | "DSH（插槽密度高**但闭源**）" | MIT 开源，255 包全公开，165k star | "DSH（插槽密度最高且 MIT 开源，但契约仅在 DSH 运行时内有效）" |
+| `旧 product-vision.md（已删除）:35,42` | "DSH（MIT 但**插槽绑定 DeepSeek 生态**）" | 官方插件含 llm-pi-ai 多 provider、web-search-exa/perplexity、subagent-claude-code/codex、hooks-claude-code/codex、sandbox-e2b——**竞品互为插件**是其设计哲学 | "DSH（MIT 且 provider 中立，但采用'把竞品装进来'的单体运行时哲学，而非'把契约搬出去'的可移植哲学）" |
 | 同文件 27 vs 35 行 | 自相矛盾（一处说闭源一处说 MIT） | — | 统一为上述表述 |
 
 **为什么这很重要**：修正后的表述反而让差异化**更硬**——"开源 vs 闭源"是会被事实打脸的弱论点；"单体运行时 vs runtime-free 契约层"是结构性的、不会被 DSH 的下个版本消灭的强论点。
