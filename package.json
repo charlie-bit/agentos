@@ -12,7 +12,13 @@
     "typecheck": "pnpm -r run typecheck",
     "test": "pnpm -r run test",
     "lint": "pnpm -r run lint",
-    "e2e:agent": "node --env-file-if-exists=.env scripts/agent-e2e.mjs"
+    "e2e:agent": "node --env-file-if-exists=.env scripts/agent-e2e.mjs",
+    "docker:up": "docker compose up -d --build",
+    "docker:down": "docker compose down",
+    "docker:restart": "docker compose restart agentos",
+    "docker:logs": "docker compose logs -f agentos",
+    "docker:watch": "docker compose watch",
+    "docker:token": "docker compose logs agentos | grep -E 'link:|token:' | tail -n 2"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

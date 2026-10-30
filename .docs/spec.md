@@ -1,7 +1,7 @@
 # AgentOS Spec — 457 点承诺清单
 
 > 定位：本文件是**全量承诺清单**（what & acceptance），按模块分组、全局编号 1–457。
-> 状态（done / in-progress / todo / blocked）一律不写在这里，由配对的 [progress.md](progress.md) 逐点打勾。
+> 状态（done / in-progress / todo / blocked）一律不写在这里；v2 技术规格见 [.docs/tech/spec.html](tech/spec.html)，历史状态见 git 记录。
 > 每个点必须锚定真实代码位置或 PRD 承诺；写不出的点不许进这张表。
 >
 > 1–100 为 v1 基线（既有承诺，编号冻结）；101–170 为 v2 扩展（对标 sre-triage-copilot 后吸收/转化的产品能力，web 为唯一入口）；171–200 为**边界承诺**（30 条明确的"不做"，每条含替代出口——对标的拒绝判决见 [gap-vs-sre-triage-copilot.md](gap-vs-sre-triage-copilot.md)）；201–307 为 v3 对齐任务（2026-10-26 五路全量代码审计产出：每个 PARTIAL/MISSING 缺口、每个审计新发现的 bug、每处死代码，各成一个 PR 大小的点，100 分 = 1–307 全绿）；308–457 为 v4 产品面（2026-10-27：web 端待办 / 自定义 Agent 角色 / Workflow 编排含定时 / Project 编排 / 外部 agent——muse 式个人工作台能力、AgentOS 形态实现；**v1.0 判据维持 1–307 不变**，v2.0 判据见 #454）。
@@ -57,7 +57,7 @@
 ## M1 契约层（1–10）
 
 1. **KnowledgeProvider 六动词契约**：`bootstrap / search / getPage / listPages / writePage / commit` 定稿于 `packages/contracts/src/knowledge.ts`；writePage 只出 draft，commit 才持久。
-    *现状分歧（2026-10-26 对齐记录）：commit 尚未上接口——`commitDraft()` 在 `packages/core/src/governance/writeback.ts:51`，且硬绑 git/markdown 路径。判 B：验收标准维持目标态，此缺口在 progress.md 记 todo；第二个 KnowledgeProvider 落地前必须把 commit 下沉回 provider 接口（治理层保留为策略/审计壳，git 操作挪进 knowledge-markdown）。挪动是 additive 的：接口加方法、旧实现补实现，不破坏既有承诺。*
+    *现状分歧（2026-10-26 对齐记录）：commit 尚未上接口——`commitDraft()` 在 `packages/core/src/governance/writeback.ts:51`，且硬绑 git/markdown 路径。判 B：验收标准维持目标态，此缺口未闭环（原 progress.md 已随 v1 文档清理删除）；第二个 KnowledgeProvider 落地前必须把 commit 下沉回 provider 接口（治理层保留为策略/审计壳，git 操作挪进 knowledge-markdown）。挪动是 additive 的：接口加方法、旧实现补实现，不破坏既有承诺。*
 2. **ToolProvider manifest 契约**：`tool.ts` 定义 name / transport / auth / allowedTools / idempotent / schemaExchange 六要素，`ToolProviderManifest` 是唯一挂载声明格式。
 3. **ModelProvider runtime 契约**：`model.ts` 定义 `healthCheck + resolveModel`，含 fallbackChain 语义（健康探测短路）。
 4. **EntryAdapter 四动词契约**：`entry.ts` 定义 `identity / session / render / confirm`；`confirm:false` 是合法诚实声明，触发内核把知识写降级为只读。
@@ -192,7 +192,7 @@
 
 ## M13 文档与工程纪律（98–100）
 
-98. **设计文档六件套**：product-vision / prd / opportunity-solution-tree / premortem / assumptions / deepseek-harness-vs-agentos 与 README 中英文保持同步、互不矛盾。
+98. **设计文档**：`.docs/deepseek-harness-vs-agentos.md` 与 README 中英文保持同步、互不矛盾；v2 技术规格见 `.docs/tech/spec.html`。
 99. **README 即合同**：README 的 Core Claims / 反模式 / 纪律表与代码行为一致——写进 README 的承诺都要能指到代码。
 100. **过渡路线 C 纪律**：每步可回退——所有演进是纯增量（新契约/新 manifest/新 adapter），不修改、不删除在线系统；zod 全仓锁 v4 作为跨边界纪律长期生效。
 
@@ -675,7 +675,7 @@
 438. **负向验收扩编**：M20 新增边界——不做图形化 workflow 编辑器、不做外部 agent 对等协议、不做待办领域模型进内核（对应 #196/#199/#177 延伸——见 M37 复审点）。验收：边界条目入 spec M20（本批即立法）。
 439. **README 产品面更新**：Core Claims 增"个人工作台五件套（待办/角色/workflow/项目/外部 agent）"——全部映射到 yml/契约/数据分界，双语同 PR（#240）。验收：README 与实现同步。
 440. **架构图更新**：`.docs/architecture-diagram`（或 README 内嵌图）纳入五区产品面 + 数据流（配置 yml → 挂载 → 实例数据 → 面板）。验收：图与代码一致。
-441. **progress.md 扩编**：308–457 进跟踪件（#306 roadmap 延伸）。验收：点号连续可勾。
+441. **progress.md 扩编**（已废止）：原计划把 308–457 进跟踪件；progress.md 已随 v1 文档清理删除，跟踪改由 v2 技术规格（`.docs/tech/spec.html`）承载。
 442. **v4 审计点**：五路审计复跑一次 v4 新面（#307 例程的首个执行样例）。验收：审计报告落 .docs。
 
 ## M37 快速实现基建与守护（443–457）
@@ -701,7 +701,7 @@
 456. **文档站扩编**：三件套（#146）扩为五件套文档（+agents/workflows/projects 编写指南）。验收：五指南双语。
 457. **v4 首跑演示脚本**：`scripts/demo-workbench.mjs`——从零到五件套全部可见的演示脚本（录屏/截图友好的分步输出）。验收：脚本跑完五件套全展示。
 
-*配对文档：[progress.md](progress.md)（逐点状态）。对标判决：[gap-vs-sre-triage-copilot.md](gap-vs-sre-triage-copilot.md)。
+*配对文档：v2 技术规格 [.docs/tech/spec.html](tech/spec.html)。对标判决：[gap-vs-sre-triage-copilot.md](gap-vs-sre-triage-copilot.md)。
 Spec 修订规则：点只能增或改验收标准，不许悄悄删——删除必须留 changelog。v2（2026-10-26）：1–100 冻结为基线，新增 101–200；v2 差异化定位一句话——"sre-triage-copilot 是一个 SRE 分诊产品，AgentOS 是做出任意分诊产品的框架：它的全部功能面，在我们的世界里要么是 preset 文件、要么是 config/*.yml、要么是 examples/，没有一样需要写进内核"。
 v3.1（2026-10-26）：#73 的 PATCH 路由文字修正为 `/api/sessions/:id/title`（与代码正则一致，属"只修验收标准措辞"，点未删除）；#233 相应标注为已采用此方案。
 v3（2026-10-26）：全量代码审计后新增 201–307（107 点）——每个 PARTIAL/MISSING 的收口任务、每个审计新发现缺陷、每处死代码各成一点；目标态 = 1–307 全绿即 100 分。审计口径：DONE 不重立点，证据一律 file:line。

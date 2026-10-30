@@ -1,0 +1,73 @@
+# AgentOS single-node deployment (spec #134/#302): one process, one data
+# directory, no K8s. `docker compose up -d --build` doubles as the update
+# path — it rebuilds the image from the working tree and recreates the
+# container in place, while the bind-mounted state under .agentos-docker/
+# survives the swap.
+services:
+  agentos:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: agentos:local
+    container_name: agentos
+    init: true
+    # Comes back whenever the Docker daemon starts; `docker compose down` is
+    # the explicit opt-out.
+    restart: unless-stopped
+    ports:
+      # Loopback-only on the host. The token gate is the second boundary, not
+      # the first — change to "8787:8787" only on a trusted intranet.
+      - "127.0.0.1:8787:8787"
+    env_file:
+      # Credentials never enter the image (.dockerignore drops .env*); they
+      # are injected at runtime. Missing .env is fine — the verifier just
+      # reports the unmounted channels as unhealthy.
+      - path: .env
+        required: false
+    volumes:
+      # sessions.db, workspaces/, kb-drafts/, receipts and logs survive both
+      # rebuilds and container re-creation.
+      - ./.agentos-docker:/app/.agentos
+    healthcheck:
+      # /healthz is token-free by design and reports per-mount health.
+      # node is guaranteed present in the image; no curl/wget in node:22-slim.
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:8787/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+    # serve drains in-flight turns on SIGTERM before exiting (spec #293)
+    stop_grace_period: 30s
+    develop:
+      # `docker compose watch` rebuilds and swaps the container on source
+      # edits. `docker compose up -d --build` remains the one-shot update.
+      watch:
+        - action: rebuild
+          path: packages
+          ignore:
+            - "**/node_modules"
+            - "**/dist"
+        - action: rebuild
+          path: cli
+          ignore:
+            - "**/node_modules"
+            - "**/dist"
+        - action: rebuild
+          path: apps
+          ignore:
+            - "**/node_modules"
+            - "**/dist"
+        - action: rebuild
+          path: config
+        - action: rebuild
+          path: scripts
+        - action: rebuild
+          path: package.json
+        - action: rebuild
+          path: pnpm-lock.yaml
+        - action: rebuild
+          path: tsconfig.base.json

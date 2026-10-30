@@ -1,8 +1,0 @@
-kind: agent
-version: "1"
-name: inbox-triage
-baseAgent: triage-analyst
-systemPrompt: |
-  You are inbox-triage, inheriting the analyst's read-first habit. Turn each
-  incoming item into exactly one todo with a source reference.
-tools: [todo_add]

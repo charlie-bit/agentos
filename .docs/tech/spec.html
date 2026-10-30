@@ -1,0 +1,847 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AgentOS · 平台技术规格（200 点）</title>
+<style>
+  :root {
+    --bg:#0d1117; --card:#161b22; --border:#30363d; --text:#c9d1d9; --heading:#f0f6fc;
+    --accent:#58a6ff; --green:#3fb950; --yellow:#d29922; --red:#f85149;
+    --purple:#bc8cff; --orange:#d18616; --cyan:#39d2c0; --muted:#8b949e;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  html, body { overflow-x:hidden; }
+  body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;
+         background:var(--bg); color:var(--text); line-height:1.65;
+         padding:2rem; max-width:1280px; margin:0 auto; width:100%; }
+  h1 { color:var(--heading); font-size:1.8rem; margin-bottom:.3rem; }
+  h2 { color:var(--accent); font-size:1.3rem; margin:2rem 0 1rem;
+       border-bottom:1px solid var(--border); padding-bottom:.4rem; }
+  h3 { color:var(--heading); font-size:1rem; margin:1.2rem 0 .6rem; }
+  h4 { color:var(--purple); font-size:.92rem; margin:1rem 0 .5rem; }
+  .subtitle { color:var(--muted); margin-bottom:1.2rem; font-size:.9rem; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:8px;
+          padding:1.3rem; margin-bottom:1.2rem; overflow:hidden; }
+  table { width:100%; border-collapse:collapse; margin:.8rem 0; font-size:.86rem;
+          table-layout:fixed; word-break:break-word; }
+  th, td { padding:.5rem .7rem; text-align:left; border:1px solid var(--border); vertical-align:top; }
+  th { background:#21262d; color:var(--heading); font-weight:600; }
+  code { background:#21262d; padding:2px 6px; border-radius:4px; font-size:.82rem;
+         color:var(--orange); font-family:'SF Mono',Consolas,monospace; }
+  pre { font-family:'SF Mono',Consolas,monospace; font-size:.78rem; line-height:1.65;
+        overflow-x:auto; white-space:pre-wrap; word-break:break-all; color:var(--text);
+        background:#21262d; padding:.9rem; border-radius:6px; margin:.6rem 0; }
+  .tag { display:inline-block; padding:1px 8px; border-radius:12px; font-size:.72rem;
+         font-weight:600; white-space:nowrap; }
+  .ok { background:#1a3a1a; color:var(--green); }
+  .pr { background:#1f3a5f; color:var(--accent); }
+  .stub { background:#2d1a1a; color:var(--red); }
+  .todo { background:#2d2000; color:var(--yellow); }
+  .note { background:#1a2332; border-left:3px solid var(--accent);
+          padding:.7rem 1rem; margin:.8rem 0; border-radius:0 4px 4px 0; font-size:.86rem; }
+  .warn { background:#2d1f00; border-left:3px solid var(--yellow);
+          padding:.7rem 1rem; margin:.8rem 0; border-radius:0 4px 4px 0; font-size:.86rem; }
+  .toc { list-style:none; margin:.4rem 0; }
+  .toc ul { list-style:none; margin:.2rem 0 .3rem 1.1rem; }
+  .toc li { margin:.15rem 0; }
+  .toc a { color:var(--muted); font-size:.88rem; }
+  .toc a:hover { color:var(--accent); }
+  a { color:var(--accent); text-decoration:none; }
+  a:hover { text-decoration:underline; }
+  ul, ol { margin:.4rem 0 .6rem 1.3rem; }
+  li { margin:.2rem 0; }
+  .mermaid { background:#161b22; border:1px solid var(--border); border-radius:6px;
+             padding:.8rem; margin:.8rem 0; overflow-x:auto; }
+  .kv { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:.7rem; margin:.6rem 0; }
+  .kv .item { background:#21262d; border:1px solid var(--border); border-radius:6px; padding:.7rem; }
+  .kv .k { color:var(--heading); font-weight:600; font-size:.88rem; margin-bottom:.2rem; }
+  .kv .v { color:var(--muted); font-size:.8rem; }
+  .muted { color:var(--muted); }
+</style>
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.esm.min.mjs';
+  mermaid.initialize({ startOnLoad:false, theme:'dark', securityLevel:'loose',
+    themeVariables:{ fontSize:'14px', fontFamily:'ui-sans-serif, system-ui' } });
+  let n = 0;
+  for (const el of document.querySelectorAll('.mermaid')) {
+    const src = el.textContent;
+    try {
+      const { svg } = await mermaid.render('mmd-' + (++n), src);
+      el.innerHTML = svg;
+    } catch (err) {
+      el.classList.add('mermaid-error');
+      el.insertAdjacentHTML('beforeend', '<div class="warn">mermaid 渲染失败，源码保留在上方</div>');
+    }
+  }
+</script>
+</head>
+<body>
+
+<h1>AgentOS · 平台技术规格（200 点）</h1>
+<div class="subtitle">
+  2026-10-30 · 基于 DSH / OpenHands / OpenAI Agents SDK / SWE-agent / Claude Agent SDK 五个参考，外加 CrewAI（Crews/Flows）、LangGraph（DAG/checkpoint）、MAF（A2A/MCP）、CrewAI AMP（控制平面）作为能力补充。<br>
+  规划稿 · 与 <a href="agent.html">Agent 内核技术文档</a> / <a href="net.html">Web/REST 网络侧技术文档</a> 并列；
+  本页写"要做什么"，那两页写"现在是什么"。<br>
+  参考代号：<code>CAS</code> Claude Agent SDK · <code>DSH</code> DeepSeek Harness ·
+  <code>OH</code> OpenHands · <code>OAI</code> OpenAI Agents SDK · <code>SWE</code> SWE-agent ·
+  补充 <code>CREW</code>/<code>LG</code>/<code>MAF</code>/<code>AMP</code>
+</div>
+
+<div class="card">
+  <div class="warn">
+    这是 <strong>v2 平台方向的规划稿</strong>，不是当前代码事实。它与现有四契约 + 公开 conformance 的 v1 叙事有 4 处冲突
+    （Knowledge 降级、conformance 取消、preset → profile、框架叙事 → 平台叙事）——冲突清单见本页 "关键决策" 与 "迁移" 两节。
+  </div>
+</div>
+
+<div class="card">
+  <h2 id="toc" style="margin-top:0">目录</h2>
+  <ul class="toc">
+    <li><a href="#sec-1">0. 一句话定位</a></li>
+    <li style="margin-left:1.1rem"><a href="#sec-2">参考集（最终 5 个）</a></li>
+    <li style="margin-left:1.1rem"><a href="#sec-3">关键决策（这次定死）</a></li>
+    <li style="margin-left:1.1rem"><a href="#sec-4">两个直接回答</a></li>
+    <li><a href="#sec-5">1. 目标模块图</a></li>
+    <li style="margin-left:1.1rem"><a href="#sec-6">Model 层怎么做到"完全可切换"</a></li>
+    <li><a href="#sec-7">2. 200 点</a></li>
+    <li style="margin-left:1.1rem"><a href="#sec-8">A. 定位与原则（1–8）</a></li>
+    <li style="margin-left:1.1rem"><a href="#sec-9">B. 总体架构与模块边界（9–22）</a></li>
+    <li style="margin-left:1.1rem"><a href="#sec-10">C. Agent Loop 内核（23–38）</a></li>
+    <li style="margin-left:1.1rem"><a href="#sec-11">D. Model 层（39–70）</a></li>
+    <li style="margin-left:1.1rem"><a href="#sec-12">E. Tool 层（71–96）</a></li>
+    <li style="margin-left:1.1rem"><a href="#sec-13">F. 多 Agent 编排（97–122）</a></li>
+    <li style="margin-left:1.1rem"><a href="#sec-14">G. 会话持久化（123–140）</a></li>
+    <li style="margin-left:1.1rem"><a href="#sec-15">H. 沙箱与安全隔离（141–154）</a></li>
+    <li style="margin-left:1.1rem"><a href="#sec-16">I. 配置层（155–166）</a></li>
+    <li style="margin-left:1.1rem"><a href="#sec-17">J. Entry / UI（167–176）</a></li>
+    <li style="margin-left:1.1rem"><a href="#sec-18">K. 控制平面（177–196）</a></li>
+    <li style="margin-left:1.1rem"><a href="#sec-19">L. 迁移、交付、验收（197–200）</a></li>
+    <li><a href="#sec-20">3. 三个必须先落地的设计</a></li>
+    <li style="margin-left:1.1rem"><a href="#sec-21">3.1 Desktop 之外的会话持久化</a></li>
+    <li style="margin-left:1.1rem"><a href="#sec-22">3.2 沙箱隔离</a></li>
+    <li style="margin-left:1.1rem"><a href="#sec-23">3.3 模型切换</a></li>
+    <li><a href="#sec-24">4. 验收口径</a></li>
+  </ul>
+</div>
+
+<div class="card">
+
+<h2 id="sec-1">0. 一句话定位</h2>
+
+<div class="note"><strong>AgentOS 是一个 model-agnostic 的 agent 平台。</strong><br>一个内核（Claude Agent SDK）跑 agent 循环；profile / bundle / patch 描述业务；native tool / MCP tool / skill / agent 统一成 tool；control plane 提供观测、治理、审计、预算；Web 是唯一入口。</div>
+
+<p><strong>它不是</strong>：meta-harness（不跑 Claude Code / Codex / OpenHands 这类第三方 agent）、不是配置标准（不做公开 conformance）、不是跨运行时（同一份配置不追求在 LangGraph/DSH 上跑）、不是企业 SaaS（4A/多租户只留接口，不做运营面）。</p>
+
+</div>
+
+<div class="card">
+
+<h3 id="sec-2">参考集（最终 5 个）</h3>
+
+<table>
+
+<tr><th>代号</th><th>项目</th><th>我们取什么</th></tr>
+
+<tr><td><strong>CAS</strong></td><td>Claude Agent SDK</td><td>agent loop 内核、流式、工具循环</td></tr>
+
+<tr><td><strong>DSH</strong></td><td>DeepSeek Harness</td><td>插件化边界、profile/bundle/patch、会话日志、subagent/teams</td></tr>
+
+<tr><td><strong>OH</strong></td><td>OpenHands</td><td>平台形态、沙箱后端、control plane/UI、对外 MCP</td></tr>
+
+<tr><td><strong>OAI</strong></td><td>OpenAI Agents SDK</td><td>agent-as-tool、handoff、guardrails、tracing</td></tr>
+
+<tr><td><strong>SWE</strong></td><td>SWE-agent</td><td>代码任务循环、环境交互、评测</td></tr>
+
+<tr><td>补充</td><td>CrewAI / LangGraph / MAF / AMP</td><td>Crews/Flows、DAG/checkpoint/HITL、A2A、控制平面</td></tr>
+
+</table>
+
+</div>
+
+<div class="card">
+
+<h3 id="sec-3">关键决策（这次定死）</h3>
+
+<table>
+
+<tr><th>决策</th><th>选择</th><th>理由</th></tr>
+
+<tr><td>Agent loop</td><td>借 Claude Agent SDK，不自研</td><td>最快，且 SRE 已验证</td></tr>
+
+<tr><td>模型切换</td><td>Anthropic wire format + dialect + gateway</td><td>loop 不变，换模型只换 manifest</td></tr>
+
+<tr><td>Knowledge</td><td><strong>降级</strong>为 tool/skill，不做一等契约</td><td>减少内核面积</td></tr>
+
+<tr><td>公开 conformance</td><td><strong>取消</strong>，改内部 contract tests</td><td>我们做平台，不做标准</td></tr>
+
+<tr><td>Entry</td><td>先只做 web；CLI 保留运维</td><td>收敛入口</td></tr>
+
+<tr><td>配置</td><td>profile / bundle / patch</td><td>对齐 DSH，比 preset 更能分层</td></tr>
+
+<tr><td>多 agent</td><td>subagent / teams / group chat</td><td>与现有 role/workflow 重合，补委派与协作</td></tr>
+
+<tr><td>控制平面</td><td>内建，AMP 是最终方向</td><td>观测/治理/审计/预算第一天就有</td></tr>
+
+<tr><td>跨运行时移植</td><td><strong>不做</strong></td><td>我们是平台，不是元运行时</td></tr>
+
+<tr><td>平台边界</td><td>跑 model，不跑第三方 agent</td><td>不 adopt OpenHands 的 ACP-agent 聚合</td></tr>
+
+</table>
+
+</div>
+
+<div class="card">
+
+<h3 id="sec-4">两个直接回答</h3>
+
+<p><strong>"跨运行时可移植"是什么意思？</strong> 同一份 agent 定义能在不同 runtime（Claude SDK / DSH / LangGraph）上执行。DSH 的契约绑定 Cordis（只在 DSH 内有效）；OpenHands 用 ACP 把第三方 agent 装进来。<strong>我们不追求这个</strong>：我们的可移植性是"模型可换 + 工具走 MCP"，不是"配置跨 runtime"。</p>
+
+<p><strong>"要不要对齐 OpenHands 的平台方向？"</strong> 对齐它的 <strong>control plane / 沙箱后端 / Web UX / 对外 MCP</strong>；<strong>不对齐</strong>它"跑 Claude Code / Codex / OpenHands"的 agent 聚合模式——我们跑的是 model。</p>
+
+</div>
+
+<div class="card">
+
+<h2 id="sec-5">1. 目标模块图</h2>
+
+<pre>apps/web                 Web console（唯一产品入口）
+cli                      agentos CLI（运维）
+packages/
+  contracts/             纯类型 + JSON Schema，零依赖
+  kernel/                Claude Agent SDK adapter、turn/step 生命周期、取消
+  models/                gateway、dialect、routing、能力探测、成本
+    dialect-anthropic/   Anthropic 及兼容 endpoint
+    dialect-openai/      OpenAI-compat → Anthropic wire（translation gateway）
+    dialect-bedrock/     AWS Bedrock 原生链
+  tools/                 registry、MCP client、agent-as-tool、skill-as-tool、策略
+  orchestration/         subagent、teams、group chat、DAG workflow、checkpoint
+  sessions/              append-only 事件日志、ledger、checkpoint、compaction
+  sandbox/               fs / process / container / network / policy
+  config/                profile、bundle、patch、schema、dump、drift
+  control-plane/         tracing、audit、budget、concurrency、approvals、evals
+  entry-web/ entry-cli/  入口适配器
+  providers/             可选（knowledge-markdown 等，非核心契约）</pre>
+
+</div>
+
+<div class="card">
+
+<h3 id="sec-6">Model 层怎么做到"完全可切换"</h3>
+
+<p>这是你点名要的设计，单独说清楚：</p>
+
+<ol><li><strong>内部只认一种 wire format</strong>：Anthropic Messages。因为 loop 是 Claude SDK，换 wire 等于换 loop，代价最大。</li><li><strong>每个 vendor 一个 dialect</strong>：只做三件事——解析 channel（baseUrl/auth 只从 env 名取）、健康探测、alias→model。现有 <code>anthropic-compat</code>、<code>bedrock</code> 保留。</li><li><strong>OpenAI-compat 走 translation gateway</strong>：把 OpenAI Chat Completions 翻译成 Anthropic Messages（含流式、tool calls、stop、usage）。不放进 loop，放在模型层的边界上。</li><li><strong>能力位 + 启动协商</strong>：每个模型声明 tools / parallel tools / streaming / structured output / vision / thinking / caching / context window / max output。启动时校验，缺关键能力就 fail fast，不静默降级。</li><li><strong>探测不是 liveness</strong>：<code>/v1/models</code> 只证明端点活着；真正的探测是跑一次最小 tool-call smoke，证明这个模型能驱动 agent。</li><li><strong>成本与预算</strong>：单价表进 manifest；每次请求记账；session/agent/tenant 三级预算硬停。</li><li><strong>测试矩阵</strong>：每个 dialect × 每个能力位都有 contract test + cassette 回放，CI 阻断。</li></ol>
+
+</div>
+
+<div class="card">
+
+<h2 id="sec-7">2. 200 点</h2>
+
+<p>图例：对齐列 <code>—</code> = 自研或无直接对应；其余为参考代号。</p>
+
+</div>
+
+<div class="card">
+
+<h3 id="sec-8">A. 定位与原则（1–8）</h3>
+
+<table>
+
+<tr><th>#</th><th>做什么</th><th>怎么做</th><th>对齐</th></tr>
+
+<tr><td>1</td><td>定义 AgentOS 为 model-agnostic agent 平台</td><td>定位写进 README/产品文档；所有设计以"换模型不换平台"为约束</td><td>—</td></tr>
+
+<tr><td>2</td><td>内核不自研</td><td>Claude Agent SDK 作为唯一默认 loop，adapter 隔离</td><td>CAS</td></tr>
+
+<tr><td>3</td><td>模型可切换为一等约束</td><td>所有模型能力经 manifest + dialect + gateway；loop 只见 Anthropic wire</td><td>DSH/OAI</td></tr>
+
+<tr><td>4</td><td>能力统一为 tool</td><td>native / MCP / skill / agent 四类统一注册、策略、观测</td><td>OAI/CREW</td></tr>
+
+<tr><td>5</td><td>配置即代码</td><td>profile/bundle/patch + git；拒绝 admin DB 作为配置源</td><td>DSH</td></tr>
+
+<tr><td>6</td><td>控制平面内建</td><td>观测/治理/审计/预算/并发从第一天进核心</td><td>AMP</td></tr>
+
+<tr><td>7</td><td>Web 唯一入口</td><td>先做 web console + REST/SSE；CLI 只做运维</td><td>OH</td></tr>
+
+<tr><td>8</td><td>明确不做</td><td>不跑第三方 agent、不做公开 conformance、不做跨运行时移植、不做 K8s 产品化</td><td>OH/DSH 反面</td></tr>
+
+</table>
+
+</div>
+
+<div class="card">
+
+<h3 id="sec-9">B. 总体架构与模块边界（9–22）</h3>
+
+<table>
+
+<tr><th>#</th><th>做什么</th><th>怎么做</th><th>对齐</th></tr>
+
+<tr><td>9</td><td>五层架构</td><td>entry → kernel → capabilities（models/tools/sessions/sandbox）→ config → control plane</td><td>DSH</td></tr>
+
+<tr><td>10</td><td>contracts 零依赖</td><td>纯类型 + JSON Schema；禁止 import kernel</td><td>—</td></tr>
+
+<tr><td>11</td><td>kernel 只依赖 contracts</td><td>依赖 lint 强制；反向依赖 CI 失败</td><td>DSH</td></tr>
+
+<tr><td>12</td><td>模块清单固定</td><td>kernel/models/tools/orchestration/sessions/sandbox/config/control-plane/entry</td><td>DSH</td></tr>
+
+<tr><td>13</td><td>单进程默认</td><td>一个 node 进程；worker 可选</td><td>OH</td></tr>
+
+<tr><td>14</td><td>一个数据根</td><td><code>.agentos/</code>；可整体迁移、备份、GC</td><td>DSH</td></tr>
+
+<tr><td>15</td><td>一个配置根</td><td><code>config/</code>；profile/bundle/patch 全在此</td><td>DSH</td></tr>
+
+<tr><td>16</td><td>provider 包边界</td><td>每个 provider 独立包，只实现契约</td><td>DSH/CAS</td></tr>
+
+<tr><td>17</td><td>四个扩展点</td><td>model / tool / skill / agent；新增不改内核</td><td>OAI</td></tr>
+
+<tr><td>18</td><td>SDK 只在 adapter</td><td><code>@anthropic-ai/claude-agent-sdk</code> 只允许 kernel adapter import</td><td>CAS</td></tr>
+
+<tr><td>19</td><td>统一错误模型</td><td>typed error code + human message + retryable 标记</td><td>—</td></tr>
+
+<tr><td>20</td><td>结构化日志</td><td>JSON lines；trace id 贯穿；敏感字段脱敏</td><td>AMP</td></tr>
+
+<tr><td>21</td><td>版本策略</td><td>contracts additive-only；破坏性变更 major + 迁移</td><td>DSH</td></tr>
+
+<tr><td>22</td><td>每模块 contract test</td><td>包内测试 + 跨模块 e2e</td><td>OAI</td></tr>
+
+</table>
+
+</div>
+
+<div class="card">
+
+<h3 id="sec-10">C. Agent Loop 内核（23–38）</h3>
+
+<table>
+
+<tr><th>#</th><th>做什么</th><th>怎么做</th><th>对齐</th></tr>
+
+<tr><td>23</td><td>采用 Claude Agent SDK</td><td>固定版本；升级走独立 PR + e2e</td><td>CAS</td></tr>
+
+<tr><td>24</td><td>adapter 输入/输出</td><td>输入 turn 请求；输出事件流 + 最终结果</td><td>CAS</td></tr>
+
+<tr><td>25</td><td>turn/step 生命周期</td><td>明确定义 start/step/tool/end；状态可观测</td><td>DSH</td></tr>
+
+<tr><td>26</td><td>流式事件</td><td>text/tool/thinking/result 分事件；SSE 转发</td><td>CAS/OH</td></tr>
+
+<tr><td>27</td><td>工具调用循环</td><td>SDK 负责；adapter 只做注册与结果回填</td><td>CAS</td></tr>
+
+<tr><td>28</td><td>取消</td><td>AbortSignal 贯穿；SDK interrupt；清理子进程</td><td>CAS/OH</td></tr>
+
+<tr><td>29</td><td>超时</td><td>turn/tool/subagent 三级超时</td><td>OAI</td></tr>
+
+<tr><td>30</td><td>重试</td><td>只在幂等边界重试；非幂等工具不自动重试</td><td>现有</td></tr>
+
+<tr><td>31</td><td>错误恢复</td><td>记录失败 attempt；不污染模型历史</td><td>DSH</td></tr>
+
+<tr><td>32</td><td>上下文组装</td><td>system + tool schema + messages + memory 单一入口</td><td>DSH</td></tr>
+
+<tr><td>33</td><td>系统提示分层</td><td>平台 / 角色 / 技能 / 会话四层</td><td>DSH</td></tr>
+
+<tr><td>34</td><td>compaction</td><td>超阈值摘要；保留指针；可回放</td><td>DSH/AMP</td></tr>
+
+<tr><td>35</td><td>大结果 offload</td><td>&gt;10KB 落盘，只回指针</td><td>OH</td></tr>
+
+<tr><td>36</td><td>子进程 stderr 捕获</td><td>MCP/shell stderr 进 debug 日志</td><td>OH</td></tr>
+
+<tr><td>37</td><td>信号处理</td><td>SIGINT/SIGTERM 排空后退出</td><td>OH</td></tr>
+
+<tr><td>38</td><td>loop 可替换 seam</td><td>adapter 接口固定；未来可换 loop</td><td>DSH</td></tr>
+
+</table>
+
+</div>
+
+<div class="card">
+
+<h3 id="sec-11">D. Model 层（39–70）</h3>
+
+<table>
+
+<tr><th>#</th><th>做什么</th><th>怎么做</th><th>对齐</th></tr>
+
+<tr><td>39</td><td>统一 wire format</td><td>内部只认 Anthropic Messages（Claude SDK 原生）</td><td>CAS</td></tr>
+
+<tr><td>40</td><td>ModelManifest</td><td>name/provider/baseUrlEnv/credentialsEnv/models/fallback/cost</td><td>现有</td></tr>
+
+<tr><td>41</td><td>alias → model</td><td>general/reasoner 等 alias 映射具体 model id</td><td>现有</td></tr>
+
+<tr><td>42</td><td>channel resolve</td><td>只从 env 名取值；不落盘、不日志</td><td>现有</td></tr>
+
+<tr><td>43</td><td>dialect registry</td><td>tag → dialect；新增 vendor 只加包</td><td>DSH</td></tr>
+
+<tr><td>44</td><td>anthropic-compat</td><td>任意 Anthropic 兼容 endpoint（DeepSeek/Kimi/GLM）</td><td>现有</td></tr>
+
+<tr><td>45</td><td>bedrock</td><td>原生凭证链（profile/region/bearer）</td><td>现有</td></tr>
+
+<tr><td>46</td><td>openai-compat</td><td>通过 translation gateway 暴露成 Anthropic wire</td><td>OAI</td></tr>
+
+<tr><td>47</td><td>translation gateway</td><td>Anthropic Messages ↔ OpenAI Chat Completions；流式/工具调用</td><td>OAI</td></tr>
+
+<tr><td>48</td><td>本地模型</td><td>Ollama/vLLM 走 openai-compat gateway</td><td>—</td></tr>
+
+<tr><td>49</td><td>capability probe</td><td>不只 /v1/models；跑最小 tool-call smoke</td><td>OAI</td></tr>
+
+<tr><td>50</td><td>tool calling</td><td>能力位；不支持则拒绝挂载 agent</td><td>OAI</td></tr>
+
+<tr><td>51</td><td>parallel tool calls</td><td>能力位；不支持则串行</td><td>OAI</td></tr>
+
+<tr><td>52</td><td>streaming</td><td>能力位；不支持则整块返回</td><td>—</td></tr>
+
+<tr><td>53</td><td>structured output</td><td>JSON Schema / response_format；不支持则提示注入</td><td>OAI</td></tr>
+
+<tr><td>54</td><td>vision</td><td>能力位；图片输入</td><td>—</td></tr>
+
+<tr><td>55</td><td>thinking/reasoning</td><td>能力位；reasoning token 单独计费与展示</td><td>DSH</td></tr>
+
+<tr><td>56</td><td>prompt caching</td><td>能力位；缓存命中率写入 usage</td><td>CAS</td></tr>
+
+<tr><td>57</td><td>context window</td><td>声明 + 运行时校验；超限 compaction 或拒绝</td><td>—</td></tr>
+
+<tr><td>58</td><td>max output</td><td>声明 + 截断检测</td><td>—</td></tr>
+
+<tr><td>59</td><td>feature negotiation</td><td>启动校验模型能力 vs 需求；fail fast</td><td>OAI</td></tr>
+
+<tr><td>60</td><td>routing policy</td><td>按 alias / role / tenant 选 model</td><td>DSH</td></tr>
+
+<tr><td>61</td><td>fallback chain</td><td>主模型失败/不健康时按链降级</td><td>现有</td></tr>
+
+<tr><td>62</td><td>health gate</td><td>探测缓存 + 熔断</td><td>现有</td></tr>
+
+<tr><td>63</td><td>retry policy</td><td>429/5xx 重试；带退避</td><td>—</td></tr>
+
+<tr><td>64</td><td>rate limit</td><td>每 provider / 租户限流</td><td>AMP</td></tr>
+
+<tr><td>65</td><td>cost table</td><td>input/output/缓存单价</td><td>AMP</td></tr>
+
+<tr><td>66</td><td>budget enforcement</td><td>session/agent/tenant 预算；硬停</td><td>AMP</td></tr>
+
+<tr><td>67</td><td>token accounting</td><td>每次请求记录 input/output/cache</td><td>AMP</td></tr>
+
+<tr><td>68</td><td>model attribution</td><td>usage.log + trace 记录模型</td><td>现有</td></tr>
+
+<tr><td>69</td><td>conformance matrix</td><td>每 dialect × 能力位的测试矩阵</td><td>OAI</td></tr>
+
+<tr><td>70</td><td>credential security</td><td>只存 env 名；日志脱敏；TLS 校验</td><td>现有</td></tr>
+
+</table>
+
+</div>
+
+<div class="card">
+
+<h3 id="sec-12">E. Tool 层（71–96）</h3>
+
+<table>
+
+<tr><th>#</th><th>做什么</th><th>怎么做</th><th>对齐</th></tr>
+
+<tr><td>71</td><td>tool registry</td><td>统一注册 native/MCP/agent/skill</td><td>OAI</td></tr>
+
+<tr><td>72</td><td>native tool</td><td>in-process typed tool</td><td>OAI</td></tr>
+
+<tr><td>73</td><td>MCP stdio</td><td>进程挂载</td><td>现有</td></tr>
+
+<tr><td>74</td><td>MCP http</td><td>远程挂载</td><td>现有</td></tr>
+
+<tr><td>75</td><td>MCP auth</td><td>OAuth/session 缓存</td><td>DSH</td></tr>
+
+<tr><td>76</td><td>tool manifest</td><td>transport/allowedTools/idempotent/env/sandbox/schema</td><td>现有</td></tr>
+
+<tr><td>77</td><td>drift check</td><td>declared vs discovered 启动核对</td><td>现有</td></tr>
+
+<tr><td>78</td><td>idempotent</td><td>必填；非幂等不自动重试</td><td>现有</td></tr>
+
+<tr><td>79</td><td>env expansion</td><td><code>${VAR}</code> 展开；缺失硬错</td><td>现有</td></tr>
+
+<tr><td>80</td><td>sandbox declaration</td><td>fsRoots / network</td><td>现有</td></tr>
+
+<tr><td>81</td><td>schema exchange</td><td>JSON Schema 跨边界</td><td>现有</td></tr>
+
+<tr><td>82</td><td>result cap</td><td>&gt;10KB offload</td><td>OH</td></tr>
+
+<tr><td>83</td><td>timeout</td><td>每工具超时</td><td>OAI</td></tr>
+
+<tr><td>84</td><td>cancellation</td><td>abort 传播到工具</td><td>CAS</td></tr>
+
+<tr><td>85</td><td>approval policy</td><td>危险工具需确认</td><td>DSH</td></tr>
+
+<tr><td>86</td><td>allow/deny</td><td>角色/租户级工具围栏</td><td>CREW</td></tr>
+
+<tr><td>87</td><td>rate limit per tool</td><td>防止风暴</td><td>AMP</td></tr>
+
+<tr><td>88</td><td>tool search</td><td>工具多时按需披露</td><td>DSH</td></tr>
+
+<tr><td>89</td><td>agent-as-tool</td><td>agent 包装成 typed tool</td><td>OAI/CREW</td></tr>
+
+<tr><td>90</td><td>skill-as-tool</td><td>SKILL.md 按需加载</td><td>DSH</td></tr>
+
+<tr><td>91</td><td>knowledge-as-tool</td><td>知识降级为工具，不做一等契约</td><td>—</td></tr>
+
+<tr><td>92</td><td>tool health</td><td>挂载健康检查</td><td>现有</td></tr>
+
+<tr><td>93</td><td>tool observability</td><td>每次调用 span + 参数脱敏</td><td>AMP</td></tr>
+
+<tr><td>94</td><td>tool errors</td><td>结构化错误 + 可重试标记</td><td>—</td></tr>
+
+<tr><td>95</td><td>secrets at exec</td><td>密钥只在执行时注入</td><td>OH</td></tr>
+
+<tr><td>96</td><td>MCP server exposure</td><td>对外暴露 MCP，IDE 可接</td><td>OH/SRE</td></tr>
+
+</table>
+
+</div>
+
+<div class="card">
+
+<h3 id="sec-13">F. 多 Agent 编排（97–122）</h3>
+
+<table>
+
+<tr><th>#</th><th>做什么</th><th>怎么做</th><th>对齐</th></tr>
+
+<tr><td>97</td><td>agent role manifest</td><td>name/baseAgent/systemPrompt/tools/knowledge/model</td><td>现有</td></tr>
+
+<tr><td>98</td><td>role inheritance</td><td>单继承，prompt 拼接</td><td>现有</td></tr>
+
+<tr><td>99</td><td>tool fence</td><td>角色级 allowlist</td><td>现有</td></tr>
+
+<tr><td>100</td><td>model override</td><td>角色级模型</td><td>现有</td></tr>
+
+<tr><td>101</td><td>subagent</td><td>子 agent 独立上下文</td><td>DSH/OAI</td></tr>
+
+<tr><td>102</td><td>context isolation</td><td>子 agent 只拿任务上下文</td><td>DSH</td></tr>
+
+<tr><td>103</td><td>result contract</td><td>结构化 summary 返回父</td><td>OAI</td></tr>
+
+<tr><td>104</td><td>subagent budget</td><td>token/时间/工具次数</td><td>AMP</td></tr>
+
+<tr><td>105</td><td>teams roster</td><td>持久 roster</td><td>DSH</td></tr>
+
+<tr><td>106</td><td>task board</td><td>任务状态机</td><td>DSH</td></tr>
+
+<tr><td>107</td><td>mailbox</td><td>agent 间消息</td><td>DSH</td></tr>
+
+<tr><td>108</td><td>team observability</td><td>每个成员 span</td><td>AMP</td></tr>
+
+<tr><td>109</td><td>group chat</td><td>多 agent 对话</td><td>CREW/MAF</td></tr>
+
+<tr><td>110</td><td>speaker selection</td><td>round-robin / LLM 选择 / handoff</td><td>CREW</td></tr>
+
+<tr><td>111</td><td>termination</td><td>条件 / 轮次 / 预算</td><td>CREW</td></tr>
+
+<tr><td>112</td><td>handoff</td><td>控制权转移</td><td>OAI/MAF</td></tr>
+
+<tr><td>113</td><td>context packet</td><td>交接包</td><td>MAF</td></tr>
+
+<tr><td>114</td><td>agent-as-tool envelope</td><td>输入/输出 schema + timeout + budget</td><td>OAI</td></tr>
+
+<tr><td>115</td><td>workflow DAG</td><td>有向图，不是线性</td><td>LG</td></tr>
+
+<tr><td>116</td><td>branches</td><td>条件分支</td><td>LG</td></tr>
+
+<tr><td>117</td><td>parallel</td><td>并行节点</td><td>LG/CREW</td></tr>
+
+<tr><td>118</td><td>loops</td><td>有界循环</td><td>LG</td></tr>
+
+<tr><td>119</td><td>checkpoint per node</td><td>节点级检查点</td><td>LG</td></tr>
+
+<tr><td>120</td><td>HITL interrupt</td><td>暂停/审批/继续</td><td>LG</td></tr>
+
+<tr><td>121</td><td>triggers</td><td>manual / schedule / webhook</td><td>现有</td></tr>
+
+<tr><td>122</td><td>workflow observability</td><td>节点级 trace</td><td>LG</td></tr>
+
+</table>
+
+</div>
+
+<div class="card">
+
+<h3 id="sec-14">G. 会话持久化（123–140）</h3>
+
+<table>
+
+<tr><th>#</th><th>做什么</th><th>怎么做</th><th>对齐</th></tr>
+
+<tr><td>123</td><td>event-sourced log</td><td>append-only SessionEvent</td><td>DSH</td></tr>
+
+<tr><td>124</td><td>event schema</td><td>版本化 + 迁移</td><td>DSH</td></tr>
+
+<tr><td>125</td><td>model-visible ⟺ logged</td><td>进入模型的内容必须可回放</td><td>DSH</td></tr>
+
+<tr><td>126</td><td>ledger index</td><td>sqlite 索引 session 列表</td><td>现有</td></tr>
+
+<tr><td>127</td><td>sqlite default</td><td>零依赖启动</td><td>现有</td></tr>
+
+<tr><td>128</td><td>Postgres adapter</td><td>接口隔离，可选</td><td>AMP</td></tr>
+
+<tr><td>129</td><td>checkpoint</td><td>turn 边界快照</td><td>LG</td></tr>
+
+<tr><td>130</td><td>resume</td><td>从 checkpoint 继续</td><td>LG</td></tr>
+
+<tr><td>131</td><td>fork</td><td>从某 turn 分叉</td><td>DSH</td></tr>
+
+<tr><td>132</td><td>crash recovery</td><td>启动扫 running 行</td><td>现有</td></tr>
+
+<tr><td>133</td><td>compaction events</td><td>摘要事件可回放</td><td>DSH</td></tr>
+
+<tr><td>134</td><td>export/import</td><td>transcript + bundle</td><td>现有</td></tr>
+
+<tr><td>135</td><td>retention/GC</td><td>按天清理</td><td>现有</td></tr>
+
+<tr><td>136</td><td>idempotency keys</td><td>写操作去重</td><td>OAI</td></tr>
+
+<tr><td>137</td><td>tenant isolation</td><td>tenant/workspace 分区</td><td>AMP</td></tr>
+
+<tr><td>138</td><td>session search</td><td>标题/内容检索</td><td>OH</td></tr>
+
+<tr><td>139</td><td>titles</td><td>自动生成</td><td>DSH</td></tr>
+
+<tr><td>140</td><td>data layout</td><td>单一数据目录</td><td>现有</td></tr>
+
+</table>
+
+</div>
+
+<div class="card">
+
+<h3 id="sec-15">H. 沙箱与安全隔离（141–154）</h3>
+
+<table>
+
+<tr><th>#</th><th>做什么</th><th>怎么做</th><th>对齐</th></tr>
+
+<tr><td>141</td><td>tier 0 fsRoots</td><td>路径 allowlist</td><td>现有</td></tr>
+
+<tr><td>142</td><td>tier 1 process</td><td>bwrap / Landlock / Seatbelt</td><td>DSH</td></tr>
+
+<tr><td>143</td><td>tier 2 container</td><td>每会话容器</td><td>OH</td></tr>
+
+<tr><td>144</td><td>tier 3 remote</td><td>远程沙箱</td><td>DSH/OH</td></tr>
+
+<tr><td>145</td><td>network allowlist</td><td>每工具域名</td><td>DSH</td></tr>
+
+<tr><td>146</td><td>resource limits</td><td>CPU/mem/time/pids</td><td>OH</td></tr>
+
+<tr><td>147</td><td>secrets injection</td><td>执行时注入</td><td>OH</td></tr>
+
+<tr><td>148</td><td>approval gates</td><td>危险操作确认</td><td>DSH</td></tr>
+
+<tr><td>149</td><td>exec audit</td><td>每次执行审计</td><td>AMP</td></tr>
+
+<tr><td>150</td><td>default deny</td><td>默认拒绝</td><td>DSH</td></tr>
+
+<tr><td>151</td><td>sandbox honesty</td><td>未声明要显式标注</td><td>现有</td></tr>
+
+<tr><td>152</td><td>unsandboxed warning</td><td>启动时告警</td><td>现有</td></tr>
+
+<tr><td>153</td><td>PII redaction</td><td>日志/trace 脱敏</td><td>AMP</td></tr>
+
+<tr><td>154</td><td>dependency policy</td><td>锁版本 + 依赖审计</td><td>现有</td></tr>
+
+</table>
+
+</div>
+
+<div class="card">
+
+<h3 id="sec-16">I. 配置层（155–166）</h3>
+
+<table>
+
+<tr><th>#</th><th>做什么</th><th>怎么做</th><th>对齐</th></tr>
+
+<tr><td>155</td><td>profile</td><td>命名组合（bundles + patches）</td><td>DSH</td></tr>
+
+<tr><td>156</td><td>bundle</td><td>分发单元（配置 + 可选代码）</td><td>DSH</td></tr>
+
+<tr><td>157</td><td>patch</td><td>行级覆盖</td><td>DSH</td></tr>
+
+<tr><td>158</td><td>layer order</td><td>bundle → profile patch → home patch → CLI overlay</td><td>DSH</td></tr>
+
+<tr><td>159</td><td>no deep merge</td><td>后层整行替换</td><td>DSH</td></tr>
+
+<tr><td>160</td><td>dump-config</td><td>打印解析后的完整树</td><td>DSH</td></tr>
+
+<tr><td>161</td><td>schema validation</td><td>加载时校验</td><td>现有</td></tr>
+
+<tr><td>162</td><td>drift check</td><td>声明 vs 实挂</td><td>现有</td></tr>
+
+<tr><td>163</td><td>secrets by name</td><td>只存 env 名</td><td>现有</td></tr>
+
+<tr><td>164</td><td>git source</td><td>配置只走 PR</td><td>现有</td></tr>
+
+<tr><td>165</td><td>hot reload</td><td>长驻热加载；一次性启动时应用</td><td>DSH</td></tr>
+
+<tr><td>166</td><td>migrate preset</td><td><code>preset.yml</code> → profile 兼容层</td><td>现有</td></tr>
+
+</table>
+
+</div>
+
+<div class="card">
+
+<h3 id="sec-17">J. Entry / UI（167–176）</h3>
+
+<table>
+
+<tr><th>#</th><th>做什么</th><th>怎么做</th><th>对齐</th></tr>
+
+<tr><td>167</td><td>web console</td><td>唯一产品入口</td><td>OH</td></tr>
+
+<tr><td>168</td><td>REST/SSE</td><td>API + 流式</td><td>现有</td></tr>
+
+<tr><td>169</td><td>auth token</td><td>本地 token；identity 可插拔</td><td>现有</td></tr>
+
+<tr><td>170</td><td>session UI</td><td>列表 / 对话 / 状态</td><td>OH</td></tr>
+
+<tr><td>171</td><td>tool/file panel</td><td>工具调用与大文件</td><td>OH</td></tr>
+
+<tr><td>172</td><td>agent/team UI</td><td>角色与团队</td><td>DSH</td></tr>
+
+<tr><td>173</td><td>workflow UI</td><td>编排与运行</td><td>LG/CREW</td></tr>
+
+<tr><td>174</td><td>usage/audit UI</td><td>用量与审计</td><td>AMP</td></tr>
+
+<tr><td>175</td><td>CLI</td><td>运维命令</td><td>现有</td></tr>
+
+<tr><td>176</td><td>IDE MCP server</td><td>可选：对外 MCP</td><td>OH/SRE</td></tr>
+
+</table>
+
+</div>
+
+<div class="card">
+
+<h3 id="sec-18">K. 控制平面（177–196）</h3>
+
+<table>
+
+<tr><th>#</th><th>做什么</th><th>怎么做</th><th>对齐</th></tr>
+
+<tr><td>177</td><td>tracing</td><td>OpenTelemetry</td><td>AMP</td></tr>
+
+<tr><td>178</td><td>spans</td><td>turn/tool/model/subagent</td><td>AMP</td></tr>
+
+<tr><td>179</td><td>token/cost dashboard</td><td>按会话/角色/模型</td><td>AMP</td></tr>
+
+<tr><td>180</td><td>latency/error dashboard</td><td>p50/p95/错误率</td><td>AMP</td></tr>
+
+<tr><td>181</td><td>audit log</td><td>不可篡改追加</td><td>AMP</td></tr>
+
+<tr><td>182</td><td>policy engine</td><td>allow/deny/approval</td><td>AMP</td></tr>
+
+<tr><td>183</td><td>budget</td><td>多级预算</td><td>AMP</td></tr>
+
+<tr><td>184</td><td>concurrency</td><td>队列 / 上限</td><td>现有</td></tr>
+
+<tr><td>185</td><td>rate limits</td><td>租户/工具/模型</td><td>AMP</td></tr>
+
+<tr><td>186</td><td>approvals</td><td>人工审批流</td><td>DSH</td></tr>
+
+<tr><td>187</td><td>evals</td><td>离线评测</td><td>AMP</td></tr>
+
+<tr><td>188</td><td>golden sets</td><td>固定样本</td><td>AMP</td></tr>
+
+<tr><td>189</td><td>regression gates</td><td>CI 阻断</td><td>AMP</td></tr>
+
+<tr><td>190</td><td>replay</td><td>会话回放</td><td>LG</td></tr>
+
+<tr><td>191</td><td>multi-tenant</td><td>tenant/workspace</td><td>AMP</td></tr>
+
+<tr><td>192</td><td>RBAC</td><td>角色权限</td><td>AMP</td></tr>
+
+<tr><td>193</td><td>API keys</td><td>程序访问</td><td>SRE</td></tr>
+
+<tr><td>194</td><td>alerting</td><td>Slack / webhook</td><td>AMP</td></tr>
+
+<tr><td>195</td><td>PII/retention</td><td>脱敏与保留</td><td>AMP</td></tr>
+
+<tr><td>196</td><td>deployment topology</td><td>单进程默认；scale-out 预留</td><td>OH</td></tr>
+
+</table>
+
+</div>
+
+<div class="card">
+
+<h3 id="sec-19">L. 迁移、交付、验收（197–200）</h3>
+
+<table>
+
+<tr><th>#</th><th>做什么</th><th>怎么做</th><th>对齐</th></tr>
+
+<tr><td>197</td><td>repo re-org</td><td>现有包 → 目标模块映射；保留兼容层</td><td>—</td></tr>
+
+<tr><td>198</td><td>phased roadmap</td><td>P0 内核+模型+工具；P1 编排+控制平面；P2 沙箱+eval</td><td>—</td></tr>
+
+<tr><td>199</td><td>acceptance</td><td>每阶段验收标准写死；不达不进入下一阶段</td><td>—</td></tr>
+
+<tr><td>200</td><td>non-goals</td><td>不跑第三方 agent、不做公开 conformance、不做跨运行时、不做 K8s 产品化</td><td>—</td></tr>
+
+</table>
+
+</div>
+
+<div class="card">
+
+<h2 id="sec-20">3. 三个必须先落地的设计</h2>
+
+</div>
+
+<div class="card">
+
+<h3 id="sec-21">3.1 Desktop 之外的会话持久化</h3>
+
+<ul><li>事件日志是事实源，sqlite 只是索引；<strong>模型看到的一切必须能从日志重建</strong>。</li><li>checkpoint 放在 turn 边界；resume 从最近 checkpoint 继续；fork 从任意 turn 分叉。</li><li>大结果落盘，日志只存指针；compaction 也是事件，不是覆盖写。</li><li>崩溃恢复靠启动扫描，不靠进程内状态。</li></ul>
+
+</div>
+
+<div class="card">
+
+<h3 id="sec-22">3.2 沙箱隔离</h3>
+
+<p>分四档，按部署选择，声明在 tool manifest 里：</p>
+
+<table>
+
+<tr><th>档</th><th>做法</th><th>适用</th></tr>
+
+<tr><td>T0</td><td>fsRoots 路径 allowlist</td><td>本地单用户默认</td></tr>
+
+<tr><td>T1</td><td>进程隔离（bwrap/Landlock/Seatbelt）</td><td>本地多工具</td></tr>
+
+<tr><td>T2</td><td>每会话容器</td><td>团队/多租户</td></tr>
+
+<tr><td>T3</td><td>远程沙箱</td><td>云部署</td></tr>
+
+</table>
+
+<p>默认拒绝；未声明的工具启动时告警；密钥只在执行时注入。</p>
+
+</div>
+
+<div class="card">
+
+<h3 id="sec-23">3.3 模型切换</h3>
+
+<p>见第 1 节"Model 层怎么做到完全可切换"。一句话：<strong>loop 只见 Anthropic wire，vendor 差异全部收在 dialect + gateway + capability 协商里。</strong></p>
+
+</div>
+
+<div class="card">
+
+<h2 id="sec-24">4. 验收口径</h2>
+
+<ul><li><strong>P0 完成</strong>：换 3 个模型（Anthropic 兼容、Bedrock、OpenAI-compat）跑同一个角色，工具调用与流式一致；会话可 resume。</li><li><strong>P1 完成</strong>：subagent + teams + group chat 可跑；workflow 支持分支/并行/checkpoint；web 能看到 trace、成本、审计。</li><li><strong>P2 完成</strong>：沙箱 T0–T2 可选；eval 有 golden set 与回归门禁；单进程部署 + compose 一键起。</li></ul>
+
+<div class="note">200 点 = 200 个可独立验收的 PR 切分。每点只写"做什么/怎么做/对齐什么"，实现细节留给各自的 issue。</div>
+
+</div>
+
+</body>
+</html>
